@@ -89,8 +89,10 @@ public class ReadApiStepTask extends RegisteredTask {
         // {{column}} from the first row of the step's input (a form's or an event's intake read just before, a row a
         // previous step made), under the run's own placeholders: a request's variables can come from the run's data.
         Map<String, Object> placeholders = new LinkedHashMap<>();
-        if (context.input() != null && context.input().size() > 0) {
-            placeholders.putAll(context.input().getRows().get(0));
+        // MIG-344: only the first row is read -- the input may be a streamed table far bigger than a step can hold.
+        Map<String, Object> first = context.firstInputRow();
+        if (first != null) {
+            placeholders.putAll(first);
         }
         placeholders.putAll(Templates.ofRun(context, null));
         Map<String, String> variables = new LinkedHashMap<>();

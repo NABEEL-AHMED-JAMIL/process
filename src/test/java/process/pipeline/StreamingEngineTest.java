@@ -211,4 +211,28 @@ class StreamingEngineTest {
         assertThat(this.worker.last).isEqualTo("Failed: Step 2 <pick> failed: The step's input has 50,001 rows x 5 columns; a step that "
             + "holds its whole input in memory takes at most 50,000 rows and 1,000,000 cells. Put a filter, select or aggregate before it.");
     }
+
+    @Test
+    void readApiAndANotificationTakeOnlyTheFirstRowOfAStreamedInputTooBigToHold() throws Exception {
+        // Read API and Send Notification hold their input in memory, but read only its size and first row: a streamed
+        // table past the in-memory cap does not stop them. Read API's fan-out then streams on into an aggregate list.
+        this.csv(50_001);
+        this.all.api.answer = variables -> "{\"entry\":[{\"resource\":{\"region\":\"" + variables.get("region") + "\",\"tag\":\"a\"}},"
+            + "{\"resource\":{\"region\":\"north\",\"tag\":\"b\"}},{\"resource\":{\"region\":\"" + variables.get("region")
+            + "\",\"tag\":\"c\"}},{\"resource\":{\"region\":\"north\",\"tag\":\"b\"}}]}";
+        this.runs(read(),
+            step("tell", "send_notification", config("to", "owner", "title", "{{rows}} orders, first {{id}} in {{region}}", "message", "run {{run}}")),
+            step("lookup", "read_api", config("requestId", 5, "variables", config("region", "{{region}}"), "rowsPath", "entry[].resource")),
+            step("tags", "aggregate", config("groupBy", Collections.singletonList("region"), "aggregations",
+                Collections.singletonList(config("op", "list", "column", "tag", "as", "tags")))));
+
+        assertThat(this.worker.last).isEqualTo("Completed: 4 of 4 step(s) completed.");
+        assertThat(this.steps.row(RUN_ID, 1, "tell").recordsIn).isEqualTo(50_001L);
+        assertThat(this.all.notifier.sent).singleElement().satisfies(notice -> assertThat(notice.title).isEqualTo("50001 orders, first 1 in south"));
+        assertThat(this.all.api.calls).singleElement().satisfies(call -> assertThat(call.variables).containsEntry("region", "south"));
+        assertThat(this.steps.row(RUN_ID, 1, "lookup").recordsIn).isEqualTo(50_001L);
+        assertThat(this.steps.row(RUN_ID, 1, "lookup").recordsOut).isEqualTo(4L);
+        assertThat(this.datasets.read("datasets/7402/1/tags/output.rows").getRows()).extracting(row -> row.get("region") + "=" + row.get("tags"))
+            .containsExactly("south=a, c", "north=b");
+    }
 }

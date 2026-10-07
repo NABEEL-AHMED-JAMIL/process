@@ -23,6 +23,17 @@ public interface StepContext {
     /** The step's input: the output it names, else the latest output before it, else the source. Never null. */
     Dataset input();
 
+    /** MIG-344: how many rows the input has, without holding it (a streamed input may be bigger than a step can hold). */
+    default long inputSize() {
+        return this.input().size();
+    }
+
+    /** MIG-344: the input's first row, or null when it has none, without reading the rest of it. */
+    default Map<String, Object> firstInputRow() throws Exception {
+        Dataset input = this.input();
+        return input == null || input.size() == 0 ? null : input.getRows().get(0);
+    }
+
     /** The run's job (source_job.job_id); null outside a run. */
     default Long jobId() {
         return null;

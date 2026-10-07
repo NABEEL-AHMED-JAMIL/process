@@ -545,6 +545,20 @@ public class StepEngine {
             RowSource open() throws Exception {
                 return this.key == null ? RowSource.of(this.source, batchRows) : datasets.open(this.key, batchRows);
             }
+
+            /** The first row, or null: one row read, whatever the input's size. */
+            synchronized Map<String, Object> first() throws Exception {
+                Dataset held = this.key == null ? this.source : this.loaded;
+                if (held != null) {
+                    return held.size() == 0 ? null : held.getRows().get(0);
+                }
+                try (RowSource rows = datasets.open(this.key, 1)) {
+                    List<Map<String, Object>> batch = rows.next();
+                    return batch == null || batch.isEmpty() ? null : batch.get(0);
+                } catch (Exception ex) {
+                    throw new IllegalStateException(String.format("The dataset %s could not be read back: %s", this.key, reasonOf(ex)), ex);
+                }
+            }
         }
 
         /** MIG-344: where a step's output goes. */
@@ -959,6 +973,16 @@ public class StepEngine {
         @Override
         public Dataset input() {
             return this.input.whole();
+        }
+
+        @Override
+        public long inputSize() {
+            return this.input.size();
+        }
+
+        @Override
+        public Map<String, Object> firstInputRow() throws Exception {
+            return this.input.first();
         }
 
         @Override

@@ -186,6 +186,10 @@ public final class Streams {
 
         @Override public Dataset input() { return this.context.input(); }
 
+        @Override public long inputSize() { return this.context.inputSize(); }
+
+        @Override public Map<String, Object> firstInputRow() throws Exception { return this.context.firstInputRow(); }
+
         @Override public Long jobId() { return this.context.jobId(); }
 
         @Override public String pipelineId() { return this.context.pipelineId(); }

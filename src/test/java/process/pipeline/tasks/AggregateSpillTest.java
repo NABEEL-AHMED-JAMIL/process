@@ -160,6 +160,30 @@ class AggregateSpillTest {
     }
 
     @Test
+    void aListThatPassesTheBudgetSpillsAndKeepsItsFirstSeenOrderAndItsMoreCount() throws Exception {
+        // 30 groups, each listing hundreds of customers: the lists' values, not the groups, pass the budget.
+        Dataset input = orders(20_000, 6_000, 4);
+        Map<String, Object> config = config("groupBy", Collections.singletonList("tag"), "aggregations", Arrays.asList(
+            config("op", "list", "column", "customer", "as", "customers"),
+            config("op", "list", "column", "region", "as", "regions"),
+            config("op", "count_distinct", "column", "customer", "as", "n")));
+        Dataset inMemory = this.task.run(TaskContext.of(config, input.getRows())).getOutput();
+
+        Tight tight = new Tight(config, input, 1L << 20);
+        this.task.stream(tight);
+        Dataset spilled = tight.sink.toDataset();
+
+        assertThat(tight.opened).as("it spilled").isEqualTo(2);
+        assertThat(inMemory.size()).isEqualTo(30);
+        assertThat((String) inMemory.getRows().get(0).get("customers")).matches("C-\\d+(, C-\\d+){49} \\(\\+\\d+ more\\)");
+        assertThat(this.stored(spilled, "l1").getRows()).isEqualTo(this.stored(inMemory, "l2").getRows());
+        assertThat(tight.memory.used()).isZero();
+        try (Stream<Path> left = Files.list(tight.scratch)) {
+            assertThat(left).isEmpty();
+        }
+    }
+
+    @Test
     void aGroupingWithoutKeysAndOneThatFitsDoNotSpill() throws Exception {
         Dataset input = orders(3_000, 50, 2);
         for (Map<String, Object> config : Arrays.asList(aggregations(), aggregations("region"))) {

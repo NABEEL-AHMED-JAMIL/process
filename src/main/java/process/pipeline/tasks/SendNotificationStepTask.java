@@ -65,7 +65,8 @@ public class SendNotificationStepTask extends RegisteredTask {
     @Override
     public StepResult run(StepContext context) throws Exception {
         Map<String, Object> config = context.config();
-        int rows = context.input().size();
+        // MIG-344: the input's size and first row only -- it may be a streamed table far bigger than a step can hold.
+        int rows = (int) Math.min(Integer.MAX_VALUE, context.inputSize());
         String when = Configs.text(config, "when", "always");
         if (("has_rows".equals(when) && rows == 0) || ("no_rows".equals(when) && rows > 0)) {
             context.log(String.format("Not sent: %d row(s) and when is %s.", rows, when));
@@ -73,8 +74,9 @@ public class SendNotificationStepTask extends RegisteredTask {
         }
         // The first row's columns, under the run's own placeholders: {{run}} stays the run whatever a column is called.
         Map<String, Object> values = new LinkedHashMap<>();
-        if (rows > 0) {
-            values.putAll(context.input().getRows().get(0));
+        Map<String, Object> first = rows > 0 ? context.firstInputRow() : null;
+        if (first != null) {
+            values.putAll(first);
         }
         values.putAll(Templates.ofRun(context, rows));
         PipelineNotifier.Notice notice = new PipelineNotifier.Notice();
