@@ -31,10 +31,14 @@ import java.util.Set;
 @Component
 public class AggregateStepTask extends RegisteredTask {
 
-    static final List<String> OPS = Arrays.asList("count", "count_distinct", "sum", "avg", "min", "max", "first", "last");
+    static final List<String> OPS = Arrays.asList("count", "count_distinct", "sum", "avg", "min", "max", "first", "last", "list");
+
+    /** list: at most this many distinct values are named; the rest are counted ("+3 more"). */
+    static final int LIST_MAX = 50;
 
     static final TaskSpec SPEC = TaskSpec.builder("aggregate", "Aggregate", TaskKind.PROCESS)
-        .description("Groups rows by columns and computes count, count_distinct, sum, avg, min, max, first or last.")
+        .description("Groups rows by columns and computes count, count_distinct, sum, avg, min, max, first, last or list"
+            + " (the group's distinct values as one text, in the order first seen, joined by \", \").")
         .input(TaskSpec.rows("Any rows."))
         .output(TaskSpec.rows("One row per group: the group's columns, then each aggregation."))
         .config(JsonSchema.object()
@@ -116,6 +120,7 @@ public class AggregateStepTask extends RegisteredTask {
         private final long[] counts;
         private final BigDecimal[] sums;
         private final Object[] picks;
+        private final List<java.util.LinkedHashSet<String>> lists = new ArrayList<>();
         private final List<Set<String>> distinct = new ArrayList<>();
         private long rows;
 
@@ -128,6 +133,7 @@ public class AggregateStepTask extends RegisteredTask {
             this.picks = new Object[slots];
             for (int i = 0; i < slots; i++) {
                 this.distinct.add(null);
+                this.lists.add(null);
             }
         }
 
@@ -169,6 +175,14 @@ public class AggregateStepTask extends RegisteredTask {
                             this.picks[i] = value;
                         }
                         break;
+                    case "list":
+                        if (value != null && !(value instanceof String && ((String) value).trim().isEmpty())) {
+                            if (this.lists.get(i) == null) {
+                                this.lists.set(i, new java.util.LinkedHashSet<>());
+                            }
+                            this.lists.get(i).add(Values.text(value).trim());
+                        }
+                        break;
                     case "first":
                         if (this.counts[i]++ == 0) {
                             this.picks[i] = value;
@@ -197,6 +211,9 @@ public class AggregateStepTask extends RegisteredTask {
                     case "sum":
                         value = Values.plain(this.sums[i] == null ? BigDecimal.ZERO : this.sums[i]);
                         break;
+                    case "list":
+                        value = listed(this.lists.get(i));
+                        break;
                     case "avg":
                         value = this.counts[i] == 0 ? null : Values.plain(this.sums[i].divide(BigDecimal.valueOf(this.counts[i]), MathContext.DECIMAL64));
                         break;
@@ -206,6 +223,24 @@ public class AggregateStepTask extends RegisteredTask {
                 out.put(Configs.text(aggregations.get(i), "as", ""), value);
             }
             return out;
+        }
+
+        private static String listed(java.util.Set<String> values) {
+            if (values == null || values.isEmpty()) {
+                return null;
+            }
+            StringBuilder text = new StringBuilder();
+            int shown = 0;
+            for (String value : values) {
+                if (shown == LIST_MAX) {
+                    break;
+                }
+                text.append(shown++ == 0 ? "" : ", ").append(value);
+            }
+            if (values.size() > LIST_MAX) {
+                text.append(" (+").append(values.size() - LIST_MAX).append(" more)");
+            }
+            return text.toString();
         }
     }
 }

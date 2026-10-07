@@ -62,4 +62,27 @@ class AggregateStepTaskTest {
             new DefinitionProblem("aggregations[0].column", "sum needs its column"),
             new DefinitionProblem("aggregations[1].as", "'n' is already a column of the output"));
     }
+
+    @Test
+    void listNamesTheGroupsDistinctValuesInTheOrderFirstSeen() throws Exception {
+        TaskContext context = TaskContext.of(config("groupBy", Collections.singletonList("patient"), "aggregations", Arrays.asList(
+            config("op", "list", "column", "drug", "as", "drugs"))),
+            Arrays.asList(row("patient", "p1", "drug", "Metformin"), row("patient", "p1", "drug", " Lisinopril "),
+                row("patient", "p1", "drug", "Metformin"), row("patient", "p1", "drug", ""), row("patient", "p2", "drug", null)));
+
+        Dataset out = this.task.run(context).getOutput();
+
+        assertThat(out.getRows()).containsExactly(row("patient", "p1", "drugs", "Metformin, Lisinopril"), row("patient", "p2", "drugs", null));
+    }
+
+    @Test
+    void listNamesAtMostFiftyValuesAndCountsTheRest() throws Exception {
+        java.util.List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (int i = 1; i <= 53; i++) {
+            rows.add(row("g", "x", "v", "v" + i));
+        }
+        Object listed = this.task.run(TaskContext.of(config("groupBy", Collections.singletonList("g"), "aggregations",
+            Collections.singletonList(config("op", "list", "column", "v", "as", "vs"))), rows)).getOutput().getRows().get(0).get("vs");
+        assertThat((String) listed).startsWith("v1, v2, ").endsWith("v50 (+3 more)");
+    }
 }

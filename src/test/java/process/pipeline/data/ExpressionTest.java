@@ -69,6 +69,9 @@ class ExpressionTest {
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", "2026-09-01", "visit_date", "2026-09-15")).isEqualTo(14L);
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", null, "visit_date", "2026-09-15")).isNull();
         assertThat(eval("`wound length` + 1", "wound length", 2)).isEqualTo(3.0);
+        String today = java.time.LocalDate.now(java.time.ZoneId.of("America/Chicago")).toString();
+        assertThat(eval("today()", "x", 1)).isEqualTo(today);
+        assertThat(eval("round(days_between(birth, today()) / 365.25, 0)", "birth", today)).isEqualTo(0L);
     }
 
     @Test
@@ -80,7 +83,9 @@ class ExpressionTest {
     void aTypoIsASyntaxErrorAtItsPlace() {
         assertThatThrownBy(() -> Expression.parse("a * (b + 1")).hasMessageContaining("expected ')'");
         assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, coalesce, concat, days_between, "
-            + "if, is_null, max, min, number, round, text.");
+            + "if, is_null, max, min, number, round, text, today.");
+        assertThatThrownBy(() -> Expression.parse("today(a)")).hasMessage("today takes no values: today().");
+        assertThatThrownBy(() -> Expression.parse("abs()")).hasMessage("abs takes at least 1 value.");
         assertThatThrownBy(() -> Expression.parse("if(a, b)")).hasMessage("if takes 3 values: if(condition, then, otherwise).");
         assertThatThrownBy(() -> Expression.parse("a +")).hasMessageContaining("at 4");
         assertThat(Expression.parse("round(a * b, 1)").columns()).containsExactly("a", "b");

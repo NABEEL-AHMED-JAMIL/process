@@ -21,7 +21,7 @@ import java.util.Set;
  *       `wound length` in backticks for a name with spaces);</li>
  *   <li>arithmetic + - * / and a leading minus; comparisons == != &gt; &gt;= &lt; &lt;=; and, or, not; parentheses;</li>
  *   <li>functions: abs, coalesce, concat, days_between (ISO dates), if(condition, then, otherwise), is_null, max, min,
- *       number, round(value[, places]), text.</li>
+ *       number, round(value[, places]), text, today() (the business date, YYYY-MM-DD, America/Chicago).</li>
  * </ul>
  *
  * A column read as CSV text is a number where it reads as one. An empty or null operand makes arithmetic null (never an
@@ -32,7 +32,10 @@ import java.util.Set;
 public final class Expression {
 
     static final List<String> FUNCTIONS = Collections.unmodifiableList(Arrays.asList("abs", "coalesce", "concat", "days_between", "if",
-        "is_null", "max", "min", "number", "round", "text"));
+        "is_null", "max", "min", "number", "round", "text", "today"));
+
+    /** The business clock's zone: today() is the date there, as {{date}} is. */
+    static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("America/Chicago");
 
     private final Node root;
     private final List<String> columns;
@@ -164,6 +167,8 @@ public final class Expression {
                     BigDecimal rounded = BigDecimal.valueOf(value).setScale(Math.max(0, Math.min(10, places.intValue())), RoundingMode.HALF_UP);
                     return rounded.scale() == 0 ? (Object) rounded.longValueExact() : (Object) rounded.doubleValue();
                 }
+                case "today":
+                    return LocalDate.now(BUSINESS_ZONE).toString();
                 case "days_between": {
                     LocalDate from = date(this.args.get(0), row);
                     LocalDate to = date(this.args.get(1), row);
@@ -479,6 +484,10 @@ public final class Expression {
             this.skipSpace();
             if (this.at < this.text.length() && this.text.charAt(this.at) == ')') {
                 this.at++;
+                if (!"today".equals(name)) {
+                    throw new IllegalArgumentException(name + " takes at least 1 value.");
+                }
+                return new Call(name, args);
             } else {
                 do {
                     args.add(this.expression());
@@ -504,6 +513,11 @@ public final class Expression {
                 case "days_between":
                     if (count != 2) {
                         throw new IllegalArgumentException("days_between takes 2 dates: days_between(from, to).");
+                    }
+                    return;
+                case "today":
+                    if (count != 0) {
+                        throw new IllegalArgumentException("today takes no values: today().");
                     }
                     return;
                 case "abs": case "is_null": case "number": case "text":
