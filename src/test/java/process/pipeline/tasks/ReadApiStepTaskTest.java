@@ -85,4 +85,18 @@ class ReadApiStepTaskTest {
         assertThat(process.pipeline.data.Values.all(process.pipeline.data.Values.JSON.readTree("{\"x\":[[1,2],[3]]}"), "x[][]"))
             .hasSize(3);
     }
+
+    @Test
+    void oneFanOutFieldMakesARowPerValueWithTheOtherColumnsRepeated() throws Exception {
+        this.api.answer = variables -> "{\"results\":[{\"id\":\"r1\",\"drug\":[{\"name\":\"A\"}],\"reaction\":[{\"pt\":\"Nausea\"},{\"pt\":\"Rash\"}]},"
+            + "{\"id\":\"r2\",\"drug\":[{\"name\":\"B\"}],\"reaction\":[]}]}";
+        Dataset out = this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", java.util.Arrays.asList(
+            config("path", "id", "target", "report"), config("path", "drug[0].name", "target", "drug"),
+            config("path", "reaction[].pt", "target", "reaction"))), Collections.emptyList())).getOutput();
+        assertThat(out.getRows()).containsExactly(row("report", "r1", "drug", "A", "reaction", "Nausea"),
+            row("report", "r1", "drug", "A", "reaction", "Rash"), row("report", "r2", "drug", "B", "reaction", null));
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", java.util.Arrays.asList(
+            config("path", "drug[].name", "target", "d"), config("path", "reaction[].pt", "target", "r"))), Collections.emptyList())))
+            .hasMessageContaining("Only one column's path may fan out");
+    }
 }
