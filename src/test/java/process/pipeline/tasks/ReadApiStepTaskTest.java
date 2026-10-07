@@ -51,4 +51,38 @@ class ReadApiStepTaskTest {
         this.api.unavailable = "not deployed";
         assertThat(this.task.unavailable()).contains("not deployed");
     }
+
+    @Test
+    void aFanOutRowsPathAndFieldsFlattenANestedAnswer() throws Exception {
+        // A FHIR searchset Bundle, as any nested JSON answer: the rows are entry[].resource, the columns dot paths into them.
+        this.api.answer = variables -> "{\"resourceType\":\"Bundle\",\"entry\":["
+            + "{\"resource\":{\"id\":\"o1\",\"subject\":{\"reference\":\"Patient/p1\"},\"code\":{\"coding\":[{\"code\":\"4548-4\"}]},"
+            + "\"valueQuantity\":{\"value\":7.1,\"unit\":\"%\"}}},"
+            + "{\"resource\":{\"id\":\"o2\",\"subject\":{\"reference\":\"Patient/p2\"},\"code\":{\"coding\":[{\"code\":\"39156-5\"}]}}},"
+            + "{\"search\":{\"mode\":\"include\"}}]}";
+        TaskContext context = TaskContext.of(config("requestId", 5, "rowsPath", "entry[].resource", "fields", java.util.Arrays.asList(
+            config("path", "id", "target", "observation_id"), config("path", "subject.reference", "target", "patient_ref"),
+            config("path", "code.coding[0].code", "target", "loinc"), config("path", "valueQuantity.value", "target", "value"),
+            config("path", "valueQuantity", "target", "quantity"))), Collections.emptyList());
+
+        Dataset out = this.task.run(context).getOutput();
+
+        assertThat(out.getColumns()).containsExactly("observation_id", "patient_ref", "loinc", "value", "quantity");
+        assertThat(out.getRows()).hasSize(2);
+        assertThat(out.getRows().get(0)).containsEntry("patient_ref", "Patient/p1").containsEntry("loinc", "4548-4")
+            .containsEntry("value", 7.1).containsEntry("quantity", "{\"value\":7.1,\"unit\":\"%\"}");
+        assertThat(out.getRows().get(1)).containsEntry("observation_id", "o2").containsEntry("value", null);
+    }
+
+    @Test
+    void aFanOutPathOverNothingIsNoRowsAndAPlainPathStillPicksOneElement() throws Exception {
+        this.api.answer = variables -> "{\"resourceType\":\"Bundle\",\"total\":0}";
+        assertThat(this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "entry[*].resource"), Collections.emptyList()))
+            .getOutput().size()).isEqualTo(0);
+        this.api.answer = variables -> "{\"results\":[{\"a\":{\"b\":1}},{\"a\":{\"b\":2}}]}";
+        assertThat(this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results[1].a"), Collections.emptyList()))
+            .getOutput().getRows()).containsExactly(row("b", 2L));
+        assertThat(process.pipeline.data.Values.all(process.pipeline.data.Values.JSON.readTree("{\"x\":[[1,2],[3]]}"), "x[][]"))
+            .hasSize(3);
+    }
 }
