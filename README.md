@@ -6,6 +6,8 @@ The server behind the ETL Console. It began as a Kafka-backed **scheduler engine
 
 Its frontend lives in [`../scheduler1`](../scheduler1) — currently mid-rewrite, with an Angular 8 app deployed and an Angular 22 app replacing it.
 
+> **As of 2026-10-07** (branch `media-extraction`, platform-commons 1.16.0): the step engine streams big files and spills to disk (ADR-026 phase 1, MIG-344); Read API, Aggregate, Compute, Send Notification and Measure image gained the features listed under [Pipeline steps](#pipeline-steps-as-of-2026-10-07); the customer API's runs, pipelines, events, files, reviews and view links are served here ([The customer API in Core](#the-customer-api-in-core-mig-332333334335-adr-025)). Architecture records: `../etl-platform/docs/adr/ADR-026-big-data-step-engine.md`, `ADR-025-customer-api.md`.
+
 > The planning and per-feature scope for the current phase is in [`../.ai/`](../.ai/). Start with [`../.ai/project.md`](../.ai/project.md), and see [`../.ai/discovery/backend.md`](../.ai/discovery/backend.md) for the full endpoint and service inventory.
 
 ## The scheduler
@@ -136,6 +138,50 @@ nothing else.
 - **Trigger functions.** The four that keep a derived column (V84's dispatch_eligible, V85's assigned_username) run as
   their owner (SECURITY DEFINER); `tenant_id_from_parent` stays the writer's, so a child filed under a parent the
   session cannot see fails.
+
+## The big-data step engine (ADR-026 phase 1, MIG-344)
+
+Deployed 2026-10-07. A step pipeline's steps no longer hold their whole input in memory when they can stream.
+
+- **Row file.** A step's output dataset is Core's own row file (`.rows`, `RowsFile`): about 1.3x the CSV's size, read back as exactly the values the JSON store gave (same keys, order and types; `RowsFileTest`). Old runs' `.json` datasets still read and download as before.
+- **Pull-based streaming.** A task that implements `StreamingStepTask` reads its input as a `RowSource` in batches of `process.pipeline.batch-rows` (1,024) and writes a `RowSink`; it reads the next batch only after writing the last, so a step holds one batch however big the file is. Each step keeps its own `step_execution`, tries, timeout and downloadable output; an output is a partial file until the try succeeds. Phase 1 streams read_file (CSV, JSON Lines), validate (500-row batches to integration-service), compute, filter, select, save_file, upload_bucket and aggregate.
+- **Aggregate spills to disk.** Past the run's budget, aggregate re-reads its input into 8 to 256 hash partitions (up to three levels) under `<datasets dir>/scratch/<run>/<attempt>/<step>/`, removed when the try ends. The output is the same groups, order and values as in memory (`AggregateSpillTest`), `list` included.
+- **Per-run memory budget.** `PROCESS_PIPELINE_RUN_MEMORY_MB` (`process.pipeline.run-memory-mb`, default 128) bounds what a run's rows take at once; keep `engine.threads` x budget at or under half the heap (4 x 128 MB of 1.2 GB). A step that cannot fit fails and names the setting. A big or spilled step's log ends with the batch size, the memory held and the bytes spilled.
+- **Steps that do not stream yet** get their input whole, held to `Limits` (50,000 rows, 1,000,000 cells); an input a streaming step made bigger fails that step with the fix ("Put a filter, select or aggregate before it."). Read API and Send Notification read only a streamed input's size and first row (`StepContext.inputSize()`, `firstInputRow()`), so they follow a big step.
+- **Native memory.** etl-platform's `config/process_app/settings.env` sets `MALLOC_ARENA_MAX=2` (glibc arenas had taken about 860 MB outside the heap on a 1M-row run) and `-Djdk.nio.maxCachedBufferSize` in `JAVA_TOOL_OPTIONS`. `FileDatasetStore.readFile` reads datasets in 64 KB chunks (c7e913a), so a large download no longer leaves a file-sized direct buffer cached on a request thread.
+- **Measured live:** 1M rows (86 MB) in 16.2 s at a 1,356 MB RSS peak; 10M rows (874 MB) in 144.5 s at 1,310 MB; `storage.bytes.read` equal to the object's size. Bench: `BigDataBench`; regression: etl-platform `scripts/load/load.py --groups bigfile`.
+- `Values.number` and `Expression` now check a text against the number grammar before parsing, instead of catching an exception per cell (aggregate 5-10x faster; a 50,000-row text filter 54 ms -> 1-4 ms; `ValuesNumberTest`, `ExpressionNumberGuardTest`).
+
+Not yet (phase 2): streaming transform, enrich and join; tenant-scoped dataset keys and the shared file area; per-step memory columns; admission by budget; disk quotas.
+
+## Pipeline steps (as of 2026-10-07)
+
+All generic: no knowledge of any customer's data shape in code.
+
+- **Read API.** `rowsPath` fans out with `[]` or `[*]` (`entry[].resource`); optional `fields` (path/target, as in Enrich) make named columns from nested answers (`code.coding[0].code`). One field path may fan out over one list (`reaction[].pt`): a row per value, the other columns repeated, an empty list one row with that column empty; two different lists are refused at save time (`FieldPaths`, shared with Enrich, which fans out per input row). Request variables take `{{column}}` from the first row of the step's input, under the run's own placeholders. The request runs through integration-service, so its paging is the request's own, including `NEXT_URL` and `OFFSET`.
+- **Placeholders.** A run started for a file (inbox arrival, form submission, API run) has `{{input_key}}` (the file's key in the workspace's storage) and `{{input_name}}` (its last part) wherever placeholders are filled; read_s3's prefix then lists exactly that object (`Templates`).
+- **Aggregate** op `list`: a group's distinct non-empty values as one text in first-seen order, joined by ", ", at most 50 named and the rest counted ("+3 more").
+- **Compute formulas:** `today()` (the business date, America/Chicago, as `{{date}}`) and `regex_extract(text, pattern)` (the first group of the first match, else the whole match, null when none) (`Expression`).
+- **Send Notification:** the first row's columns as `{{column}}` in the title and message (`{{run}}` stays the run).
+- **Measure image** is generic (`MeasureImageStepTask`): a `target` says what to measure -- `contrast` (default for a new step: the largest region outside the ruler that differs markedly from the photo's border) or `red_region` (a red region on a lighter background). `red_on_skin`, the earlier name, is still read and measures exactly as before; a save writes `red_region`.
+- **Run with a different model** now covers step-engine AI steps (b6a284b): `StepReferences` reads which steps name a prompt or an API request from the Task Registry's schema formats; `AiModelChoiceService` lists those AI steps, and the ai_prompt step sends the run's model (Run with..., else the schedule's) to ai-service. Prompts' and API collections' Used by count step-engine pipelines (`PipelineUsage`; `POST /internal/pipelines/apiRequestUsers` for integration-service).
+- **Schedule preview** is `GET /api/v1/sourceJob.json/schedulePreview` (the timetable in the query): an unsaved timetable's next runs by the scheduler's own rules, a read, so a managed-service session's audit no longer records every preview.
+
+## The customer API in Core (MIG-332/333/334/335, ADR-025)
+
+The gateway rewrites `/v1/x` to `/api/v1/customer/x` on the owning service; under `/customer/` Core accepts only an API client's token (`type: client`), checked again here with its scope. Every read is in the client's workspace under row-level security; another workspace's id is a 404.
+
+| Path (as the customer calls it) | Core's controller | |
+|---|---|---|
+| `GET /v1/pipelines`, `/v1/pipelines/{id}`, `POST /v1/pipelines/{id}/runs` | `CustomerPipelinesRestApi` | list, read with the input contract, start a run (one in flight per pipeline, else 409 `/problems/run-in-flight`); the intake is one JSON file in the workspace's inbox |
+| `POST /v1/events` | `CustomerEventsRestApi` | an event in; answers `{eventId, started, workflows, notStarted}` |
+| `GET /v1/runs`, `/{id}`, `/{id}/steps`, `/{id}/outputs` | `CustomerRunsRestApi` | runs however started, filtered and keyset-paged; the latest attempt's steps; the manifest of made and given files |
+| `GET`, `POST /v1/runs/{id}/review` | `CustomerRunsRestApi` | the customer's review through `RunReviewService.decide` (the console's rules); a rejection with `rerun` starts an API run again |
+| `POST /v1/runs/{id}/view-links` | `CustomerRunsRestApi` | a signed 15-minute link to the console's read-only `/embed/runs/{token}` (`customer.embed.console-url`) |
+| `GET /v1/embed/runs/{token}`, `/frame` | `CustomerEmbedRestApi` | the view's signed read and its frame check (the client's frame allow-list is Identity's) |
+| `GET /v1/files/{id}`, `/meta`, `/content?token=` | `CustomerFilesRestApi`, `CustomerFileLinkRestApi` | a 302 to a 5-minute signed link on the API itself, never a bucket URL; every read logged in `file_access_log` |
+
+Creating POSTs take an `Idempotency-Key` (receipts per workspace, client and key). **Events out:** V203's `api_event_out` journal is written by triggers in the transaction of the change (a run Running/Completed/Failed, a made file, a settled form submission) and by every review decision; `CustomerEventRelay` (ShedLock, every second) relays it through `platform_outbox` to `platform.customer.events.v1`, once and in order per workspace. integration-service turns those into signed webhooks. A pipeline's `emits` names `file.available` when a step makes a file. Checked live by etl-platform's `tests/customer-api/*_check.py`.
 
 ## Monitoring
 
