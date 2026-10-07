@@ -1,5 +1,7 @@
 package process.pipeline.data;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -69,7 +71,7 @@ class ExpressionTest {
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", "2026-09-01", "visit_date", "2026-09-15")).isEqualTo(14L);
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", null, "visit_date", "2026-09-15")).isNull();
         assertThat(eval("`wound length` + 1", "wound length", 2)).isEqualTo(3.0);
-        String today = java.time.LocalDate.now(java.time.ZoneId.of("America/Chicago")).toString();
+        String today = LocalDate.now(ZoneId.of("America/Chicago")).toString();
         assertThat(eval("today()", "x", 1)).isEqualTo(today);
         assertThat(eval("round(days_between(birth, today()) / 365.25, 0)", "birth", today)).isEqualTo(0L);
         assertThat(eval("regex_extract(k, '-([a-z]+-[0-9]{3})[.]jpe?g$')", "k", "intake/2026-10-06/88-scan-007.jpeg")).isEqualTo("scan-007");

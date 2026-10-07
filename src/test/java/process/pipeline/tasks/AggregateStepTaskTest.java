@@ -1,5 +1,8 @@
 package process.pipeline.tasks;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
@@ -77,7 +80,7 @@ class AggregateStepTaskTest {
 
     @Test
     void listNamesAtMostFiftyValuesAndCountsTheRest() throws Exception {
-        java.util.List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+        List<Map<String, Object>> rows = new ArrayList<>();
         for (int i = 1; i <= 53; i++) {
             rows.add(row("g", "x", "v", "v" + i));
         }

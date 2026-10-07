@@ -3,6 +3,7 @@ package process.pipeline.data;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -12,6 +13,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * A Compute formula (MIG-255): a small, closed language over one row's columns -- nothing in it can reach outside the row.
@@ -35,10 +40,10 @@ public final class Expression {
     static final List<String> FUNCTIONS = Collections.unmodifiableList(Arrays.asList("abs", "coalesce", "concat", "days_between", "if",
         "is_null", "max", "min", "number", "regex_extract", "round", "text", "today"));
 
-    private static final Map<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, Pattern> PATTERNS = new ConcurrentHashMap<>();
 
     /** The business clock's zone: today() is the date there, as {{date}} is. */
-    static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("America/Chicago");
+    static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Chicago");
 
     private final Node root;
     private final List<String> columns;
@@ -178,7 +183,7 @@ public final class Expression {
                     if (isNull(value) || isNull(pattern)) {
                         return null;
                     }
-                    java.util.regex.Matcher m = pattern(textOf(pattern)).matcher(textOf(value));
+                    Matcher m = pattern(textOf(pattern)).matcher(textOf(value));
                     if (!m.find()) {
                         return null;
                     }
@@ -297,13 +302,13 @@ public final class Expression {
         }
     }
 
-    private static java.util.regex.Pattern pattern(String text) {
+    private static Pattern pattern(String text) {
         if (PATTERNS.size() > 1000) {
             PATTERNS.clear();
         }
         try {
-            return PATTERNS.computeIfAbsent(text, java.util.regex.Pattern::compile);
-        } catch (java.util.regex.PatternSyntaxException invalid) {
+            return PATTERNS.computeIfAbsent(text, Pattern::compile);
+        } catch (PatternSyntaxException invalid) {
             throw new IllegalArgumentException(String.format("'%s' is not a valid pattern: %s.", text, invalid.getDescription()));
         }
     }

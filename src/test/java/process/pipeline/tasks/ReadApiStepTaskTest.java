@@ -1,10 +1,12 @@
 package process.pipeline.tasks;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.backing.Fakes;
 
 import java.util.Collections;
+import process.pipeline.data.Values;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,7 +62,7 @@ class ReadApiStepTaskTest {
             + "\"valueQuantity\":{\"value\":7.1,\"unit\":\"%\"}}},"
             + "{\"resource\":{\"id\":\"o2\",\"subject\":{\"reference\":\"Patient/p2\"},\"code\":{\"coding\":[{\"code\":\"39156-5\"}]}}},"
             + "{\"search\":{\"mode\":\"include\"}}]}";
-        TaskContext context = TaskContext.of(config("requestId", 5, "rowsPath", "entry[].resource", "fields", java.util.Arrays.asList(
+        TaskContext context = TaskContext.of(config("requestId", 5, "rowsPath", "entry[].resource", "fields", Arrays.asList(
             config("path", "id", "target", "observation_id"), config("path", "subject.reference", "target", "patient_ref"),
             config("path", "code.coding[0].code", "target", "loinc"), config("path", "valueQuantity.value", "target", "value"),
             config("path", "valueQuantity", "target", "quantity"))), Collections.emptyList());
@@ -82,7 +84,7 @@ class ReadApiStepTaskTest {
         this.api.answer = variables -> "{\"results\":[{\"a\":{\"b\":1}},{\"a\":{\"b\":2}}]}";
         assertThat(this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results[1].a"), Collections.emptyList()))
             .getOutput().getRows()).containsExactly(row("b", 2L));
-        assertThat(process.pipeline.data.Values.all(process.pipeline.data.Values.JSON.readTree("{\"x\":[[1,2],[3]]}"), "x[][]"))
+        assertThat(Values.all(Values.JSON.readTree("{\"x\":[[1,2],[3]]}"), "x[][]"))
             .hasSize(3);
     }
 
@@ -90,15 +92,15 @@ class ReadApiStepTaskTest {
     void oneFanOutFieldMakesARowPerValueWithTheOtherColumnsRepeated() throws Exception {
         this.api.answer = variables -> "{\"results\":[{\"id\":\"r1\",\"drug\":[{\"name\":\"A\"}],\"reaction\":[{\"pt\":\"Nausea\"},{\"pt\":\"Rash\"}]},"
             + "{\"id\":\"r2\",\"drug\":[{\"name\":\"B\"}],\"reaction\":[]}]}";
-        Dataset out = this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", java.util.Arrays.asList(
+        Dataset out = this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", Arrays.asList(
             config("path", "id", "target", "report"), config("path", "drug[0].name", "target", "drug"),
             config("path", "reaction[].pt", "target", "reaction"))), Collections.emptyList())).getOutput();
         assertThat(out.getRows()).containsExactly(row("report", "r1", "drug", "A", "reaction", "Nausea"),
             row("report", "r1", "drug", "A", "reaction", "Rash"), row("report", "r2", "drug", "B", "reaction", null));
-        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", java.util.Arrays.asList(
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", Arrays.asList(
             config("path", "drug[].name", "target", "d"), config("path", "reaction[].pt", "target", "r"))), Collections.emptyList())))
             .hasMessageContaining("must fan out over the same list");
-        assertThat(this.task.check(config("requestId", 5, "fields", java.util.Arrays.asList(config("path", "a[].b[].c", "target", "x")))))
+        assertThat(this.task.check(config("requestId", 5, "fields", Arrays.asList(config("path", "a[].b[].c", "target", "x")))))
             .extracting(p -> p.toString()).anyMatch(t -> t.contains("fan out once"));
     }
 
@@ -106,7 +108,7 @@ class ReadApiStepTaskTest {
     void variablesTakeTheFirstInputRowsColumnsUnderTheRunsPlaceholders() throws Exception {
         this.api.answer = variables -> "[]";
         this.task.run(TaskContext.of(config("requestId", 9, "variables", config("condition", "{{condition}}", "city", "{{city}}",
-            "run", "{{run}}")), java.util.Arrays.asList(row("condition", "asthma", "city", "Chicago", "run", "not this"),
+            "run", "{{run}}")), Arrays.asList(row("condition", "asthma", "city", "Chicago", "run", "not this"),
             row("condition", "second row", "city", "x"))));
         assertThat(this.api.calls.get(0).variables).containsEntry("condition", "asthma").containsEntry("city", "Chicago")
             .containsEntry("run", "88001");

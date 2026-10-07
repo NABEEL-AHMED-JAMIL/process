@@ -1,5 +1,6 @@
 package process.pipeline.tasks;
 
+import java.util.LinkedHashMap;
 import org.springframework.stereotype.Component;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
@@ -71,7 +72,7 @@ public class SendNotificationStepTask extends RegisteredTask {
             return StepResult.nothing((long) rows);
         }
         // The first row's columns, under the run's own placeholders: {{run}} stays the run whatever a column is called.
-        Map<String, Object> values = new java.util.LinkedHashMap<>();
+        Map<String, Object> values = new LinkedHashMap<>();
         if (rows > 0) {
             values.putAll(context.input().getRows().get(0));
         }

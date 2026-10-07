@@ -120,7 +120,7 @@ public class AggregateStepTask extends RegisteredTask {
         private final long[] counts;
         private final BigDecimal[] sums;
         private final Object[] picks;
-        private final List<java.util.LinkedHashSet<String>> lists = new ArrayList<>();
+        private final List<LinkedHashSet<String>> lists = new ArrayList<>();
         private final List<Set<String>> distinct = new ArrayList<>();
         private long rows;
 
@@ -178,7 +178,7 @@ public class AggregateStepTask extends RegisteredTask {
                     case "list":
                         if (value != null && !(value instanceof String && ((String) value).trim().isEmpty())) {
                             if (this.lists.get(i) == null) {
-                                this.lists.set(i, new java.util.LinkedHashSet<>());
+                                this.lists.set(i, new LinkedHashSet<>());
                             }
                             this.lists.get(i).add(Values.text(value).trim());
                         }
@@ -225,7 +225,7 @@ public class AggregateStepTask extends RegisteredTask {
             return out;
         }
 
-        private static String listed(java.util.Set<String> values) {
+        private static String listed(Set<String> values) {
             if (values == null || values.isEmpty()) {
                 return null;
             }
