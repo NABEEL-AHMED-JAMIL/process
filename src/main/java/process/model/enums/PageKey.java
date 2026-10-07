@@ -60,8 +60,11 @@ public enum PageKey {
     // once its PageKey names the same prefixes (HttpIdentity asks it only about a path this catalogue gates).
     FORMS("forms", "All forms", "Forms", "/forms/builder",
         "/form.json"),
+    // Console review 2026-10-07 (H8): the Submissions page picks a form from /form.json/list and names its fields from
+    // /form.json/fetch, so a reviewer holding Submissions alone was refused the whole page. Those two READS open to it as
+    // well; building, saving, a form's status, sharing and filling in stay All forms'.
     FORM_SUBMISSIONS("form-submissions", "Submissions", "Forms", "/forms/submissions",
-        "/formSubmission.json");
+        "/formSubmission.json", "/form.json/list", "/form.json/fetch");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is
