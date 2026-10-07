@@ -313,9 +313,9 @@ class StepEnginePostgresTest {
         assertThat(rows.get(1)).containsEntry("step_key", "more").containsEntry("records_in", 1L).containsEntry("records_out", 2L);
         assertThat(login.queryForList("SELECT d.name || ':' || d.row_count || ':' || d.storage_key || ':' || d.tenant_id FROM run_dataset d "
             + "JOIN step_execution s ON s.step_execution_id = d.step_execution_id WHERE s.job_queue_id = ? ORDER BY s.step_index",
-            String.class, steps)).containsExactly("output:1:datasets/" + steps + "/1/shape/output.json:" + TENANT,
-            "output:2:datasets/" + steps + "/1/more/output.json:" + TENANT);
-        assertThat(Files.exists(datasetDir.resolve("datasets/" + steps + "/1/shape/output.json"))).isTrue();
+            String.class, steps)).containsExactly("output:1:datasets/" + steps + "/1/shape/output.rows:" + TENANT,
+            "output:2:datasets/" + steps + "/1/more/output.rows:" + TENANT);
+        assertThat(Files.exists(datasetDir.resolve("datasets/" + steps + "/1/shape/output.rows"))).isTrue();
         assertThat(login.queryForList("SELECT l.message FROM step_log l JOIN step_execution s ON s.step_execution_id = l.step_execution_id "
             + "WHERE s.job_queue_id = ? ORDER BY s.step_index, l.line_no", String.class, steps))
             .containsExactly("1 row(s), 2 column(s) kept.", "2 sample row(s).");
@@ -397,7 +397,7 @@ class StepEnginePostgresTest {
     void anExpiredDatasetIsSweptAway() throws Exception {
         long steps = this.queue(STEPS_JOB);
         this.pass();
-        String key = "datasets/" + steps + "/1/shape/output.json";
+        String key = "datasets/" + steps + "/1/shape/output.rows";
         assertThat(Files.exists(datasetDir.resolve(key))).isTrue();
         login.update("UPDATE run_dataset SET expires_at = now() - interval '1 minute' WHERE storage_key = ?", key);
 
@@ -406,7 +406,7 @@ class StepEnginePostgresTest {
 
         assertThat(Files.exists(datasetDir.resolve(key))).isFalse();
         assertThat(login.queryForObject("SELECT count(*) FROM run_dataset WHERE storage_key = ?", Long.class, key)).isZero();
-        assertThat(Files.exists(datasetDir.resolve("datasets/" + steps + "/1/more/output.json"))).as("not expired").isTrue();
+        assertThat(Files.exists(datasetDir.resolve("datasets/" + steps + "/1/more/output.rows"))).as("not expired").isTrue();
         assertThat(login.queryForObject("SELECT records_out FROM step_execution WHERE job_queue_id = ? AND step_key = 'shape'", Long.class,
             steps)).as("the step still says what it did").isEqualTo(1L);
     }

@@ -457,7 +457,9 @@ public class StepEngine {
                 this.memory.resetPeak();
                 Tried tried = this.tryStep(step, row, input, log);
                 long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - began);
-                if (tried.streamed) {
+                // MIG-344: what a streaming step held, on its log -- for a step that read a batch or more, or spilled (a small
+                // step's log stays as it was).
+                if (tried.streamed && (input.size() >= batchRows || this.memory.spilled() > 0)) {
                     log.line("INFO", String.format("Streamed in batches of %,d row(s): at most about %s held at once of the run's %s "
                         + "memory budget%s.", batchRows, RunMemory.megabytes(this.memory.peak()), RunMemory.megabytes(this.memory.budget()),
                         this.memory.spilled() > 0 ? String.format("; %s spilled to disk", RunMemory.megabytes(this.memory.spilled())) : ""));
@@ -596,16 +598,15 @@ public class StepEngine {
                 if (future != null) {
                     try {
                         tried.result = future.get(timeout, TimeUnit.SECONDS);
-                        if (streams) {
-                            this.commitStreamed((StreamTry) context, tried);
+                        String uncommitted = streams ? this.commitStreamed((StreamTry) context, tried) : null;
+                        tried.timedOut = false;
+                        if (uncommitted == null) {
+                            tried.error = null;
+                            return tried;
                         }
-                        tried.error = null;
-                        tried.timedOut = false;
-                        return tried;
-                    } catch (StreamCommitFailed ex) {
+                        // The work succeeded but its output could not be kept: a failed try.
                         tried.result = null;
-                        tried.error = ex.getMessage();
-                        tried.timedOut = false;
+                        tried.error = uncommitted;
                     } catch (TimeoutException ex) {
                         future.cancel(true);
                         tried.error = String.format("timed out after %d s", timeout);
@@ -664,9 +665,10 @@ public class StepEngine {
 
         /**
          * MIG-344: a streaming try that succeeded -- its output file is committed (it was a partial file until now), or
-         * dropped when the step made no dataset; its spill files go either way.
+         * dropped when the step made no dataset; its spill files go either way. Returns why the output could not be
+         * kept, or null when it was.
          */
-        private void commitStreamed(StreamTry context, Tried tried) {
+        private String commitStreamed(StreamTry context, Tried tried) {
             try {
                 if (tried.result.isStreamed()) {
                     DatasetStore.Output output = context.output == null ? context.startOutput() : context.output;
@@ -679,9 +681,10 @@ public class StepEngine {
                 } else {
                     context.discard();
                 }
+                return null;
             } catch (Exception ex) {
                 context.discard();
-                throw new StreamCommitFailed(String.format("its output could not be kept: %s", reasonOf(ex)));
+                return String.format("its output could not be kept: %s", reasonOf(ex));
             } finally {
                 context.removeScratch();
             }
@@ -863,13 +866,6 @@ public class StepEngine {
         String outputKey;
         long outputRows;
         List<String> outputColumns;
-    }
-
-    /** A streaming try whose work succeeded but whose output could not be committed: a failed try. */
-    private static final class StreamCommitFailed extends RuntimeException {
-        StreamCommitFailed(String message) {
-            super(message);
-        }
     }
 
     /** A checked exception out of a task, carried through the try's thread. */
