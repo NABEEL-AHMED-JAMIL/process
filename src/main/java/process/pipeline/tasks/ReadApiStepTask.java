@@ -39,7 +39,8 @@ public class ReadApiStepTask extends RegisteredTask {
         .output(TaskSpec.rows("One row per element of the answer's rows (or the whole answer as one row)."))
         .config(ApiConfigs.request(JsonSchema.object())
             .property("variables", JsonSchema.map(JsonSchema.string()).title("Variables")
-                .description("Request variables by name; {{run}}, {{date}} and the other run placeholders are filled in."))
+                .description("Request variables by name; {{run}}, {{date}} and the other run placeholders are filled in, and"
+                    + " {{column}} from the first row of the step's input."))
             .property("rowsPath", JsonSchema.string().maxLength(255).title("Rows at")
                 .description("Where the rows are in the answer, as a dot path (data.items; entry[].resource takes the resource of"
                     + " every element); empty for the pages' items, else the body."))
@@ -85,7 +86,13 @@ public class ReadApiStepTask extends RegisteredTask {
     @Override
     public StepResult run(StepContext context) throws Exception {
         Map<String, Object> config = context.config();
-        Map<String, Object> placeholders = Templates.ofRun(context, null);
+        // {{column}} from the first row of the step's input (a form's or an event's intake read just before, a row a
+        // previous step made), under the run's own placeholders: a request's variables can come from the run's data.
+        Map<String, Object> placeholders = new LinkedHashMap<>();
+        if (context.input() != null && context.input().size() > 0) {
+            placeholders.putAll(context.input().getRows().get(0));
+        }
+        placeholders.putAll(Templates.ofRun(context, null));
         Map<String, String> variables = new LinkedHashMap<>();
         Configs.textMap(config, "variables").forEach((name, value) -> variables.put(name, Templates.fill(value, placeholders)));
         ApiRunner.ApiRunResult result = this.runner.run(ApiConfigs.call(context, config, variables));

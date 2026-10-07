@@ -101,4 +101,14 @@ class ReadApiStepTaskTest {
         assertThat(this.task.check(config("requestId", 5, "fields", java.util.Arrays.asList(config("path", "a[].b[].c", "target", "x")))))
             .extracting(p -> p.toString()).anyMatch(t -> t.contains("fan out once"));
     }
+
+    @Test
+    void variablesTakeTheFirstInputRowsColumnsUnderTheRunsPlaceholders() throws Exception {
+        this.api.answer = variables -> "[]";
+        this.task.run(TaskContext.of(config("requestId", 9, "variables", config("condition", "{{condition}}", "city", "{{city}}",
+            "run", "{{run}}")), java.util.Arrays.asList(row("condition", "asthma", "city", "Chicago", "run", "not this"),
+            row("condition", "second row", "city", "x"))));
+        assertThat(this.api.calls.get(0).variables).containsEntry("condition", "asthma").containsEntry("city", "Chicago")
+            .containsEntry("run", "88001");
+    }
 }
