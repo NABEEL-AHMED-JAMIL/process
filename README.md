@@ -2,9 +2,9 @@
 
 **Running the platform:** every service, its settings and its secrets are started from [etl-platform](https://github.com/NABEEL-AHMED-JAMIL/etl-platform) (`../etl-platform`): `scripts/up.sh`, `scripts/deploy.sh <service>`, `scripts/verify.sh`. This repository's own `docker-compose.yml` still works for standalone development, but once the service runs from etl-platform its `.env` here no longer configures the running container -- change `etl-platform/config/` or `etl-platform/secrets/` instead.
 
-The server behind the ETL Console. It began as a Kafka-backed **scheduler engine**, and that is still its core, but it has grown well past it: 27 REST controllers now cover multi-tenancy, storage, AI agents, document and audio tooling, a query engine, dynamic forms and more.
+The server behind the ETL Console ("Core"). It began as a Kafka-backed **scheduler engine**, and that is still its core: 47 REST controllers (15 of them `/internal`, 6 the customer API) cover pipelines and the step engine, schedules, runs and their review, forms, inbox triggers, reports and the customer API's runs, events and reads. Identity, storage, media and documents, and analytics have moved out to their own services (MIG-108, MIG-70, MIG-48, MIG-128), beside ai-, billing-, integration- and workflow-service; Core reaches them over HTTP and Kafka.
 
-Its frontend lives in [`../scheduler1`](../scheduler1) — currently mid-rewrite, with an Angular 8 app deployed and an Angular 22 app replacing it.
+Its frontend is the Angular 22 console in [`../scheduler1`](../scheduler1) (`next-app`, served on :4400 by etl-platform). The older Angular 8 console was retired on 2026-09-24.
 
 > **As of 2026-10-07** (branch `media-extraction`, platform-commons 1.16.0): the step engine streams big files and spills to disk (ADR-026 phase 1, MIG-344); Read API, Aggregate, Compute, Send Notification and Measure image gained the features listed under [Pipeline steps](#pipeline-steps-as-of-2026-10-07); the customer API's runs, pipelines, events, files, reviews and view links are served here ([The customer API in Core](#the-customer-api-in-core-mig-332333334335-adr-025)). Architecture records: `../etl-platform/docs/adr/ADR-026-big-data-step-engine.md`, `ADR-025-customer-api.md`.
 
@@ -13,12 +13,13 @@ Its frontend lives in [`../scheduler1`](../scheduler1) — currently mid-rewrite
 ## The scheduler
 
 ```
-Process has 5 types of scheduler
+Process has 6 types of scheduler
 1. Mint    (runs on a minute interval,  e.g. every 5 minutes)
 2. Hr      (runs hourly,                e.g. every 1 hour)
 3. Daily
 4. Weekly
 5. Monthly
+6. Cron    (the schedule's own cron expression, scheduler.cron_expression, V187)
 ```
 
 These are exactly the values of `process.model.enums.Frequency`.
@@ -28,9 +29,9 @@ These are exactly the values of `process.model.enums.Frequency`.
 1. **Producer** — sends job/task messages into Kafka topics
 2. **Scheduler engine** — pulls due jobs, applies scheduling logic, dispatches them
 3. **Consumer** — reads results and error events back off Kafka
-4. **Workers** — the Python services in [`../job-search`](../job-search) consume the topics and do the work
+4. **Step engine** — a pipeline with a step definition runs inside Core (`process.pipeline.StepEngine`, MIG-230; streaming per ADR-026, below). The engine takes the run and reports through the same callback a worker uses (`NotifyService.changeState`), so statuses, retries, mails and metering are unchanged. A pipeline without one (a "Legacy" task) is still published through `dispatch_outbox` to its worker's Kafka queue, but no worker is part of the platform any more: the Python workers (`../job-search`) were retired on 2026-09-24 and the step engine replaced them (the Java `service-1` worker is a test executor only).
 
-Concurrency comes from Spring's own scheduling pool, sized by `spring.task.scheduling.pool.size`. (Earlier versions of this README described a `ThreadPoolExecutor` with a `PriorityBlockingQueue`; no such code exists today.)
+Concurrency comes from Spring's own scheduling pool, sized by `spring.task.scheduling.pool.size`, and the step engine's own threads (`process.pipeline.engine.threads`, default 4). (Earlier versions of this README described a `ThreadPoolExecutor` with a `PriorityBlockingQueue`; no such code exists today.)
 
 ## Tech stack
 
@@ -38,13 +39,13 @@ Concurrency comes from Spring's own scheduling pool, sized by `spring.task.sched
 |---|---|
 | **Java 17 / Spring Boot 2.7.18** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204) |
 | **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
-| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`, V1.0 → V25.0) |
-| **Redis** | Caching |
-| **MinIO** | Object storage; S3 and Azure Blob also supported per connection |
-| **jodconverter / LibreOffice** | Document conversion |
-| **Spring Security + JWT** | Three roles: `PLATFORM_ADMIN` > `TENANT_ADMIN` > `TENANT_USER` |
+| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V204.0 as of 2026-10-07 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
+| **Redis** | Caching, token revocations shared with Identity, locks and one-time secrets |
+| **storage-service** | Object storage (MinIO, S3, Azure Blob, per connection) is storage-service's; a pipeline's bucket steps go through its trusted contract (`TrustedBucketStore`). Document conversion left with media-service (MIG-48) |
+| **DuckDB 1.1.3** | Reads Parquet for the step engine (`ParquetRows`) |
+| **Spring Security + JWT** | Tokens from identity-service (RS256 on the platform, checked against its JWKS). Three roles: `PLATFORM_ADMIN` > `TENANT_ADMIN` > `TENANT_USER` |
 
-`docker-compose.yml` additionally runs `kafka_ui` and `redisinsight`.
+`docker-compose.yml` additionally runs `kafka_ui` and `redisinsight`, and LocalStack (`--profile aws`) and Azurite (`--profile storage-test`) on request.
 
 ## Running
 
@@ -57,7 +58,7 @@ mvn clean package -DskipTests
 java -jar target/*.jar
 ```
 
-The branch this workspace is on is `new-screen-2026`.
+Work happens on `media-extraction`. etl-platform builds Core from `../process-main`, a worktree of that branch (`config/process_app/SOURCE`); `../process` is the owner's own checkout and is never built from.
 
 ### Option 2 — Docker Compose (recommended)
 
@@ -77,8 +78,10 @@ docker-compose down
 | | URL |
 |---|---|
 | API | `http://localhost:9098/api/v1` |
-| Swagger UI | `http://localhost:9098/api/v1/swagger-ui.html` |
+| Swagger UI | `http://localhost:9098/api/v1/swagger-ui.html` (a platform administrator only) |
 | Health | `http://localhost:9098/api/v1/actuator/health` |
+
+Core listens on 9098 inside its container. Under etl-platform (and this compose file) the host's 9098 is the API gateway's, and Core itself is on `127.0.0.1:9099`.
 
 Schema migration is automatic — Liquibase runs on startup, and `ModelApplication` seeds `SCHEDULER_LAST_RUN_TIME` if it is absent without overwriting an existing value. **No manual bootstrap SQL is needed;** the statements older versions of this README carried no longer match the tables.
 
@@ -97,8 +100,8 @@ POST /api/v1/sourceTask.json/uploadSourceTask
 
 | Suite | Command | Count |
 |---|---|---|
-| Unit | `mvn -o test` | 1949 (Postgres suites need NOTIFICATIONS_TEST_DB_*) |
-| End-to-end, over real HTTP | `./run-e2e.sh` | 86 |
+| Unit and Postgres | `mvn -o test` | about 2,661 as of 2026-10-07 (the 91 `*PostgresTest` classes need NOTIFICATIONS_TEST_DB_*) |
+| End-to-end, over real HTTP | `./run-e2e.sh` (`*E2EIT`, `HarnessSmokeIT`) | 13 |
 | Kafka security matrix, real broker | `./run-kafka-matrix.sh` | 17 |
 
 `run-e2e.sh` reads the database credentials and the encryption key from the running `process_app` container, so the stack must be up. `run-kafka-matrix.sh` **must** run in a container — every listener on the test broker is advertised as `host.docker.internal`, which the host cannot resolve, and a host run fails with metadata timeouts that look nothing like the cause. Bring that broker up with `kafka-it/start.sh`.
@@ -205,4 +208,4 @@ The rest — `env`, `configprops`, `heapdump`, `threaddump`, `beans` and the oth
 
 ## Note on the wider documentation
 
-Five further markdown files exist under `ext-detail/md/` and `docs/design/` that are not linked from here and have not been verified. Treat them as unknown. The superseded content of this README — the bootstrap SQL and the actuator endpoint dump — is preserved in [`../.ai/old-scope/`](../.ai/old-scope/).
+Eight further markdown files exist under `ext-detail/md/` (seven) and `docs/design/` (one) that are not linked from here and have not been verified. Treat them as unknown. The superseded content of this README — the bootstrap SQL and the actuator endpoint dump — is preserved in [`../.ai/old-scope/`](../.ai/old-scope/).
