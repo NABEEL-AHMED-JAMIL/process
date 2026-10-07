@@ -66,20 +66,37 @@ public class RunReviews {
     /** As above, with the run's pinned definition already known and the definitions read through {@code byId}. */
     private Set<ReviewParty> requiredByDefinition(JobQueue run, SourceJob job, Optional<Long> pinned,
         Function<Long, Optional<PipelineDefinitionStore.Stored>> byId) {
+        return this.definitionOf(run, job, pinned, byId).map(d -> d.effectiveSettings().requiredReviews())
+            .orElseGet(() -> EnumSet.noneOf(ReviewParty.class));
+    }
+
+    /**
+     * MIG-361: whose Task inbox the run's internal review goes to -- its definition's settings.review.reviewers, else the
+     * workspace's administrators -- by the same rule as the parties (the version the run follows).
+     */
+    public PipelineDefinition.Reviewers reviewersOf(JobQueue run, SourceJob job) {
+        return this.definitionOf(run, job, this.steps.pinnedDefinition(run.getJobQueueId()), this.definitions::byId)
+            .map(d -> d.effectiveSettings().getReview())
+            .map(PipelineDefinition.Review::effectiveReviewers)
+            .orElseGet(() -> PipelineDefinition.Reviewers.of(PipelineDefinition.Reviewers.ROLE, PipelineDefinition.Reviewers.ADMINS));
+    }
+
+    /** The definition the run follows: the one it is pinned to, else its pipeline's latest as of the run; empty for none. */
+    private Optional<PipelineDefinition> definitionOf(JobQueue run, SourceJob job, Optional<Long> pinned,
+        Function<Long, Optional<PipelineDefinitionStore.Stored>> byId) {
         Optional<PipelineDefinitionStore.Stored> stored = pinned.flatMap(byId);
         if (!stored.isPresent() && job.getTenantId() != null && job.getTaskDetail() != null) {
             stored = this.definitions.latestFor(job.getTenantId(), job.getTaskDetail().getPipelineId(), run.getDateCreated());
         }
         if (!stored.isPresent()) {
-            return EnumSet.noneOf(ReviewParty.class);
+            return Optional.empty();
         }
         try {
-            PipelineDefinition definition = stored.get().definition();
-            return definition.effectiveSettings().requiredReviews();
+            return Optional.of(stored.get().definition());
         } catch (IllegalStateException unreadable) {
             logger.warn("Run {}: definition {} cannot be read, so its review setting is not known: {}", run.getJobQueueId(),
                 stored.get().id, unreadable.getMessage());
-            return EnumSet.noneOf(ReviewParty.class);
+            return Optional.empty();
         }
     }
 

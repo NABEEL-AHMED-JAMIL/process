@@ -18,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import process.forms.FormStore;
 import process.outbox.OutboxWriter;
 import process.pipeline.StepStore;
+import process.pipeline.review.RunReviewEvents;
 import process.pipeline.review.RunReviews;
 
 import java.sql.ResultSet;
@@ -112,12 +113,31 @@ public class CustomerEventRelay {
         final String type;
         final String subject;
         final Map<String, Object> data;
+        /** MIG-361: not the customer's -- the run's internal review, for the Task inbox (RunReviewEvents). */
+        final Runnable internal;
 
         Event(String type, String subject, Map<String, Object> data) {
+            this(type, subject, data, null);
+        }
+
+        private Event(String type, String subject, Map<String, Object> data, Runnable internal) {
             this.type = type;
             this.subject = subject;
             this.data = data;
+            this.internal = internal;
         }
+
+        static Event internal(String type, Runnable write) {
+            return new Event(type, null, null, write);
+        }
+    }
+
+    /** MIG-361: the run's internal review for the Task inbox; absent in hand-built tests. */
+    private RunReviewEvents reviewEvents;
+
+    @Autowired(required = false)
+    public void setReviewEvents(RunReviewEvents reviewEvents) {
+        this.reviewEvents = reviewEvents;
     }
 
     @Scheduled(initialDelayString = "${customer.events.relay.initial-delay-ms:20000}", fixedDelayString = "${customer.events.relay.poll-ms:1000}")
@@ -158,11 +178,19 @@ public class CustomerEventRelay {
 
     /** The row's events into the outbox, and the row stamped; answers how many. Nothing when another relay stamped it first. */
     int publish(Pending row) {
-        List<Event> events = this.eventsOf(row);
+        List<Event> all = this.eventsOf(row);
+        List<Event> events = new ArrayList<>();
+        List<Event> internal = new ArrayList<>();
+        for (Event event : all) {
+            (event.internal != null ? internal : events).add(event);
+        }
         int stamped = this.jdbc.update("UPDATE api_event_out SET published_at = now(), event_count = ? WHERE out_id = ? AND published_at IS NULL",
             events.size(), row.outId);
         if (stamped == 0) {
             return 0;
+        }
+        for (Event event : internal) {
+            event.internal.run();
         }
         for (Event event : events) {
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -226,6 +254,12 @@ public class CustomerEventRelay {
             data.put("review", review);
             events.add(new Event(CustomerEventTypes.REVIEW_REQUESTED, subjectOfRun(row.jobQueueId), data));
         }
+        if (completed && "pending".equals(reviewWord) && asksUs(summary) && this.reviewEvents != null) {
+            // MIG-361: the internal review waits -- a Task inbox task for the pipeline's reviewers.
+            CustomerRuns.Found at = found.get();
+            events.add(Event.internal(RunReviewEvents.REQUESTED, () -> this.reviewEvents.requested(row.tenantId, at.run, at.job,
+                row.occurredAt)));
+        }
     }
 
     private void reviewDecided(Pending row, List<Event> events) {
@@ -241,6 +275,12 @@ public class CustomerEventRelay {
         data.put("run", CustomerViews.run(found.get().row, CustomerViews.reviewWordOf(summary.get("reviewStatus"))));
         data.put("review", CustomerViews.review(summary));
         events.add(new Event(CustomerEventTypes.REVIEW_DECIDED, subjectOfRun(row.jobQueueId), data));
+        if (this.reviewEvents != null && internalDone(summary)) {
+            // MIG-361: a Task inbox task still open for the run's internal review is no longer needed.
+            String status = String.valueOf(summary.get("reviewStatus"));
+            events.add(Event.internal(RunReviewEvents.DECIDED, () -> this.reviewEvents.decided(row.tenantId, row.jobQueueId, status,
+                row.occurredAt)));
+        }
     }
 
     private void fileMade(Pending row, List<Event> events) {
@@ -299,6 +339,28 @@ public class CustomerEventRelay {
         then.endedAt = row.endedAt;
         then.attempt = row.attempt == null ? now.attempt : Math.max(1, row.attempt);
         return then;
+    }
+
+    /**
+     * MIG-361: the internal review needs nothing more -- the review is settled (approved, or rejected by either party), or
+     * the workspace's own decision is in. A customer's approval alone leaves the internal task open.
+     */
+    @SuppressWarnings("unchecked")
+    static boolean internalDone(Map<String, Object> summary) {
+        Object status = summary.get("reviewStatus");
+        if ("APPROVED".equals(status) || "REJECTED".equals(status)) {
+            return true;
+        }
+        Object decisions = summary.get("decisions");
+        return decisions instanceof List && ((List<Object>) decisions).stream()
+            .anyMatch(d -> d instanceof Map && "internal".equals(((Map<String, Object>) d).get("party")));
+    }
+
+    /** MIG-361: the review needs the workspace's own (internal) decision. */
+    @SuppressWarnings("unchecked")
+    static boolean asksUs(Map<String, Object> summary) {
+        Object required = summary.get("required");
+        return required instanceof List && ((List<Object>) required).contains("internal");
     }
 
     @SuppressWarnings("unchecked")

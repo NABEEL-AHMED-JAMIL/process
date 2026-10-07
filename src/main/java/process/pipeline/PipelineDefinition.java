@@ -35,7 +35,8 @@ import process.model.enums.ReviewParty;
  *     task: select
  *     input: read                      # an earlier step's output; default: the latest output before this step
  * settings: {datasetRetentionHours: 24, defaultTimeoutSeconds: 600, defaultOnError: fail,
- *            review: {required: [internal, customer]}}   # MIG-237: who must approve a run's results; none by default
+ *            review: {required: [internal, customer],     # MIG-237: who must approve a run's results; none by default
+ *                     reviewers: {kind: group, value: "1063"}}}  # MIG-361: whose Task inbox the internal review goes to
  * </pre>
  *
  * Every existing pipeline is, without a stored definition, {@link #legacy}: one {@code legacy} step that runs today's
@@ -389,12 +390,18 @@ public class PipelineDefinition {
      * a review starts PENDING and is approved only by every party named here.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"required", "reviewers"})
     public static class Review {
 
         /** The words a party is written as, in the order they are listed. */
         public static final List<String> PARTIES = Collections.unmodifiableList(Arrays.asList("internal", "customer"));
 
         private List<String> required;
+        /**
+         * MIG-361: who decides the internal review in the Task inbox -- a role (TENANT_ADMIN, TENANT_USER) or a group (an
+         * access profile, by id). Absent: the workspace's administrators, as before.
+         */
+        private Reviewers reviewers;
 
         public static Review of(List<String> required) {
             Review review = new Review();
@@ -418,5 +425,48 @@ public class PipelineDefinition {
         public List<String> getRequired() { return required; }
 
         public void setRequired(List<String> required) { this.required = required; }
+
+        public Reviewers getReviewers() { return reviewers; }
+
+        public void setReviewers(Reviewers reviewers) { this.reviewers = reviewers; }
+
+        /** The reviewers in effect: the ones set, else the workspace's administrators. */
+        @JsonIgnore
+        public Reviewers effectiveReviewers() {
+            return this.reviewers != null ? this.reviewers : Reviewers.of(Reviewers.ROLE, Reviewers.ADMINS);
+        }
+    }
+
+    /**
+     * MIG-361: whose Task inbox a run's internal review goes to -- {@code {kind: role, value: TENANT_USER}} or {@code {kind:
+     * group, value: "1063"}} (an access profile of the workspace, by id). A workspace's viewers are neither: a role names
+     * its administrators or users, and a group only its own people.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"kind", "value"})
+    public static class Reviewers {
+
+        public static final String ROLE = "role";
+        public static final String GROUP = "group";
+        public static final String ADMINS = "TENANT_ADMIN";
+        public static final List<String> ROLES = Collections.unmodifiableList(Arrays.asList(ADMINS, "TENANT_USER"));
+
+        private String kind;
+        private String value;
+
+        public static Reviewers of(String kind, String value) {
+            Reviewers reviewers = new Reviewers();
+            reviewers.setKind(kind);
+            reviewers.setValue(value);
+            return reviewers;
+        }
+
+        public String getKind() { return kind; }
+
+        public void setKind(String kind) { this.kind = kind; }
+
+        public String getValue() { return value; }
+
+        public void setValue(String value) { this.value = value; }
     }
 }

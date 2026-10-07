@@ -203,39 +203,14 @@ public class RunReviewService {
         if (refused.isPresent()) {
             return new ResponseDto(ERROR, refused.get());
         }
+        Recorded recorded = this.record(owned.get(), party, decision.get(), comment, reason, TenantContext.getAppUserId(),
+            TenantContext.getUsername(), null);
+        if (recorded.refusal != null) {
+            return new ResponseDto(ERROR, recorded.refusal);
+        }
         JobQueue run = owned.get().run;
-
-        // Held for the rest of the transaction, then asked again: the other party may have decided meanwhile.
-        RunReviewStore.Status held = this.store.lockPending(run.getJobQueueId(), this.reviews.required(run, owned.get().job));
-        Map<ReviewParty, ReviewDecision> decided = this.reviews.decisionsByParty(this.store.decisionsOf(run.getJobQueueId()));
-        Optional<String> late = RunReviewRules.refusal(held.required, decided, party);
-        if (late.isPresent()) {
-            return new ResponseDto(ERROR, late.get());
-        }
-
-        Instant now = Instant.now();
-        RunReviewStore.Decision record = new RunReviewStore.Decision();
-        record.jobQueueId = run.getJobQueueId();
-        record.attempt = Math.max(1, run.getAttempt());
-        record.party = party;
-        record.decision = decision.get();
-        record.comment = comment;
-        record.reason = reason;
-        record.reviewerUserId = TenantContext.getAppUserId();
-        record.reviewerName = TenantContext.getUsername();
-        record.decidedAt = now;
-        this.store.record(record);
-        decided.put(party, decision.get());
-        RunReviewStatus status = RunReviewRules.statusOf(held.required, decided);
-        this.store.settle(run.getJobQueueId(), status, status.isDecided() ? now : null);
-        if (status.isDecided()) {
-            this.store.settleResults(run.getJobQueueId(), status);
-        }
-        this.transactions.saveJobAuditLogs(run.getJobQueueId(), auditLine(record, status));
-        if (this.events != null && run.getTenantId() != null) {
-            // MIG-333: the customer's webhooks hear of every decision, either party's, with the review's status after it.
-            this.events.reviewDecided(run.getTenantId(), run.getJobQueueId());
-        }
+        RunReviewStore.Decision record = recorded.decision;
+        RunReviewStatus status = recorded.status;
 
         Map<String, Object> rerunOutcome = rerun ? this.runAgain(owned.get(), record) : null;
         Map<String, Object> answer = this.head(run);
@@ -249,6 +224,95 @@ public class RunReviewService {
                 : " The job was not run again: " + rerunOutcome.get("message");
         }
         return new ResponseDto(SUCCESS, message, answer);
+    }
+
+    /** What {@link #record} did: the decision and the review's status after it, or why nothing was recorded. */
+    private static final class Recorded {
+        final RunReviewStore.Decision decision;
+        final RunReviewStatus status;
+        final String refusal;
+
+        Recorded(RunReviewStore.Decision decision, RunReviewStatus status, String refusal) {
+            this.decision = decision;
+            this.status = status;
+            this.refusal = refusal;
+        }
+    }
+
+    /**
+     * Records {@code party}'s decision on the run -- the one way a decision is written, whoever asked: the run's status row
+     * held for the transaction and asked again (the other party may have decided meanwhile), the decision, the status after
+     * it, the results settled once decided, a line in the run's audit log ({@code via} says where, when not the console's
+     * or the API's own endpoint), and the customer's run.review.decided.
+     */
+    private Recorded record(RunOwnership.Owned owned, ReviewParty party, ReviewDecision decision, String comment, String reason,
+        Long reviewerUserId, String reviewerName, String via) {
+        JobQueue run = owned.run;
+        RunReviewStore.Status held = this.store.lockPending(run.getJobQueueId(), this.reviews.required(run, owned.job));
+        Map<ReviewParty, ReviewDecision> decided = this.reviews.decisionsByParty(this.store.decisionsOf(run.getJobQueueId()));
+        Optional<String> late = RunReviewRules.refusal(held.required, decided, party);
+        if (late.isPresent()) {
+            return new Recorded(null, null, late.get());
+        }
+        Instant now = Instant.now();
+        RunReviewStore.Decision record = new RunReviewStore.Decision();
+        record.jobQueueId = run.getJobQueueId();
+        record.attempt = Math.max(1, run.getAttempt());
+        record.party = party;
+        record.decision = decision;
+        record.comment = comment;
+        record.reason = reason;
+        record.reviewerUserId = reviewerUserId;
+        record.reviewerName = reviewerName;
+        record.decidedAt = now;
+        this.store.record(record);
+        decided.put(party, decision);
+        RunReviewStatus status = RunReviewRules.statusOf(held.required, decided);
+        this.store.settle(run.getJobQueueId(), status, status.isDecided() ? now : null);
+        if (status.isDecided()) {
+            this.store.settleResults(run.getJobQueueId(), status);
+        }
+        this.transactions.saveJobAuditLogs(run.getJobQueueId(), auditLine(record, status) + (via == null ? "" : " " + via));
+        if (this.events != null && run.getTenantId() != null) {
+            // MIG-333: the customer's webhooks hear of every decision, either party's, with the review's status after it.
+            this.events.reviewDecided(run.getTenantId(), run.getJobQueueId());
+        }
+        return new Recorded(record, status, null);
+    }
+
+    /**
+     * MIG-361: the internal review decided in the Task inbox -- workflow-service's request for the run ended Approved or
+     * Rejected by one of the reviewers the pipeline names (workflow-service let only them act on the task). Recorded as
+     * that person's internal decision, with their comment (a rejection's reason too). No caller is signed in: run as the
+     * run's workspace (RowSecurity.forTenant). Refused, and nothing recorded, when the run is not this workspace's, not
+     * completed, needs no internal review, or the internal review is already decided (the console got there first).
+     */
+    @Transactional
+    public ResponseDto decideFromInbox(long tenantId, long jobQueueId, ReviewDecision decision, Long reviewerUserId,
+        String reviewerName, String comment, long instanceId, long taskId) {
+        Optional<RunOwnership.Owned> owned = RunOwnership.ofWorkspace(this.runs, this.jobs, jobQueueId, tenantId);
+        if (!owned.isPresent()) {
+            return new ResponseDto(ERROR, RUN_NOT_FOUND);
+        }
+        if (owned.get().run.getJobStatus() != JobStatus.Completed) {
+            return new ResponseDto(ERROR, String.format("Only a completed run's results can be reviewed; this run is %s.",
+                owned.get().run.getJobStatus()));
+        }
+        if (!this.reviews.required(owned.get().run, owned.get().job).contains(ReviewParty.INTERNAL)) {
+            return new ResponseDto(ERROR, "This run's results need no internal review.");
+        }
+        String said = trimmed(comment);
+        if (said != null && said.length() > MAX_TEXT) {
+            said = said.substring(0, MAX_TEXT);
+        }
+        String reason = decision == ReviewDecision.REJECTED ? (said != null ? said : "Rejected in the Task inbox") : null;
+        Recorded recorded = this.record(owned.get(), ReviewParty.INTERNAL, decision, said, reason, reviewerUserId, reviewerName,
+            String.format("Decided in the Task inbox (request %d, task %d).", instanceId, taskId));
+        if (recorded.refusal != null) {
+            return new ResponseDto(ERROR, recorded.refusal);
+        }
+        return new ResponseDto(SUCCESS, String.format("The internal review is recorded: the run's results are %s.", recorded.status.name()),
+            this.head(owned.get().run));
     }
 
     /** Why this caller may not record {@code party}'s review of this run now; empty when they may. */

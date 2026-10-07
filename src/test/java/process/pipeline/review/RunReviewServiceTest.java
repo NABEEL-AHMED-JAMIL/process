@@ -216,7 +216,7 @@ class RunReviewServiceTest {
         TenantContext.set(TENANT, "TENANT_USER", USER, "uma@acme.example");
         Map<String, Object> review = data(this.service.review(RUN));
         assertThat((Map<String, Object>) review.get("you")).containsEntry("canDecide", false)
-            .containsEntry("refusal", "Only a tenant administrator can approve or reject a run's results.");
+            .containsEntry("refusal", "Only a tenant administrator can approve or reject a run's results here; the pipeline's reviewers decide it in the Task inbox.");
         TenantContext.set(TENANT, "TENANT_USER", 99L, "someone@acme.example");
         refused(this.service.review(RUN), "Run not found with jobQueueId.");
     }
@@ -259,7 +259,7 @@ class RunReviewServiceTest {
         this.requires("internal");
         TenantContext.set(TENANT, "TENANT_USER", USER, "uma@acme.example");
         refused(this.service.consoleDecide(request("APPROVED", null, null)),
-            "Only a tenant administrator can approve or reject a run's results.");
+            "Only a tenant administrator can approve or reject a run's results here; the pipeline's reviewers decide it in the Task inbox.");
         assertThat(this.store.decisions).isEmpty();
     }
 

@@ -52,7 +52,9 @@ public final class ReviewParties {
             return Optional.of(party == ReviewParty.INTERNAL ? INTERNAL_IS_OURS : CUSTOMER_IS_THEIRS);
         }
         if (party == ReviewParty.INTERNAL && !mayDecide()) {
-            return Optional.of("Only a tenant administrator can approve or reject a run's results.");
+            // MIG-361: a pipeline's reviewers decide its runs in the Task inbox (RunReviewTaskListener), not here.
+            return Optional.of("Only a tenant administrator can approve or reject a run's results here; "
+                + "the pipeline's reviewers decide it in the Task inbox.");
         }
         return Optional.empty();
     }

@@ -114,7 +114,7 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
             .contains(REFUSED).contains("A customer review is recorded by the customer through the API");
         assertThat(fx.probe("POST sourceJob.json/review/decide(tenant user)", USER_OF_A,
             () -> fx.runReview.decide(decision(A_RUN, "APPROVED", null))))
-            .contains(REFUSED).contains("Only a tenant administrator can approve or reject a run's results.");
+            .contains(REFUSED).contains("Only a tenant administrator can approve or reject a run's results here; the pipeline's reviewers decide it in the Task inbox.");
         assertThat(fx.db.jdbc().queryForObject("SELECT count(*) FROM run_review_decision WHERE job_queue_id = ?", Long.class,
             COLLEAGUE_RUN)).isZero();
         assertThat(fx.leaks).isEmpty();
