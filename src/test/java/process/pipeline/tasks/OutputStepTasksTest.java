@@ -121,4 +121,21 @@ class OutputStepTasksTest {
         task.run(TaskContext.of(config("title", "{{input_name}}"), this.rows));
         assertThat(notifier.sent.get(1).title).as("no file: left as written").isEqualTo("{{input_name}}");
     }
+
+    /** MIG-360: a run that took a batch of waiting inbox files says how many, and which. */
+    @Test
+    void aBatchRunNamesItsFilesAsInputCountAndInputKeys() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        TaskContext context = TaskContext.of(config("title", "{{input_count}} file(s)", "message", "{{input_keys}}"), this.rows);
+        context.inputKey = "intake/a.jpeg";
+        context.inputKeys = Arrays.asList("intake/a.jpeg", "intake/b.jpeg");
+        task.run(context);
+        assertThat(notifier.sent.get(0).title).isEqualTo("2 file(s)");
+        assertThat(notifier.sent.get(0).body).isEqualTo("intake/a.jpeg,intake/b.jpeg");
+        TaskContext one = TaskContext.of(config("title", "{{input_count}} file(s)"), this.rows);
+        one.inputKey = "intake/a.jpeg";
+        task.run(one);
+        assertThat(notifier.sent.get(1).title).isEqualTo("1 file(s)");
+    }
 }

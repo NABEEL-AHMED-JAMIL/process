@@ -169,6 +169,16 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * still refuses a second run that races it. Runs in the caller's transaction, as the arrival's workspace.
      */
     public JobQueue addInboxJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String fileName, String arrivalId) {
+        return this.addInboxJobInQueue(sourceJob, inputBucket, inputKey, Collections.singletonList(fileName),
+            Collections.singletonList(arrivalId));
+    }
+
+    /**
+     * MIG-360: as above, for the files that waited for the job -- one, or a batch (the trigger's batch size). The run is
+     * named after the first file (input_bucket, input_key); inbox_arrival names the run on every file it took.
+     */
+    public JobQueue addInboxJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, List<String> fileNames,
+        List<String> arrivalIds) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: a file arrived in the inbox.", false);
@@ -176,12 +186,22 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         jobQueue.setInputBucket(inputBucket);
         jobQueue.setInputKey(inputKey);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
-        logger.info("Run {} of job {} queued by inbox arrival {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), arrivalId, inputKey);
+        logger.info("Run {} of job {} queued by inbox arrival(s) {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), arrivalIds, inputKey);
         this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
-        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
-            "Job %s now in the queue: %s arrived in the inbox (%s, arrival %s).", sourceJob.getJobId(), fileName, inputBucket, arrivalId));
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), fileNames.size() == 1
+            ? String.format("Job %s now in the queue: %s arrived in the inbox (%s, arrival %s).", sourceJob.getJobId(), fileNames.get(0),
+                inputBucket, arrivalIds.get(0))
+            : String.format("Job %s now in the queue: %d files that arrived in the inbox (%s): %s.", sourceJob.getJobId(), fileNames.size(),
+                inputBucket, namesOf(fileNames)));
         this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
         return jobQueue;
+    }
+
+    /** A batch's file names for its audit line: the first ten, and how many more. */
+    private static String namesOf(List<String> fileNames) {
+        int shown = Math.min(10, fileNames.size());
+        String names = String.join(", ", fileNames.subList(0, shown));
+        return shown == fileNames.size() ? names : names + String.format(" and %d more", fileNames.size() - shown);
     }
 
     /**

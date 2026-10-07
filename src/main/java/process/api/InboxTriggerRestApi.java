@@ -19,11 +19,11 @@ import process.inbox.InboxTriggerService;
  *
  * <ul>
  *   <li>GET sourceJob.json/inboxTrigger?jobId= -- the job's trigger (configured, enabled, filePattern);</li>
- *   <li>POST sourceJob.json/inboxTrigger/save {jobId, enabled, filePattern} -- set it (filePattern: a glob on the file's
- *       name, blank for every file);</li>
+ *   <li>POST sourceJob.json/inboxTrigger/save {jobId, enabled, filePattern, batchSize} -- set it (filePattern: a glob on the
+ *       file's name, blank for every file; batchSize, MIG-360: how many files that waited one run takes, 1 by default);</li>
  *   <li>DELETE sourceJob.json/inboxTrigger?jobId= -- remove it;</li>
- *   <li>GET sourceJob.json/inboxArrivals?jobId=&amp;limit= -- what the inbox's files did to the job: Started (its run) or
- *       Skipped (why), newest first.</li>
+ *   <li>GET sourceJob.json/inboxArrivals?jobId=&amp;limit= -- what the inbox's files did to the job: Started (its run),
+ *       Waiting (MIG-360: its place in the line) or Skipped (why), newest first.</li>
  * </ul>
  *
  * Whoever may see the job may set its trigger (JobOwnership); anyone else is answered as for a job that does not exist.
@@ -48,7 +48,7 @@ public class InboxTriggerRestApi {
     @RequestMapping(value = "/sourceJob.json/inboxTrigger/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody InboxTriggerRequest request) {
         return new ResponseEntity<>(request == null ? this.service.trigger(null)
-            : this.service.save(request.getJobId(), request.getEnabled(), request.getFilePattern()), HttpStatus.OK);
+            : this.service.save(request.getJobId(), request.getEnabled(), request.getFilePattern(), request.getBatchSize()), HttpStatus.OK);
     }
 
     @BuilderAction

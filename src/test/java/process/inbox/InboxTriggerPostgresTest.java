@@ -1,5 +1,6 @@
 package process.inbox;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,6 +27,15 @@ import process.security.TenantContext;
 import process.util.OpenSearchAuditLogClient;
 
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.TreeMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -43,9 +53,10 @@ import static org.mockito.Mockito.when;
  * nobody signed in -- the listener works as the event's workspace only (RowSecurity.forTenant).
  *
  * Each job with an enabled inbox trigger whose pattern takes the file gets its own run, queued once per arrival, with
- * the file on the run (input_bucket, input_key); a redelivered event starts nothing more. The existing rules hold: a job
- * with a run in flight, an inactive job and a paused workspace do not run -- the arrival is recorded as Skipped with the
- * reason. Another workspace's jobs are never reached. Opt-in on NOTIFICATIONS_TEST_DB_URL (see ScratchPostgres).
+ * the file on the run (input_bucket, input_key); a redelivered event starts nothing more. MIG-360: an arrival is never
+ * dropped -- a job with a run in flight, or a paused workspace, makes it wait, and the job's next run takes it (as many
+ * waiting files at once as the trigger's batch size); an inactive job records it as Skipped with the reason. Another
+ * workspace's jobs are never reached. Opt-in on NOTIFICATIONS_TEST_DB_URL (see ScratchPostgres).
  */
 class InboxTriggerPostgresTest {
 
@@ -59,6 +70,7 @@ class InboxTriggerPostgresTest {
     private WorkspaceDirectory workspaces;
     private InboxTriggerService service;
     private InboxArrivalListener listener;
+    private InboxQueueSweep sweep;
 
     @BeforeAll
     static void build() throws Exception {
@@ -82,6 +94,7 @@ class InboxTriggerPostgresTest {
         this.sql.update("DELETE FROM inbox_arrival");
         this.sql.update("DELETE FROM job_inbox_trigger");
         this.sql.update("DELETE FROM job_audit_logs");
+        this.sql.update("DELETE FROM job_audit_logs WHERE job_queue_id IN (SELECT job_queue_id FROM job_queue WHERE job_id BETWEEN 9501 AND 9599)");
         this.sql.update("DELETE FROM job_queue WHERE job_id BETWEEN 9501 AND 9599");
         this.sql.update("DELETE FROM source_job WHERE job_id BETWEEN 9501 AND 9599");
         for (long tenant : new long[] {A, B}) {
@@ -101,6 +114,7 @@ class InboxTriggerPostgresTest {
         this.service = new InboxTriggerService(new JdbcInboxTriggerStore(new JdbcTemplate(db.appPool())), engine, store,
             jpa.transactionManager());
         this.listener = new InboxArrivalListener(this.service);
+        this.sweep = new InboxQueueSweep(db.appJdbc(), this.service);
     }
 
     @AfterEach
@@ -194,7 +208,7 @@ class InboxTriggerPostgresTest {
     }
 
     @Test
-    void aJobWithARunInFlightRecordsTheArrivalAsSkippedAndStartsNothing() throws Exception {
+    void aJobWithARunInFlightKeepsTheArrivalWaitingAndItsNextRunTakesIt() throws Exception {
         job(9521, A, "Active");
         trigger(9521, null, true);
         this.sql.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status) "
@@ -207,13 +221,29 @@ class InboxTriggerPostgresTest {
         assertThat(runsOf(9521)).extracting(r -> r.get("job_queue_id")).containsExactly(952101L);
         List<Map<String, Object>> arrivals = arrivalsOf(9521);
         assertThat(arrivals).hasSize(1);
-        assertThat(arrivals.get(0)).containsEntry("outcome", "Skipped").containsEntry("job_queue_id", null);
-        assertThat((String) arrivals.get(0).get("reason")).contains("in flight");
+        assertThat(arrivals.get(0)).containsEntry("outcome", "Waiting").containsEntry("job_queue_id", null);
+        assertThat((String) arrivals.get(0).get("reason")).contains("in flight").contains("next run");
+        // While the run is in flight the sweep leaves the file where it is.
+        assertThat(this.sweep.sweep()).isZero();
+
+        finish(952101L);
+        assertThat(this.sweep.sweep()).isEqualTo(1);
+        assertThat(this.sweep.sweep()).as("the next pass finds the new run in flight").isZero();
+
+        List<Map<String, Object>> runs = runsOf(9521);
+        assertThat(runs).hasSize(2);
+        Map<String, Object> next = runs.stream().filter(r -> !Long.valueOf(952101L).equals(r.get("job_queue_id"))).findFirst().get();
+        assertThat(next).containsEntry("job_status", "Queue").containsEntry("input_key", KEY).containsEntry("tenant_id", A);
+        assertThat(arrivalsOf(9521)).hasSize(1).first().satisfies(a -> {
+            assertThat(a).containsEntry("outcome", "Started").containsEntry("job_queue_id", next.get("job_queue_id"))
+                .containsEntry("reason", null);
+        });
+        assertThat(this.sql.queryForObject("SELECT started_at IS NOT NULL FROM inbox_arrival WHERE job_id = 9521", Boolean.class)).isTrue();
     }
 
-    /** Two starts racing: the one-in-flight index refuses the second run, and the arrival is recorded as Skipped. */
+    /** Two starts racing: the one-in-flight index refuses the second run, and the arrival waits for the one that won. */
     @Test
-    void whenTheIndexRefusesTheRunTheArrivalIsRecordedAsSkipped() throws Exception {
+    void whenTheIndexRefusesTheRunTheArrivalWaits() throws Exception {
         job(9531, A, "Active");
         trigger(9531, null, true);
         // A run the job's own status does not show yet: the pre-check passes, the index does not.
@@ -225,12 +255,11 @@ class InboxTriggerPostgresTest {
         assertThat(runsOf(9531)).extracting(r -> r.get("job_queue_id")).containsExactly(953101L);
         List<Map<String, Object>> arrivals = arrivalsOf(9531);
         assertThat(arrivals).hasSize(1);
-        assertThat(arrivals.get(0)).containsEntry("outcome", "Skipped");
-        assertThat((String) arrivals.get(0).get("reason")).contains("in flight");
+        assertThat(arrivals.get(0)).containsEntry("outcome", "Waiting");
     }
 
     @Test
-    void anInactiveJobOrAPausedWorkspaceRecordsTheArrivalAsSkipped() throws Exception {
+    void anInactiveJobSkipsTheArrivalAndAPausedWorkspaceKeepsItWaiting() throws Exception {
         job(9541, A, "Inactive");
         trigger(9541, null, true);
         job(9542, B, "Active");
@@ -246,10 +275,174 @@ class InboxTriggerPostgresTest {
             assertThat((String) a.get("reason")).contains("not active");
         });
         assertThat(runsOf(9542)).isEmpty();
-        assertThat(arrivalsOf(9542)).hasSize(1).first().satisfies(a -> {
+        assertThat(arrivalsOf(9542)).hasSize(1).first().satisfies(a -> assertThat(a.get("outcome")).isEqualTo("Waiting"));
+        assertThat(this.sweep.sweep()).as("paused: the file waits").isZero();
+
+        // The workspace is active again: the file's run starts.
+        when(this.workspaces.pauseOf(B)).thenReturn(Optional.empty());
+        assertThat(this.sweep.sweep()).isEqualTo(1);
+        assertThat(runsOf(9542)).hasSize(1);
+        assertThat(arrivalsOf(9542)).first().satisfies(a -> assertThat(a.get("outcome")).isEqualTo("Started"));
+    }
+
+    @Test
+    void filesThatWaitedForAJobSwitchedOffSinceAreSkippedSayingSo() throws Exception {
+        job(9545, A, "Active");
+        trigger(9545, null, true);
+        busy(9545, 954501L);
+        this.listener.onArrival(event());
+        this.sql.update("UPDATE source_job SET job_status = 'Inactive' WHERE job_id = 9545");
+        finish(954501L);
+
+        assertThat(this.sweep.sweep()).isZero();
+
+        assertThat(runsOf(9545)).hasSize(1);
+        assertThat(arrivalsOf(9545)).first().satisfies(a -> {
             assertThat(a.get("outcome")).isEqualTo("Skipped");
-            assertThat((String) a.get("reason")).contains("Suspended");
+            assertThat((String) a.get("reason")).contains("not active");
         });
+    }
+
+    // ---- MIG-360: none lost ---------------------------------------------------------------------------------------------
+
+    /** The card's test: 40 images uploaded at once give 40 runs, one after the other, none lost and none twice. */
+    @Test
+    void fortyFilesAtOnceGiveFortyRunsInTurn() throws Exception {
+        job(9581, A, "Active");
+        trigger(9581, "*.jpeg", true);
+
+        arriveAtOnce(40, 8);
+
+        assertThat(runsOf(9581)).as("one run at a time").hasSize(1);
+        assertThat(outcomes(9581)).containsEntry("Started", 1L).containsEntry("Waiting", 39L);
+        TenantContext.set(A, "TENANT_ADMIN", 60L, "admin@acme.example");
+        assertThat(this.service.trigger(9581L).getData()).hasFieldOrPropertyWithValue("waiting", 39);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> shown = (List<Map<String, Object>>) this.service.arrivals(9581L, 200).getData();
+        assertThat(shown).hasSize(40);
+        assertThat(shown.stream().filter(a -> "Waiting".equals(a.get("outcome"))).map(a -> a.get("place")))
+            .containsExactlyInAnyOrderElementsOf(LongStream.rangeClosed(1, 39).boxed().collect(Collectors.toList()));
+        TenantContext.clear();
+
+        int runs = drain(9581);
+
+        assertThat(runs).isEqualTo(39);
+        List<Map<String, Object>> made = runsOf(9581);
+        assertThat(made).hasSize(40);
+        assertThat(outcomes(9581)).containsOnlyKeys("Started").containsEntry("Started", 40L);
+        // Each file has its own run, and each run its own file: none lost, none twice.
+        assertThat(this.sql.queryForObject("SELECT count(DISTINCT job_queue_id) FROM inbox_arrival WHERE job_id = 9581", Long.class)).isEqualTo(40);
+        assertThat(made.stream().map(r -> r.get("input_key")).distinct().count()).isEqualTo(40);
+        // In the order they arrived.
+        assertThat(this.sql.queryForList("SELECT job_queue_id FROM inbox_arrival WHERE job_id = 9581 ORDER BY inbox_arrival_id", Long.class))
+            .isSorted();
+    }
+
+    /** The trigger's batch size: the files that waited go ten at a time, the run naming each (keysOf). */
+    @Test
+    void aBatchSizeTakesTheWaitingFilesTenAtATime() throws Exception {
+        job(9591, A, "Active");
+        trigger(9591, null, true);
+        this.sql.update("UPDATE job_inbox_trigger SET batch_size = 10 WHERE job_id = 9591");
+        busy(9591, 959101L);
+
+        arriveAtOnce(40, 8);
+        assertThat(outcomes(9591)).containsEntry("Waiting", 40L);
+
+        int runs = drain(9591);
+
+        assertThat(runs).isEqualTo(4);
+        assertThat(outcomes(9591)).containsOnlyKeys("Started").containsEntry("Started", 40L);
+        JdbcInboxTriggerStore store = new JdbcInboxTriggerStore(db.appJdbc());
+        List<Long> made = this.sql.queryForList("SELECT job_queue_id FROM job_queue WHERE job_id = 9591 AND job_queue_id <> 959101 "
+            + "ORDER BY job_queue_id", Long.class);
+        assertThat(made).hasSize(4);
+        for (Long run : made) {
+            List<String> keys = RowSecurity.forTenant(A, () -> store.keysOf(run));
+            assertThat(keys).hasSize(10);
+            String own = this.sql.queryForObject("SELECT input_key FROM job_queue WHERE job_queue_id = ?", String.class, run);
+            assertThat(keys.get(0)).as("the run is named after its first file").isEqualTo(own);
+        }
+    }
+
+    @Test
+    void theBatchSizeIsSetWithTheTriggerAndHeldToOneToFifty() throws Exception {
+        job(9596, A, "Active");
+        TenantContext.set(A, "TENANT_ADMIN", 60L, "admin@acme.example");
+
+        assertThat(this.service.save(9596L, true, null, 0).getStatus()).isEqualTo("ERROR");
+        assertThat(this.service.save(9596L, true, null, 51).getStatus()).isEqualTo("ERROR");
+        ResponseDto saved = this.service.save(9596L, true, "*.jpeg", 5);
+        assertThat(saved.getStatus()).isEqualTo("SUCCESS");
+        assertThat(saved.getMessage()).contains("up to 5");
+        assertThat(this.service.trigger(9596L).getData()).hasFieldOrPropertyWithValue("batchSize", 5);
+        // Saved again without one: the trigger keeps its batch size.
+        this.service.save(9596L, false, "*.jpeg");
+        assertThat(this.service.trigger(9596L).getData()).hasFieldOrPropertyWithValue("batchSize", 5)
+            .hasFieldOrPropertyWithValue("enabled", false);
+    }
+
+    private void busy(long jobId, long runId) {
+        this.sql.update("INSERT INTO job_queue (job_queue_id, job_id, job_status, start_time, date_created, status) "
+            + "VALUES (?, ?, 'Running', now(), now(), 'Active')", runId, jobId);
+        this.sql.update("UPDATE source_job SET job_running_status = 'Running' WHERE job_id = ?", jobId);
+    }
+
+    private void finish(long runId) {
+        this.sql.update("UPDATE job_queue SET job_status = 'Completed', end_time = now() WHERE job_queue_id = ?", runId);
+        this.sql.update("UPDATE source_job SET job_running_status = 'Completed' WHERE job_id = (SELECT job_id FROM job_queue "
+            + "WHERE job_queue_id = ?)", runId);
+    }
+
+    /** Finishes the job's run in flight and sweeps, until nothing more starts; answers how many runs the sweep made. */
+    private int drain(long jobId) {
+        int made = 0;
+        for (int pass = 0; pass < 200; pass++) {
+            for (Long inFlight : this.sql.queryForList("SELECT job_queue_id FROM job_queue WHERE job_id = ? AND job_status IN "
+                + "('Queue', 'Start', 'Running')", Long.class, jobId)) {
+                finish(inFlight);
+            }
+            int started = this.sweep.sweep();
+            if (started == 0) {
+                return made;
+            }
+            made += started;
+        }
+        return made;
+    }
+
+    /** {@code count} different files arriving at once, on {@code threads} threads (the listener's), all for workspace A. */
+    private void arriveAtOnce(int count, int threads) throws Exception {
+        String fixture = event();
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Future<?>> sent = new ArrayList<>();
+            CountDownLatch go = new CountDownLatch(1);
+            for (int i = 1; i <= count; i++) {
+                String arrival = String.format("0b8f6a52-3f5e-4c1a-9d7e-%012d", i);
+                String name = String.format("chest-xray-%03d.jpeg", i);
+                String message = fixture.replace("0b8f6a52-3f5e-4c1a-9d7e-5a4b3c2d1e0f", arrival).replace("invoices_q3.csv", name);
+                sent.add(pool.submit(() -> {
+                    go.await();
+                    this.listener.onArrival(message);
+                    return null;
+                }));
+            }
+            go.countDown();
+            for (Future<?> one : sent) {
+                one.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private Map<String, Long> outcomes(long jobId) {
+        Map<String, Long> out = new TreeMap<>();
+        this.sql.query("SELECT outcome, count(*) AS n FROM inbox_arrival WHERE job_id = ? GROUP BY outcome", rs -> {
+            out.put(rs.getString("outcome"), rs.getLong("n"));
+        }, jobId);
+        return out;
     }
 
     /** An arrival names its workspace; the listener works as that workspace alone, so B's arrival never reaches A's jobs. */

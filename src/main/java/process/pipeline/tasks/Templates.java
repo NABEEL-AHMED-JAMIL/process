@@ -7,6 +7,7 @@ import process.util.BusinessTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,8 +16,9 @@ import java.util.regex.Pattern;
  * {{placeholders}} in a step's text settings (MIG-231): a bucket key, a notice's title, an API variable. The run's are
  * {{run}}, {{attempt}}, {{step}}, {{job}}, {{pipeline}}, {{date}} (yyyy-MM-dd) and {{time}} (HHmmss) on the business
  * clock (America/Chicago), and {{rows}} where a step has rows; for a run started for a file (an inbox arrival, a form
- * submission, an API run) {{input_key}} (its key in the workspace's storage) and {{input_name}} (the key's last part);
- * a row's are its columns, {{column}}. An unknown
+ * submission, an API run) {{input_key}} (its key in the workspace's storage) and {{input_name}} (the key's last part),
+ * and (MIG-360) {{input_count}} and {{input_keys}} -- how many files, and their keys joined by commas, for a run that took
+ * a batch of inbox files; a row's are its columns, {{column}}. An unknown
  * placeholder is left as written, so a mistake shows in the result instead of vanishing.
  */
 final class Templates {
@@ -43,6 +45,9 @@ final class Templates {
         if (inputKey != null && !inputKey.isEmpty()) {
             values.put("input_key", inputKey);
             values.put("input_name", inputKey.substring(inputKey.lastIndexOf('/') + 1));
+            List<String> keys = context.inputKeys();
+            values.put("input_count", keys.size());
+            values.put("input_keys", String.join(",", keys));
         }
         return values;
     }

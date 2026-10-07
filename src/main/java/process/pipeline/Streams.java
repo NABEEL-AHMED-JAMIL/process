@@ -200,6 +200,8 @@ public final class Streams {
 
         @Override public String inputKey() { return this.context.inputKey(); }
 
+        @Override public List<String> inputKeys() { return this.context.inputKeys(); }
+
         @Override public Dataset dataset(String stepKey) throws Exception { return this.context.dataset(stepKey); }
 
         @Override

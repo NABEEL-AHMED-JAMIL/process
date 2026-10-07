@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 204.0-inbox-queue
+      author: nabeel.amd93
+      description: "MIG-360: an inbox arrival that finds its job busy waits (inbox_arrival outcome Waiting, started_at, a partial index of the waiting files) and the job's next run takes it; job_inbox_trigger.batch_size says how many waiting files one run takes"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V204.0-inbox-queue/V204__inbox_queue.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V204.0-inbox-queue/V204__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

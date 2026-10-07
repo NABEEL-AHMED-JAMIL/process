@@ -175,6 +175,14 @@ public class StepEngine {
         this.sleeper = sleeper;
     }
 
+    /** MIG-360: the files a run took when it took a batch (the inbox's store); without it, a run's own file alone. */
+    private RunInputs runInputs;
+
+    @Autowired(required = false)
+    public void useRunInputs(RunInputs runInputs) {
+        this.runInputs = runInputs;
+    }
+
     /** MIG-243: the data policy's retention (PolicyRetention); without one, the definition's hours alone, as before. */
     @Autowired(required = false)
     public void useRetention(RetentionPolicy retention) {
@@ -342,6 +350,8 @@ public class StepEngine {
         private final Map<String, Long> sizes = new HashMap<>();
         /** MIG-344: the run's memory budget. */
         private final RunMemory memory = RunMemory.ofMegabytes(runMemoryMb);
+        /** MIG-360: the files the run was started for, read once, when a step first asks. */
+        private volatile List<String> inputKeys;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -351,6 +361,22 @@ public class StepEngine {
             this.definition = plan.definition;
             this.settings = plan.definition == null ? new PipelineDefinition.Settings() : plan.definition.effectiveSettings();
             this.stepList = plan.definition == null ? Collections.emptyList() : plan.definition.getSteps();
+        }
+
+        /** MIG-360: the run's files -- the batch it took, else its own file, else none. One query, the first time. */
+        List<String> inputKeys() {
+            List<String> keys = this.inputKeys;
+            if (keys == null) {
+                String own = this.run.getInputKey();
+                if (own == null) {
+                    keys = Collections.emptyList();
+                } else {
+                    List<String> taken = runInputs == null ? Collections.emptyList() : runInputs.keysOf(this.run.getJobQueueId());
+                    keys = taken.size() > 1 ? Collections.unmodifiableList(new ArrayList<>(taken)) : Collections.singletonList(own);
+                }
+                this.inputKeys = keys;
+            }
+            return keys;
         }
 
         void go() {
@@ -1029,6 +1055,11 @@ public class StepEngine {
         @Override
         public String inputKey() {
             return this.execution.run.getInputKey();
+        }
+
+        @Override
+        public List<String> inputKeys() {
+            return this.execution.inputKeys();
         }
 
         @Override

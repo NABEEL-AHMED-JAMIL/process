@@ -1,5 +1,6 @@
 package process.pipeline;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -76,6 +77,15 @@ public interface StepContext {
     /** The key of the file this run was started for (an inbox arrival, MIG-239); null for any other run. */
     default String inputKey() {
         return null;
+    }
+
+    /**
+     * MIG-360: every file this run was started for, in the order they arrived -- a batch of inbox files that waited for
+     * the job, or just {@link #inputKey}; empty for a run no file started.
+     */
+    default List<String> inputKeys() {
+        String key = this.inputKey();
+        return key == null ? Collections.emptyList() : Collections.singletonList(key);
     }
 
     /**
