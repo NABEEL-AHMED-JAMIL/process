@@ -1,5 +1,7 @@
 package process.pipeline.data;
 
+import org.barco.platform.api.ApiTimes;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -23,7 +25,7 @@ import java.util.regex.PatternSyntaxException;
  *
  * <ul>
  *   <li>values: numbers (2, 0.785), text ('stable' or "stable"), true, false, null, and columns by name (length_cm, or
- *       `wound length` in backticks for a name with spaces);</li>
+ *       `item length` in backticks for a name with spaces);</li>
  *   <li>arithmetic + - * / and a leading minus; comparisons == != &gt; &gt;= &lt; &lt;=; and, or, not; parentheses;</li>
  *   <li>functions: abs, coalesce, concat, days_between (ISO dates), if(condition, then, otherwise), is_null, max, min,
  *       number, regex_extract(text, pattern) (the first group of the first match, or the whole match; null when
@@ -43,7 +45,7 @@ public final class Expression {
     private static final Map<String, Pattern> PATTERNS = new ConcurrentHashMap<>();
 
     /** The business clock's zone: today() is the date there, as {{date}} is. */
-    static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Chicago");
+    static final ZoneId BUSINESS_ZONE = ApiTimes.PLATFORM_ZONE;
 
     private final Node root;
     private final List<String> columns;
@@ -295,11 +297,45 @@ public final class Expression {
         if (value instanceof Boolean || isNull(value)) {
             return null;
         }
+        String text = value.toString().trim();
+        if (!mayBeDouble(text)) {
+            // Answered without throwing: a NumberFormatException per cell (every 'north' or '2024-01-01' a filter
+            // compares, twice a row) was most of a text comparison's time -- the MIG-344 fix Values.number has.
+            return null;
+        }
         try {
-            return Double.valueOf(value.toString().trim());
+            return Double.valueOf(text);
         } catch (NumberFormatException notANumber) {
             return null;
         }
+    }
+
+    /**
+     * Whether {@link Double#valueOf(String)} might accept the (trimmed) text; false only when it certainly refuses it, so
+     * the answer of {@link #numberOrNull} is unchanged. Its grammar: an optional sign, then NaN, Infinity, a hexadecimal
+     * float (0x...), or a decimal -- BigDecimal's grammar ({@link Values#readsAsNumber}) with an optional f, F, d or D.
+     */
+    static boolean mayBeDouble(String text) {
+        int start = !text.isEmpty() && (text.charAt(0) == '+' || text.charAt(0) == '-') ? 1 : 0;
+        if (start >= text.length()) {
+            return false;
+        }
+        String body = text.substring(start);
+        char first = body.charAt(0);
+        if (first == 'N') {
+            return body.equals("NaN");
+        }
+        if (first == 'I') {
+            return body.equals("Infinity");
+        }
+        if (body.startsWith("0x") || body.startsWith("0X")) {
+            return true;
+        }
+        char last = body.charAt(body.length() - 1);
+        if (last == 'f' || last == 'F' || last == 'd' || last == 'D') {
+            body = body.substring(0, body.length() - 1);
+        }
+        return !body.isEmpty() && Values.readsAsNumber(body);
     }
 
     private static Pattern pattern(String text) {
