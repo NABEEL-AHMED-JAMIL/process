@@ -107,4 +107,17 @@ class OutputStepTasksTest {
         assertThat(notifier.sent.get(0).title).isEqualTo("Weekly digest, run 88001");
         assertThat(notifier.sent.get(0).body).isEqualTo("Nausea leads. (1 row)");
     }
+
+    @Test
+    void aRunStartedForAFileNamesItAsInputKeyAndInputName() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        TaskContext context = TaskContext.of(config("title", "{{input_name}}", "message", "{{input_key}}"), this.rows);
+        context.inputKey = "intake/2026-10-06/77-scan-001.jpeg";
+        task.run(context);
+        assertThat(notifier.sent.get(0).title).isEqualTo("77-scan-001.jpeg");
+        assertThat(notifier.sent.get(0).body).isEqualTo("intake/2026-10-06/77-scan-001.jpeg");
+        task.run(TaskContext.of(config("title", "{{input_name}}"), this.rows));
+        assertThat(notifier.sent.get(1).title).as("no file: left as written").isEqualTo("{{input_name}}");
+    }
 }

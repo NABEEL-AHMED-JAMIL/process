@@ -14,7 +14,9 @@ import java.util.regex.Pattern;
 /**
  * {{placeholders}} in a step's text settings (MIG-231): a bucket key, a notice's title, an API variable. The run's are
  * {{run}}, {{attempt}}, {{step}}, {{job}}, {{pipeline}}, {{date}} (yyyy-MM-dd) and {{time}} (HHmmss) on the business
- * clock (America/Chicago), and {{rows}} where a step has rows; a row's are its columns, {{column}}. An unknown
+ * clock (America/Chicago), and {{rows}} where a step has rows; for a run started for a file (an inbox arrival, a form
+ * submission, an API run) {{input_key}} (its key in the workspace's storage) and {{input_name}} (the key's last part);
+ * a row's are its columns, {{column}}. An unknown
  * placeholder is left as written, so a mistake shows in the result instead of vanishing.
  */
 final class Templates {
@@ -36,6 +38,11 @@ final class Templates {
         values.put("time", now.format(DateTimeFormatter.ofPattern("HHmmss")));
         if (rows != null) {
             values.put("rows", rows);
+        }
+        String inputKey = context.inputKey();
+        if (inputKey != null && !inputKey.isEmpty()) {
+            values.put("input_key", inputKey);
+            values.put("input_name", inputKey.substring(inputKey.lastIndexOf('/') + 1));
         }
         return values;
     }

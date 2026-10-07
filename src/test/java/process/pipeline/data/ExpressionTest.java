@@ -72,6 +72,11 @@ class ExpressionTest {
         String today = java.time.LocalDate.now(java.time.ZoneId.of("America/Chicago")).toString();
         assertThat(eval("today()", "x", 1)).isEqualTo(today);
         assertThat(eval("round(days_between(birth, today()) / 365.25, 0)", "birth", today)).isEqualTo(0L);
+        assertThat(eval("regex_extract(k, '-([a-z]+-[0-9]{3})[.]jpe?g$')", "k", "intake/2026-10-06/88-scan-007.jpeg")).isEqualTo("scan-007");
+        assertThat(eval("regex_extract(k, '[0-9]+')", "k", "abc 42 x")).isEqualTo("42");
+        assertThat(eval("regex_extract(k, 'z')", "k", "abc")).isNull();
+        assertThat(eval("regex_extract(k, 'z')", "k", null)).isNull();
+        assertThatThrownBy(() -> eval("regex_extract(k, '(')", "k", "a")).hasMessageContaining("is not a valid pattern");
     }
 
     @Test
@@ -83,7 +88,8 @@ class ExpressionTest {
     void aTypoIsASyntaxErrorAtItsPlace() {
         assertThatThrownBy(() -> Expression.parse("a * (b + 1")).hasMessageContaining("expected ')'");
         assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, coalesce, concat, days_between, "
-            + "if, is_null, max, min, number, round, text, today.");
+            + "if, is_null, max, min, number, regex_extract, round, text, today.");
+        assertThatThrownBy(() -> Expression.parse("regex_extract(a)")).hasMessage("regex_extract takes 2 values: regex_extract(text, pattern).");
         assertThatThrownBy(() -> Expression.parse("today(a)")).hasMessage("today takes no values: today().");
         assertThatThrownBy(() -> Expression.parse("abs()")).hasMessage("abs takes at least 1 value.");
         assertThatThrownBy(() -> Expression.parse("if(a, b)")).hasMessage("if takes 3 values: if(condition, then, otherwise).");

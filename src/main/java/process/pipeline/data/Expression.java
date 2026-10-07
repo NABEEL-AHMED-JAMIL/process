@@ -21,7 +21,8 @@ import java.util.Set;
  *       `wound length` in backticks for a name with spaces);</li>
  *   <li>arithmetic + - * / and a leading minus; comparisons == != &gt; &gt;= &lt; &lt;=; and, or, not; parentheses;</li>
  *   <li>functions: abs, coalesce, concat, days_between (ISO dates), if(condition, then, otherwise), is_null, max, min,
- *       number, round(value[, places]), text, today() (the business date, YYYY-MM-DD, America/Chicago).</li>
+ *       number, regex_extract(text, pattern) (the first group of the first match, or the whole match; null when
+ *       none), round(value[, places]), text, today() (the business date, YYYY-MM-DD, America/Chicago).</li>
  * </ul>
  *
  * A column read as CSV text is a number where it reads as one. An empty or null operand makes arithmetic null (never an
@@ -32,7 +33,9 @@ import java.util.Set;
 public final class Expression {
 
     static final List<String> FUNCTIONS = Collections.unmodifiableList(Arrays.asList("abs", "coalesce", "concat", "days_between", "if",
-        "is_null", "max", "min", "number", "round", "text", "today"));
+        "is_null", "max", "min", "number", "regex_extract", "round", "text", "today"));
+
+    private static final Map<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** The business clock's zone: today() is the date there, as {{date}} is. */
     static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("America/Chicago");
@@ -169,6 +172,18 @@ public final class Expression {
                 }
                 case "today":
                     return LocalDate.now(BUSINESS_ZONE).toString();
+                case "regex_extract": {
+                    Object value = this.args.get(0).eval(row);
+                    Object pattern = this.args.get(1).eval(row);
+                    if (isNull(value) || isNull(pattern)) {
+                        return null;
+                    }
+                    java.util.regex.Matcher m = pattern(textOf(pattern)).matcher(textOf(value));
+                    if (!m.find()) {
+                        return null;
+                    }
+                    return m.groupCount() >= 1 ? m.group(1) : m.group();
+                }
                 case "days_between": {
                     LocalDate from = date(this.args.get(0), row);
                     LocalDate to = date(this.args.get(1), row);
@@ -279,6 +294,17 @@ public final class Expression {
             return Double.valueOf(value.toString().trim());
         } catch (NumberFormatException notANumber) {
             return null;
+        }
+    }
+
+    private static java.util.regex.Pattern pattern(String text) {
+        if (PATTERNS.size() > 1000) {
+            PATTERNS.clear();
+        }
+        try {
+            return PATTERNS.computeIfAbsent(text, java.util.regex.Pattern::compile);
+        } catch (java.util.regex.PatternSyntaxException invalid) {
+            throw new IllegalArgumentException(String.format("'%s' is not a valid pattern: %s.", text, invalid.getDescription()));
         }
     }
 
@@ -508,6 +534,11 @@ public final class Expression {
                 case "round":
                     if (count < 1 || count > 2) {
                         throw new IllegalArgumentException("round takes 1 or 2 values: round(value, places).");
+                    }
+                    return;
+                case "regex_extract":
+                    if (count != 2) {
+                        throw new IllegalArgumentException("regex_extract takes 2 values: regex_extract(text, pattern).");
                     }
                     return;
                 case "days_between":
