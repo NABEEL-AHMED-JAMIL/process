@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
+import process.ai.ModelProfiles;
 import process.ai.PayloadXml;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
@@ -998,6 +999,26 @@ public class StepEngine {
         @Override
         public Long jobOwnerUserId() {
             return this.execution.plan.job.getCreatedBy();
+        }
+
+        @Override
+        public String modelProfile() {
+            return this.asked().profile;
+        }
+
+        @Override
+        public String modelProfileSource() {
+            return this.asked().source;
+        }
+
+        /** The run's "Run with...", else its schedule's setting, for this step (ModelProfiles reads both defensively). */
+        private ModelProfiles.Asked asked() {
+            return ModelProfiles.of(this.execution.plan.job.getModelProfiles(), this.execution.run.getModelProfiles()).forStep(this.step.getKey());
+        }
+
+        @Override
+        public Long sourceTaskId() {
+            return this.execution.plan.job.getTaskDetail() == null ? null : this.execution.plan.job.getTaskDetail().getTaskDetailId();
         }
 
         @Override

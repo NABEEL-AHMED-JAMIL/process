@@ -44,6 +44,25 @@ public interface StepContext {
         return null;
     }
 
+    /**
+     * The model this run asks this step to run on (MIG-242, for the engine since the console review of 2026-10-07): an
+     * ai-service model option id from the run's "Run with a different AI model...", else the schedule's setting; null for
+     * the step's default. Only an AI step reads it; ai-service decides whether the option may be used.
+     */
+    default String modelProfile() {
+        return null;
+    }
+
+    /** Where {@link #modelProfile()} came from: "run" or "schedule" (ModelProfiles' words); null for the step's default. */
+    default String modelProfileSource() {
+        return null;
+    }
+
+    /** The run's job's source task (source_task.task_detail_id), by which ai-service finds a step's own allowed models. */
+    default Long sourceTaskId() {
+        return null;
+    }
+
     /** Who owns the run's job (source_job.created_by): whom an "owner" notice goes to; null when nobody does. */
     default Long jobOwnerUserId() {
         return null;

@@ -19,6 +19,12 @@ import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceJobService;
+import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.StepReferences;
+import process.pipeline.StepTasks;
+import process.pipeline.backing.BucketStore;
+import process.pipeline.tasks.AiPromptStepTask;
+import process.pipeline.tasks.ComputeStepTask;
 import process.security.TenantContext;
 
 import java.util.Arrays;
@@ -65,13 +71,18 @@ class AiModelChoiceServiceTest {
     @Mock private PipelineRepository pipelines;
     @Mock private AiPort ai;
     @Mock private SourceJobService sourceJobs;
+    @Mock private PipelineDefinitionStore definitions;
+    @Mock private BucketStore buckets;
 
     private final InMemoryModelChoiceStore store = new InMemoryModelChoiceStore();
     private AiModelChoiceService service;
 
     @BeforeEach
     void setUp() throws Exception {
-        this.service = new AiModelChoiceService(this.jobs, this.tasks, this.runs, this.pipelines, this.ai, this.store, this.sourceJobs);
+        StepReferences references = new StepReferences(new StepTasks(Arrays.asList(new AiPromptStepTask(this.ai, this.buckets),
+            new ComputeStepTask())));
+        this.service = new AiModelChoiceService(this.jobs, this.tasks, this.runs, this.pipelines, this.ai, this.store, this.sourceJobs,
+            this.definitions, references);
         for (long[] j : new long[][] {{A_JOB, A, A_TASK}, {B_JOB, B, B_TASK}}) {
             SourceJob job = job(j[0], j[1], j[2]);
             lenient().when(this.jobs.findByJobIdAndJobStatus(j[0], Status.Active)).thenReturn(Optional.of(job));
@@ -190,6 +201,32 @@ class AiModelChoiceServiceTest {
         assertThat(steps.get(0)).containsEntry("modelOptionId", "1204").containsEntry("runIn", "server").containsEntry("promptId", 1000L);
         assertThat(steps.get(1)).doesNotContainKey("modelOptionId").containsEntry("runIn", "worker");
         assertThat((List<?>) steps.get(0).get("options")).hasSize(2);
+    }
+
+    /** Review 2026-10-07: a step-engine pipeline's AI steps (ai_prompt, with or without an image) are AI steps too. */
+    @Test
+    void aStepEnginePipelinesAiPromptStepsAreAiStepsAndMayBeChosenFor() throws Exception {
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1;
+        stored.pipelineKey = 77;
+        stored.version = 3;
+        stored.json = "{\"version\":1,\"steps\":["
+            + "{\"key\":\"band\",\"name\":\"Bands\",\"task\":\"compute\",\"config\":{\"formulas\":[{\"target\":\"k\",\"expression\":\"1\"}]}},"
+            + "{\"key\":\"label\",\"name\":\"Label each image\",\"task\":\"ai_prompt\",\"config\":{\"promptId\":3000,"
+            + "\"image\":{\"bucket\":\"b\",\"keyColumn\":\"key\"}}},"
+            + "{\"key\":\"summary\",\"task\":\"ai_prompt\",\"config\":{\"promptId\":1000}}]}";
+        when(this.definitions.latestFor(A, "PIPE-" + A)).thenReturn(Optional.of(stored));
+        when(this.ai.stepModelOptions(eq(A), eq(A_TASK), eq("label"), eq(3000L))).thenReturn(Collections.singletonList(option(1401L, true, true)));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) ((Map<String, Object>) this.service.jobChoices(A_JOB).getData()).get("steps");
+
+        // The old fields first; the engine's "summary" shares a key with one, so it is listed once; "band" is no AI step.
+        assertThat(steps).extracting(s -> s.get("stepKey")).containsExactly("summary", "caption", "label");
+        assertThat(steps.get(2)).containsEntry("label", "Label each image").containsEntry("runIn", "server").containsEntry("promptId", 3000L);
+        assertThat(this.service.saveSchedule(choice(A_JOB, "label", "1401")).getStatus()).isEqualTo("SUCCESS");
+        assertThat(this.store.schedules.get(A_JOB)).isEqualTo("{\"label\":\"1401\"}");
+        assertThat(this.service.saveSchedule(choice(A_JOB, "band", "1401")).getMessage()).isEqualTo("This job's pipeline has no AI step <band>.");
     }
 
     @Test

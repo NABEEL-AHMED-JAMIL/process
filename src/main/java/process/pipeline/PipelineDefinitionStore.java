@@ -125,6 +125,48 @@ public class PipelineDefinitionStore {
             tenantId, pipelineId.trim(), asOf));
     }
 
+    /** A live pipeline's latest definition with the pipeline's own id and name: what {@link #latestMentioning} answers. */
+    public static final class Named {
+        public Stored stored;
+        public String pipelineId;
+        public String pipelineName;
+    }
+
+    /**
+     * The latest definition of every live pipeline -- of one workspace, or of every workspace when {@code tenantId} is
+     * null (the caller declares that) -- whose text holds one of these ids as a whole number. A cheap first cut for
+     * {@link StepReferences}, which then reads each definition's steps to see whether the number really is a reference
+     * (a prompt, an API request) and not, say, a row limit that happens to match.
+     */
+    public List<Named> latestMentioning(Long tenantId, Collection<Long> ids) {
+        List<String> numbers = new ArrayList<>();
+        for (Long id : ids == null ? Collections.<Long>emptyList() : ids) {
+            if (id != null && id > 0 && !numbers.contains(String.valueOf(id))) {
+                numbers.add(String.valueOf(id));
+            }
+        }
+        if (numbers.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("SELECT * FROM (SELECT DISTINCT ON (d.pipeline_key) p.pipeline_id AS of_pipeline, "
+            + "p.pipeline_name AS of_pipeline_name, " + COLUMNS + " FROM pipeline_definition d JOIN pipeline p ON p.pipeline_key = d.pipeline_key "
+            + "WHERE p.status <> 'Delete'");
+        if (tenantId != null) {
+            sql.append(" AND p.tenant_id = ?");
+            args.add(tenantId);
+        }
+        sql.append(" ORDER BY d.pipeline_key, d.version DESC) latest WHERE latest.definition ~ ?");
+        args.add("(^|[^0-9])(" + String.join("|", numbers) + ")([^0-9]|$)");
+        return this.jdbc.query(sql + " ORDER BY latest.pipeline_key", (rs, n) -> {
+            Named named = new Named();
+            named.stored = row(rs, n);
+            named.pipelineId = rs.getString("of_pipeline");
+            named.pipelineName = rs.getString("of_pipeline_name");
+            return named;
+        }, args.toArray());
+    }
+
     public Optional<Stored> byId(long pipelineDefinitionId) {
         return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_definition_id = ?",
             PipelineDefinitionStore::row, pipelineDefinitionId));

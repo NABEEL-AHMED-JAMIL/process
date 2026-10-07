@@ -14,6 +14,7 @@ import process.model.pojo.SourceTask;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
+import process.pipeline.PipelineUsage;
 import process.security.RunCallbackTokens;
 
 import java.util.Arrays;
@@ -171,6 +172,42 @@ class InternalRunVerificationRestApiTest {
         assertThat(answer).containsEntry("promptId", 6L).containsEntry("count", 2L);
         assertThat(this.api.countUsingPrompt(null, Collections.singletonMap("promptId", 6)).getStatusCodeValue()).isEqualTo(401);
         assertThat(this.api.countUsingPrompt(SERVICE, Collections.emptyMap()).getStatusCodeValue()).isEqualTo(400);
+    }
+
+    /** Review 2026-10-07: with PipelineUsage wired, the count is its count -- step-engine pipelines included. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void thePromptCountIncludesStepEnginePipelinesWhenPipelineUsageIsWired() {
+        PipelineUsage usage = mock(PipelineUsage.class);
+        when(usage.countUsingPrompt(6L)).thenReturn(5L);
+        this.api.setUsage(usage);
+        Map<String, Object> answer = (Map<String, Object>) this.api.countUsingPrompt(SERVICE, Collections.singletonMap("promptId", 6)).getBody();
+        assertThat(answer).containsEntry("count", 5L);
+        verifyNoInteractions(this.pipelines);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void apiRequestUsersAnswersTheServiceTokenForOneWorkspace() {
+        PipelineUsage usage = mock(PipelineUsage.class);
+        Map<String, Object> row = new HashMap<>();
+        row.put("pipelineId", "PATIENT_360");
+        row.put("requestId", 1083L);
+        when(usage.apiRequestUsers(eq(2960L), eq(Arrays.asList(1083L, 1084L)))).thenReturn(Collections.singletonList(row));
+        this.api.setUsage(usage);
+        Map<String, Object> body = new HashMap<>();
+        body.put("tenantId", 2960);
+        body.put("requestIds", Arrays.asList(1083, 1084));
+
+        Map<String, Object> answer = (Map<String, Object>) this.api.apiRequestUsers(SERVICE, body).getBody();
+
+        assertThat(answer).containsEntry("tenantId", 2960L);
+        assertThat((List<Object>) answer.get("users")).containsExactly(row);
+        assertThat(this.api.apiRequestUsers(null, body).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.apiRequestUsers("wrong", body).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("tenantId", 2960)).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("requestIds", Collections.emptyList())).getStatusCodeValue())
+            .isEqualTo(400);
     }
 
     /**

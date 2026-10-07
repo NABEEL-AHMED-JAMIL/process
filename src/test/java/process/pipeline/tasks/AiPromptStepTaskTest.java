@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.ai.AiPort;
 import process.pipeline.Dataset;
+import process.pipeline.StepContext;
 import process.pipeline.backing.Fakes;
 
 import java.nio.charset.StandardCharsets;
@@ -10,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -85,6 +87,43 @@ class AiPromptStepTaskTest {
         // Each row is its own run in ai-service (tag#item), so a retried run reuses that row's answer.
         verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("1"), eq(41L), anyMap(), anyList(), isNull(), isNull());
         verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("2"), eq(41L), anyMap(), anyList(), isNull(), isNull());
+    }
+
+    /** Review 2026-10-07: "Run with a different AI model..." reaches an engine AI step -- the option and the job's source task. */
+    @Test
+    void theModelTheRunAsksForIsSentWithTheJobsSourceTask() throws Exception {
+        this.answer("A short summary.");
+        TaskContext base = TaskContext.of(config("promptId", 41, "values", config("note", "{{note}}")), Arrays.asList(row("note", "Healing well")));
+        StepContext context = new StepContext() {
+            @Override public long tenantId() { return base.tenantId(); }
+
+            @Override public long jobQueueId() { return base.jobQueueId(); }
+
+            @Override public int attempt() { return base.attempt(); }
+
+            @Override public String stepKey() { return base.stepKey(); }
+
+            @Override public int tryNumber() { return base.tryNumber(); }
+
+            @Override public Map<String, Object> config() { return base.config(); }
+
+            @Override public Dataset input() { return base.input(); }
+
+            @Override public String modelProfile() { return "1401"; }
+
+            @Override public String modelProfileSource() { return "run"; }
+
+            @Override public Long sourceTaskId() { return 1928L; }
+
+            @Override public void log(String message) { base.log(message); }
+
+            @Override public void warn(String message) { base.warn(message); }
+        };
+
+        this.task.run(context);
+
+        verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("1"), eq(41L), anyMap(), isNull(), eq("1401"), eq(1928L));
+        assertThat(base.lines).contains("INFO Asked to run on model option 1401 (from the run).");
     }
 
     @Test

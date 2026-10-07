@@ -56,6 +56,7 @@ import process.pipeline.DefinitionValidator;
 import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.StepReferences;
 import process.pipeline.StepTasks;
 import process.pipeline.registry.JdbcTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
@@ -509,7 +510,8 @@ final class CoreProbeFixture implements AutoCloseable {
         this.fileChat = new FileChatRestApi(new FileChatServiceImpl(asTheCaller, this.media, this.agents, this.rag, this.embeddings,
             this.indexLock));
         this.modelChoice = new AiModelChoiceRestApi(new AiModelChoiceService(jobRows, taskRows, runRows, pipelineRows, this.ai,
-            new JdbcModelChoiceStore(this.db.appJdbc()), jobs));
+            new JdbcModelChoiceStore(this.db.appJdbc()), jobs, new PipelineDefinitionStore(this.db.appJdbc()),
+            new StepReferences(stepTasks)));
         this.inboxTriggers = new InboxTriggerRestApi(new InboxTriggerService(new JdbcInboxTriggerStore(this.db.appJdbc()), this.engine,
             transactions, this.jpa.transactionManager()));
         FormService formService = new FormService(new JdbcFormStore(this.db.appJdbc()), transactions);

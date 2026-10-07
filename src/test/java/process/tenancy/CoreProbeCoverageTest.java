@@ -187,6 +187,9 @@ class CoreProbeCoverageTest {
             + " (InternalRunVerificationRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/pipelines/countUsingPrompt", service
             + " (InternalRunVerificationRestApiTest.thePromptDeleteGuardCountsThePipelinesUsingAPrompt)");
+        NOTHING_TO_AIM.put("POST internal/pipelines/apiRequestUsers", service
+            + " (InternalRunVerificationRestApiTest.apiRequestUsersAnswersTheServiceTokenForOneWorkspace; the workspace it names "
+            + "is the only one row security shows: PipelineUsagePostgresTest.anotherWorkspacesPipelinesAreNeverAnApiRequestsUsers)");
         NOTHING_TO_AIM.put("POST internal/secretRef/{ref}/redeem", service
             + " (InternalSecretRestApiTest.withoutTheTokenNothingIsRedeemed)");
         // MIG-278: the visitor of a share link names no workspace and has no principal; the link's token names the one

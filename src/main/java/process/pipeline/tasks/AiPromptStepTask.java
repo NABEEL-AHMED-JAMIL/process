@@ -35,6 +35,9 @@ import java.util.Set;
  * {@code maxCalls} rows (default 50, at most {@value Limits#MAX_CALLS}); an input with more fails before any call. A row
  * whose call fails, or whose image cannot be read: {@code fail} (the default) fails the step, {@code skip} drops the row,
  * {@code null} keeps it with the answer empty. Images are capped at {@value #MAX_IMAGE_BYTES} bytes each.
+ *
+ * The model: the prompt's, unless the run asks for another (MIG-242's "Run with a different AI model...", else the
+ * schedule's setting) -- sent as the model profile with the job's source task, exactly as the old pipeline's AI steps do.
  */
 @Component
 public class AiPromptStepTask extends RegisteredTask {
@@ -113,6 +116,11 @@ public class AiPromptStepTask extends RegisteredTask {
             }
         }
         Map<String, Object> runValues = Templates.ofRun(context, input.size());
+        if (context.modelProfile() != null) {
+            // "Run with a different AI model..." or the schedule's setting (MIG-242): ai-service checks the option is one this
+            // step may run on, in this workspace, and refuses the row (422) otherwise -- which onError then handles.
+            context.log(String.format("Asked to run on model option %s (from the %s).", context.modelProfile(), context.modelProfileSource()));
+        }
 
         Set<String> columns = new LinkedHashSet<>(input.getColumns());
         columns.add(outputColumn);
@@ -138,7 +146,7 @@ public class AiPromptStepTask extends RegisteredTask {
                 templates.forEach((name, template) -> variables.put(name, Templates.fill(template, values)));
                 List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
                 AiPort.StepResult result = this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(),
-                    String.valueOf(i + 1), promptId, variables, images, null, null);
+                    String.valueOf(i + 1), promptId, variables, images, context.modelProfile(), context.sourceTaskId());
                 if (!result.ok()) {
                     throw new IllegalStateException("Row " + (i + 1) + ": " + (result.error == null ? "the AI step failed." : result.error));
                 }
