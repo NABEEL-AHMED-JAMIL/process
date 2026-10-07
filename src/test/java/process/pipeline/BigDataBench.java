@@ -17,6 +17,11 @@ import process.pipeline.backing.BucketStore;
 import process.pipeline.backing.ContractChecker;
 import process.pipeline.registry.InMemoryTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
+import process.pipeline.data.FileFormats;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
+import process.pipeline.data.RowsFile;
+import process.pipeline.data.RunMemory;
 import process.pipeline.tasks.AggregateStepTask;
 import process.pipeline.tasks.ComputeStepTask;
 import process.pipeline.tasks.FilterStepTask;
@@ -36,6 +41,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryUsage;
@@ -61,6 +67,18 @@ import com.sun.management.ThreadMXBean;
 import java.time.LocalDateTime;
 import javax.management.NotificationListener;
 import process.pipeline.data.Values;
+import java.io.BufferedOutputStream;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Collection;
+import java.util.Properties;
+import org.duckdb.DuckDBAppender;
+import org.duckdb.DuckDBConnection;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -147,6 +165,31 @@ class BigDataBench {
                 customers.setInput("keep");
                 steps.add(customers);
                 break;
+            case "brfss": {
+                // The medical demo's BRFSS pipeline up to its statistics (demo/medical/setup_medical.py), in full.
+                steps.add(step("check", "validate", config("contractName", "demo_medical_brfss_rows", "onInvalid", "drop")));
+                steps.add(step("narrow", "select", config("columns", Arrays.asList("Diabetes_012", "BMI", "Age", "Smoker", "PhysActivity",
+                    "HighBP", "Sex"), "required", true)));
+                steps.add(step("banded", "compute", config("formulas", Arrays.asList(
+                    config("target", "age_band", "expression", "if(Age <= 2, '18-29', if(Age <= 4, '30-39', if(Age <= 6, '40-49', "
+                        + "if(Age <= 8, '50-59', if(Age <= 10, '60-69', if(Age <= 12, '70-79', '80+'))))))"),
+                    config("target", "bmi_band", "expression", "if(BMI < 18.5, 'under 18.5', if(BMI < 25, '18.5-24.9', if(BMI < 30, "
+                        + "'25-29.9', if(BMI < 35, '30-34.9', if(BMI < 40, '35-39.9', '40+')))))"),
+                    config("target", "smoking", "expression", "if(Smoker == 1, 'smoked', 'never')"),
+                    config("target", "activity", "expression", "if(PhysActivity == 1, 'active', 'not active')"),
+                    config("target", "blood_pressure", "expression", "if(HighBP == 1, 'high', 'normal')"),
+                    config("target", "diabetes", "expression", "if(Diabetes_012 == 2, 1, 0)"),
+                    config("target", "prediabetes", "expression", "if(Diabetes_012 == 1, 1, 0)"),
+                    config("target", "all", "expression", "'all respondents'")))));
+                for (String group : Arrays.asList("age_band", "bmi_band", "smoking", "activity", "blood_pressure", "all")) {
+                    PipelineDefinition.Step rates = step("by_" + group, "aggregate", config("groupBy", Collections.singletonList(group),
+                        "aggregations", Arrays.asList(config("op", "count", "as", "rows"), config("op", "avg", "column", "diabetes", "as", "diabetes"),
+                            config("op", "avg", "column", "prediabetes", "as", "prediabetes"))));
+                    rates.setInput("banded");
+                    steps.add(rates);
+                }
+                break;
+            }
             case "creditcard":
                 steps.add(step("calc", "compute", config("formulas", Collections.singletonList(
                     config("target", "amount_band", "expression", "if(Amount > 1000, 'large', if(Amount > 100, 'medium', 'small'))")))));
@@ -249,7 +292,8 @@ class BigDataBench {
             answer.rows = new ArrayList<>(call.rows.size());
             for (int i = 0; i < call.rows.size(); i++) {
                 Map<String, Object> row = call.rows.get(i);
-                boolean valid = numeric(row.get("quantity")) && numeric(row.get("unit_price"));
+                // Orders hold when their quantity and price are numbers; rows of any other file all hold.
+                boolean valid = !row.containsKey("quantity") || numeric(row.get("quantity")) && numeric(row.get("unit_price"));
                 answer.rows.add(new RowVerdict(i, valid, valid ? null : Collections.singletonList("/quantity: must be a number")));
             }
             return answer;
@@ -268,6 +312,10 @@ class BigDataBench {
 
     // ---------------------------------------------------------------------------------------------------- measuring
 
+    static final Set<String> HEAP_POOLS = ManagementFactory.getMemoryPoolMXBeans().stream()
+        .filter(pool -> pool.getType() == MemoryType.HEAP).map(MemoryPoolMXBean::getName)
+        .collect(Collectors.toSet());
+
     /** Heap sampled every millisecond, and every GC's heap after collection: the peak since the last mark. */
     static final class HeapWatch implements AutoCloseable {
         private final AtomicLong peakUsed = new AtomicLong();
@@ -282,8 +330,11 @@ class BigDataBench {
             }
             GarbageCollectionNotificationInfo info = GarbageCollectionNotificationInfo.from((CompositeData) notification.getUserData());
             long after = 0;
-            for (MemoryUsage usage : info.getGcInfo().getMemoryUsageAfterGc().values()) {
-                after += usage.getUsed();
+            // Heap pools only: the GC's report covers metaspace and the code cache too.
+            for (Map.Entry<String, MemoryUsage> pool : info.getGcInfo().getMemoryUsageAfterGc().entrySet()) {
+                if (HEAP_POOLS.contains(pool.getKey())) {
+                    after += pool.getValue().getUsed();
+                }
             }
             this.gcs.incrementAndGet();
             this.peakLive.accumulateAndGet(after, Math::max);
@@ -724,5 +775,326 @@ class BigDataBench {
         report(String.format("| %s | %s | %s | %,d | %d | %.2f | %,.0f | %,.0f | %,.0f | %,.0f | %s | %s |", file, step, phase, data.size(),
             data.getColumns().size(), seconds, allocated / MB, peakLive / MB, retainedAfter / MB, datasetBytes / MB,
             cells == 0 || datasetBytes <= 0 ? "" : String.format("%.0f", (double) datasetBytes / cells), notes));
+    }
+
+    // ---------------------------------------------------------------------------------------------------- formats mode
+
+    /** RSS sampled every 100 ms (ps), for native memory a heap sampler cannot see (DuckDB's). */
+    static final class RssWatch implements AutoCloseable {
+        private final AtomicLong peak = new AtomicLong();
+        private volatile boolean stop;
+        private final Thread thread;
+
+        RssWatch() {
+            this.thread = new Thread(() -> {
+                while (!this.stop) {
+                    this.peak.accumulateAndGet(rssBytes(), Math::max);
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ex) {
+                        return;
+                    }
+                }
+            }, "rss-watch");
+            this.thread.setDaemon(true);
+            this.thread.start();
+        }
+
+        long mark() {
+            long now = rssBytes();
+            return Math.max(this.peak.getAndSet(now), now);
+        }
+
+        @Override
+        public void close() {
+            this.stop = true;
+        }
+    }
+
+    /** A streaming try over a row file, for the formats mode's aggregates. */
+    static final class FileStream implements StreamContext {
+        final Path input;
+        final Map<String, Object> config;
+        final RunMemory memory;
+        final Path scratch;
+        long out;
+        final List<String> lines = new ArrayList<>();
+        final RowSink sink = new RowSink() {
+            @Override
+            public void declare(Collection<String> columns) {
+            }
+
+            @Override
+            public void add(Map<String, Object> row) {
+                FileStream.this.out++;
+            }
+
+            @Override
+            public long size() {
+                return FileStream.this.out;
+            }
+        };
+
+        FileStream(Path input, Map<String, Object> config, long budget, Path scratch) {
+            this.input = input;
+            this.config = config;
+            this.memory = new RunMemory(budget);
+            this.scratch = scratch;
+        }
+
+        @Override public RowSource openInput() throws Exception { return RowsFile.open(this.input, 1024); }
+
+        @Override public RowSink output() { return this.sink; }
+
+        @Override public Path scratch() { return this.scratch; }
+
+        @Override public RunMemory memory() { return this.memory; }
+
+        @Override public long maxFileBytes() { return Long.MAX_VALUE; }
+
+        @Override public long maxRows() { return Long.MAX_VALUE; }
+
+        @Override public KeptFile keepFile(String fileName, List<String> columns, long rows, FileWriter writer) { throw new UnsupportedOperationException(); }
+
+        @Override public long tenantId() { return TENANT; }
+
+        @Override public long jobQueueId() { return 1; }
+
+        @Override public int attempt() { return 1; }
+
+        @Override public String stepKey() { return "agg"; }
+
+        @Override public int tryNumber() { return 1; }
+
+        @Override public Map<String, Object> config() { return this.config; }
+
+        @Override public Dataset input() { throw new UnsupportedOperationException(); }
+
+        @Override public void log(String message) { this.lines.add(message); }
+
+        @Override public void warn(String message) { this.lines.add(message); }
+    }
+
+    private void format(String what, String note, long rows, double seconds, long allocated, long[] heap, long rss, long bytes) {
+        report(String.format("| %s | %,d | %.2f | %,.0f | %,.0f | %,.0f | %,.0f | %,.0f | %s |", what, rows, seconds, rows / Math.max(seconds, 1e-6),
+            allocated / MB, heap[1] / MB, rss / MB, bytes / MB, note));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "bigdata.bench", matches = "formats")
+    void formats() throws Exception {
+        String csv = files().get(0);
+        Path dir = Paths.get(System.getProperty("bigdata.datasets", System.getProperty("java.io.tmpdir") + "/bigdata-datasets"), "formats");
+        deleteTree(dir);
+        Files.createDirectories(dir);
+        report(String.format("## %s, formats over %s, -Xmx %.0f MB", label(), Paths.get(csv).getFileName(), Runtime.getRuntime().maxMemory() / MB));
+        report("| what | rows | time s | rows/s | allocated MB | peak live heap MB | peak RSS MB | file MB | note |");
+        report("|---|---|---|---|---|---|---|---|---|");
+        HeapWatch heap = new HeapWatch();
+        RssWatch rss = new RssWatch();
+        FileFormats.ReadOptions options = new FileFormats.ReadOptions();
+        try {
+            // 1. Parse only.
+            long[] count = {0};
+            RowSink counting = new RowSink() {
+                @Override public void declare(Collection<String> columns) { }
+
+                @Override public void add(Map<String, Object> row) { count[0]++; }
+
+                @Override public long size() { return count[0]; }
+            };
+            retained();
+            heap.mark();
+            rss.mark();
+            long a0 = allocated();
+            long t0 = System.nanoTime();
+            try (InputStream in = new FileInputStream(csv)) {
+                FileFormats.readStream(in, "csv", options, counting, null, Long.MAX_VALUE, csv);
+            }
+            this.format("CSV parse only (commons-csv, rows as maps)", "the floor every read pays", count[0], (System.nanoTime() - t0) / 1e9,
+                allocated() - a0, heap.mark(), rss.mark(), Files.size(Paths.get(csv)));
+
+            // 2. CSV -> row file, and read it back.
+            Path rows = dir.resolve("orders.rows");
+            retained();
+            heap.mark();
+            rss.mark();
+            a0 = allocated();
+            t0 = System.nanoTime();
+            RowsFile.Writer writer = RowsFile.create(rows);
+            try (InputStream in = new FileInputStream(csv)) {
+                FileFormats.readStream(in, "csv", options, writer, null, Long.MAX_VALUE, csv);
+            }
+            long n = writer.size();
+            writer.commit();
+            this.format("CSV -> .rows (parse + write)", "Core's row file", n, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(),
+                rss.mark(), Files.size(rows));
+            retained();
+            heap.mark();
+            rss.mark();
+            a0 = allocated();
+            t0 = System.nanoTime();
+            long read = 0;
+            try (RowSource source = RowsFile.open(rows, 1024)) {
+                for (List<Map<String, Object>> batch = source.next(); batch != null; batch = source.next()) {
+                    read += batch.size();
+                }
+            }
+            this.format(".rows read back (as maps)", "what the next step pays", read, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(),
+                rss.mark(), Files.size(rows));
+
+            // 3. JSON Lines, Jackson, both ways.
+            Path jsonl = dir.resolve("orders.jsonl");
+            retained();
+            heap.mark();
+            rss.mark();
+            a0 = allocated();
+            t0 = System.nanoTime();
+            try (RowSource source = RowsFile.open(rows, 1024); OutputStream out = new BufferedOutputStream(Files.newOutputStream(jsonl), 1 << 16)) {
+                for (List<Map<String, Object>> batch = source.next(); batch != null; batch = source.next()) {
+                    for (Map<String, Object> row : batch) {
+                        out.write(Values.JSON.writeValueAsBytes(row));
+                        out.write('\n');
+                    }
+                }
+            }
+            this.format(".rows -> JSON Lines (read + Jackson write)", "includes a .rows read", n, (System.nanoTime() - t0) / 1e9, allocated() - a0,
+                heap.mark(), rss.mark(), Files.size(jsonl));
+            retained();
+            heap.mark();
+            rss.mark();
+            a0 = allocated();
+            t0 = System.nanoTime();
+            long jread = 0;
+            try (BufferedReader reader = Files.newBufferedReader(jsonl, StandardCharsets.UTF_8)) {
+                for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                    Values.JSON.readValue(line, Map.class);
+                    jread++;
+                }
+            }
+            this.format("JSON Lines read back (Jackson, as maps)", "", jread, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(), rss.mark(),
+                Files.size(jsonl));
+
+            // 4. DuckDB: rows in through the appender, out to Parquet, read back, aggregated.
+            Class.forName("org.duckdb.DuckDBDriver");
+            Properties settings = new Properties();
+            settings.setProperty("threads", System.getProperty("bigdata.duck-threads", "1"));
+            settings.setProperty("memory_limit", System.getProperty("bigdata.duck-memory", "256MB"));
+            settings.setProperty("temp_directory", dir.resolve("duck-tmp").toString());
+            Path duck = dir.resolve("spill.duckdb");
+            List<String> columns;
+            try (RowSource source = RowsFile.open(rows, 1)) {
+                columns = new ArrayList<>(source.columns());
+            }
+            try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + duck, settings)) {
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("CREATE TABLE t (" + columns.stream().map(c -> "\"" + c + "\" VARCHAR").collect(Collectors.joining(", ")) + ")");
+                }
+                retained();
+                heap.mark();
+                rss.mark();
+                a0 = allocated();
+                t0 = System.nanoTime();
+                try (DuckDBAppender appender = ((DuckDBConnection) connection).createAppender(
+                    DuckDBConnection.DEFAULT_SCHEMA, "t"); RowSource source = RowsFile.open(rows, 1024)) {
+                    for (List<Map<String, Object>> batch = source.next(); batch != null; batch = source.next()) {
+                        for (Map<String, Object> row : batch) {
+                            appender.beginRow();
+                            for (String column : columns) {
+                                Object value = row.get(column);
+                                appender.append(value == null ? null : value.toString());
+                            }
+                            appender.endRow();
+                        }
+                    }
+                }
+                this.format(".rows -> DuckDB table (appender, on disk)", "includes a .rows read; " + settings.getProperty("threads") + " thread(s), "
+                    + settings.getProperty("memory_limit"), n, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(), rss.mark(), Files.size(duck));
+                Path parquet = dir.resolve("orders.parquet");
+                t0 = System.nanoTime();
+                a0 = allocated();
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("COPY t TO '" + parquet + "' (FORMAT PARQUET)");
+                }
+                this.format("DuckDB table -> Parquet (COPY)", "", n, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(), rss.mark(),
+                    Files.size(parquet));
+                retained();
+                heap.mark();
+                rss.mark();
+                a0 = allocated();
+                t0 = System.nanoTime();
+                long pread = 0;
+                try (Statement statement = connection.createStatement();
+                     ResultSet result = statement.executeQuery("SELECT * FROM read_parquet('" + parquet + "')")) {
+                    int width = result.getMetaData().getColumnCount();
+                    while (result.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= width; i++) {
+                            row.put(columns.get(i - 1), result.getObject(i));
+                        }
+                        pread++;
+                    }
+                }
+                this.format("Parquet read back through DuckDB JDBC (as maps)", "", pread, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(),
+                    rss.mark(), Files.size(parquet));
+                String[][] queries = {
+                    {"DuckDB GROUP BY region, category (count, sum, avg, count distinct customer, max)",
+                        "SELECT region, category, count(*), sum(TRY_CAST(quantity AS DOUBLE) * TRY_CAST(unit_price AS DOUBLE)), avg(TRY_CAST(score AS DOUBLE)),"
+                            + " count(DISTINCT customer_id), max(TRY_CAST(unit_price AS DOUBLE)) FROM read_parquet('" + parquet + "') GROUP BY 1, 2"},
+                    {"DuckDB GROUP BY customer_id (200,000 groups)",
+                        "SELECT customer_id, count(*), sum(TRY_CAST(quantity AS DOUBLE) * TRY_CAST(unit_price AS DOUBLE)), count(DISTINCT category),"
+                            + " last(event_date) FROM read_parquet('" + parquet + "') GROUP BY 1"}};
+                for (String[] query : queries) {
+                    retained();
+                    heap.mark();
+                    rss.mark();
+                    a0 = allocated();
+                    t0 = System.nanoTime();
+                    long groups = 0;
+                    try (Statement statement = connection.createStatement(); ResultSet result = statement.executeQuery(query[1])) {
+                        while (result.next()) {
+                            groups++;
+                        }
+                    }
+                    this.format(query[0], groups + " groups; over the Parquet file", n, (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(),
+                        rss.mark(), 0);
+                }
+            }
+
+            // 5. Core's aggregate over the row file: in memory (it fits), then forced to spill.
+            AggregateStepTask aggregate = new AggregateStepTask();
+            Object[][] runs = {
+                {"Core aggregate, region x category (it fits)", config("groupBy", Arrays.asList("region", "category"), "aggregations", Arrays.asList(
+                    config("op", "count", "as", "n"), config("op", "sum", "column", "unit_price", "as", "s"), config("op", "avg", "column", "score", "as", "a"),
+                    config("op", "count_distinct", "column", "customer_id", "as", "c"), config("op", "max", "column", "unit_price", "as", "m"))), 256L},
+                {"Core aggregate, customer_id (200,000 groups), 256 MB budget", config("groupBy", Collections.singletonList("customer_id"), "aggregations",
+                    Arrays.asList(config("op", "count", "as", "n"), config("op", "sum", "column", "unit_price", "as", "s"),
+                        config("op", "count_distinct", "column", "category", "as", "c"), config("op", "last", "column", "event_date", "as", "l"))), 256L},
+                {"Core aggregate, customer_id, 32 MB budget (spills)", null, 32L},
+                {"Core aggregate, region x category, 32 MB budget (spills)", null, 32L}};
+            runs[2][1] = runs[1][1];
+            runs[3][1] = runs[0][1];
+            for (Object[] run : runs) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> config = (Map<String, Object>) run[1];
+                Path scratch = Files.createDirectories(dir.resolve("agg-scratch"));
+                FileStream context = new FileStream(rows, config, (Long) run[2] * 1024 * 1024, scratch);
+                retained();
+                heap.mark();
+                rss.mark();
+                a0 = allocated();
+                t0 = System.nanoTime();
+                aggregate.stream(context);
+                this.format((String) run[0], context.out + " groups; " + RunMemory.megabytes(context.memory.peak()) + " budget used at most"
+                    + (context.memory.spilled() > 0 ? ", " + RunMemory.megabytes(context.memory.spilled()) + " spilled" : ""), n,
+                    (System.nanoTime() - t0) / 1e9, allocated() - a0, heap.mark(), rss.mark(), 0);
+                deleteTree(scratch);
+            }
+        } finally {
+            heap.close();
+            rss.close();
+            flush("formats.md");
+            deleteTree(dir);
+        }
     }
 }

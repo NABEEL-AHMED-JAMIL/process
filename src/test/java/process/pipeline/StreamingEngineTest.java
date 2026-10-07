@@ -135,7 +135,8 @@ class StreamingEngineTest {
     @Test
     void streamingStepsPassRowFilesAndAHoldingStepStillGetsItsInputWhole() throws Exception {
         this.csv(3_000);
-        PipelineDefinition.Step pick = step("pick", "select", config("columns", config("region", "r")));
+        PipelineDefinition.Step pick = step("pick", "transform", config("mappings", Collections.singletonList(
+            config("target", "r", "op", "upper", "source", "region"))));
         this.runs(read(),
             step("keep", "filter", config("conditions", Collections.singletonList(config("column", "status", "operator", "ne", "value", "cancelled")))),
             step("calc", "compute", config("formulas", Collections.singletonList(config("target", "total", "expression", "qty * price")))),
@@ -203,7 +204,7 @@ class StreamingEngineTest {
     @Test
     void aReadStreamsPastTheOldCapAndAHoldingStepSaysWhyItCannotTakeIt() throws Exception {
         this.csv(50_001);
-        this.runs(read(), step("pick", "select", config("columns", config("id", "id"))));
+        this.runs(read(), step("pick", "transform", config("mappings", Collections.singletonList(config("target", "id", "op", "trim", "source", "id")))));
 
         assertThat(this.steps.row(RUN_ID, 1, "read").recordsOut).as("past the 50,000 rows a step held before MIG-344").isEqualTo(50_001L);
         assertThat(this.statuses()).containsOnly(entry("read", "Completed"), entry("pick", "Failed"));
