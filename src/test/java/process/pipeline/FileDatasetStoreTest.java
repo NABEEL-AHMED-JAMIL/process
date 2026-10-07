@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +41,22 @@ class FileDatasetStoreTest {
         store.delete(key);
         assertThat(Files.exists(this.dir.resolve(key))).isFalse();
         store.delete(key);
+    }
+
+    /** readFile reads in 64 KB chunks (code review 2026-10-07): the bytes are exactly the file's, at every boundary. */
+    @Test
+    void aFileIsReadBackByteForByteAtEveryChunkBoundary() throws Exception {
+        FileDatasetStore store = new FileDatasetStore(this.dir.toString());
+        Random random = new Random(7);
+        for (int size : new int[] {0, 1, (1 << 16) - 1, 1 << 16, (1 << 16) + 1, 3 * (1 << 16) + 17}) {
+            byte[] content = new byte[size];
+            random.nextBytes(content);
+            String key = "datasets/7402/1/file/part-" + size + ".bin";
+            Path file = this.dir.resolve(key);
+            Files.createDirectories(file.getParent());
+            Files.write(file, content);
+            assertThat(store.readFile(key)).as("%d bytes", size).isEqualTo(content);
+        }
     }
 
     @Test

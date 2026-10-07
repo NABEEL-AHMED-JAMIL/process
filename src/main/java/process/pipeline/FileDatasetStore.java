@@ -20,6 +20,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -45,6 +46,8 @@ import java.util.Collection;
 public class FileDatasetStore implements DatasetStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** How much readFile asks of the file at once: the JDK's per-thread temporary buffer stays this small. */
+    private static final int READ_CHUNK = 1 << 16;
 
     private final Path root;
 
@@ -257,9 +260,33 @@ public class FileDatasetStore implements DatasetStore {
         }
     }
 
+    /**
+     * The file's bytes, read in 64 KB chunks into one array of its size. Not Files.readAllBytes: that reads through a
+     * FileChannel in one call the size of the file, and the JDK copies through a temporary direct buffer of that size which it
+     * then keeps cached on the calling thread (jdk.nio.maxCachedBufferSize is unlimited by default). One json download of an
+     * 815 MB kept file left 880 MB of native memory on a Tomcat thread for good, and process_app at 2.0 of its 2 GB (code
+     * review 2026-10-07). The bytes returned are the same.
+     */
     @Override
     public byte[] readFile(String storageKey) throws IOException {
-        return Files.readAllBytes(this.resolve(storageKey));
+        Path file = this.resolve(storageKey);
+        long size = Files.size(file);
+        if (size > Integer.MAX_VALUE - 8) {
+            throw new IOException("The file is too large to read whole (" + size + " bytes).");
+        }
+        byte[] content = new byte[(int) size];
+        int read = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            while (read < content.length) {
+                int n = in.read(content, read, Math.min(READ_CHUNK, content.length - read));
+                if (n < 0) {
+                    break;
+                }
+                read += n;
+            }
+        }
+        // A dataset file is written whole and moved into place (writeFile), so it never changes under a read.
+        return read == content.length ? content : Arrays.copyOf(content, read);
     }
 
     @Override
