@@ -1,10 +1,12 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
-import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
@@ -21,9 +23,10 @@ import java.util.Map;
  * value: eq, ne, gt, gte, lt, lte (numbers by value when both sides are numbers, else text), contains, starts_with,
  * ends_with (text; {@code ignoreCase} optional), in / not_in a list of values, is_null / not_null, is_empty /
  * not_empty (null or ""). No regular expressions: nothing a person types can make a step run away. Pure Core.
+ * MIG-344: streamed, a row at a time.
  */
 @Component
-public class FilterStepTask extends RegisteredTask {
+public class FilterStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final List<String> OPERATORS = Arrays.asList("eq", "ne", "gt", "gte", "lt", "lte", "contains", "starts_with", "ends_with",
         "in", "not_in", "is_null", "not_null", "is_empty", "not_empty");
@@ -67,30 +70,39 @@ public class FilterStepTask extends RegisteredTask {
     }
 
     @Override
-    public StepResult run(StepContext context) {
+    public StepResult stream(StreamContext context) throws Exception {
         boolean any = "any".equals(Configs.text(context.config(), "match", "all"));
         List<Map<String, Object>> conditions = Configs.objects(context.config(), "conditions");
-        Dataset input = context.input();
-        List<Map<String, Object>> kept = new ArrayList<>();
-        for (Map<String, Object> row : input.getRows()) {
-            boolean keep = !any;
-            for (Map<String, Object> condition : conditions) {
-                boolean met = meets(row.get(Configs.text(condition, "column", "")), condition);
-                if (any && met) {
-                    keep = true;
-                    break;
+        RowSink out = context.output();
+        long total;
+        try (RowSource input = context.openInput()) {
+            total = input.size();
+            out.declare(input.columns());
+            for (List<Map<String, Object>> batch = input.next(); batch != null; batch = input.next()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Filter was stopped.");
                 }
-                if (!any && !met) {
-                    keep = false;
-                    break;
+                for (Map<String, Object> row : batch) {
+                    boolean keep = !any;
+                    for (Map<String, Object> condition : conditions) {
+                        boolean met = meets(row.get(Configs.text(condition, "column", "")), condition);
+                        if (any && met) {
+                            keep = true;
+                            break;
+                        }
+                        if (!any && !met) {
+                            keep = false;
+                            break;
+                        }
+                    }
+                    if (keep) {
+                        out.add(row);
+                    }
                 }
-            }
-            if (keep) {
-                kept.add(row);
             }
         }
-        context.log(String.format("%d of %d row(s) kept.", kept.size(), input.size()));
-        return StepResult.of(new Dataset(input.getColumns(), kept));
+        context.log(String.format("%d of %d row(s) kept.", out.size(), total));
+        return StepResult.streamed(out.size());
     }
 
     static boolean meets(Object actual, Map<String, Object> condition) {

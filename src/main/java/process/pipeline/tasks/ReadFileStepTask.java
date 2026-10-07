@@ -1,9 +1,11 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
+import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
@@ -12,6 +14,9 @@ import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -25,9 +30,13 @@ import java.util.Optional;
  * With no bucket and key it reads the file the run was started for -- an inbox arrival's (MIG-239,
  * job_queue.input_bucket/input_key) -- so an inbox-triggered pipeline starts with "Read CSV/JSON/Parquet" and nothing
  * else; a run no file started fails the step and says so.
+ *
+ * MIG-344: when the engine streams it, a CSV or JSON Lines file is read as a stream, row by row, straight into the
+ * step's output file -- no file-size, row or cell limit beyond {@code Limits.MAX_STREAM_*}, and storage-service bills
+ * the bytes taken. JSON and Parquet are still read whole, within the in-memory bounds.
  */
 @Component
-public class ReadFileStepTask extends RegisteredTask {
+public class ReadFileStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("read_file", "Read CSV/JSON/Parquet", TaskKind.READ)
         .description("Reads one file of a workspace bucket — CSV, JSON, JSON Lines or Parquet — as rows (storage-service).")
@@ -67,7 +76,7 @@ public class ReadFileStepTask extends RegisteredTask {
     }
 
     @Override
-    public StepResult run(StepContext context) throws Exception {
+    public StepResult stream(StreamContext context) throws Exception {
         Map<String, Object> config = context.config();
         String bucket = Configs.text(config, "bucket", null);
         String key = Templates.fill(Configs.text(config, "key", null), Templates.ofRun(context, null));
@@ -80,10 +89,39 @@ public class ReadFileStepTask extends RegisteredTask {
             context.log(String.format("Reading the file the run was started for: %s/%s.", bucket, key));
         }
         String format = FileConfigs.formatOf(Configs.text(config, "format", "auto"), key);
-        byte[] content = this.buckets.read(context.tenantId(), bucket, key, Limits.MAX_FILE_BYTES);
-        RowCollector rows = new RowCollector(key, Configs.integer(config, "maxRows", null));
-        FileFormats.read(content, format, FileConfigs.options(config), rows);
-        context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes).", rows.size(), bucket, key, format, content.length));
-        return StepResult.of(rows.toDataset());
+        Integer maxRows = Configs.integer(config, "maxRows", null);
+        if (context.inMemory() || !FileFormats.streams(format)) {
+            // Read whole, as before MIG-344: held to the in-memory bounds.
+            byte[] content = this.buckets.read(context.tenantId(), bucket, key, Limits.MAX_FILE_BYTES);
+            RowCollector rows = new RowCollector(key, maxRows);
+            FileFormats.read(content, format, FileConfigs.options(config), rows);
+            context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes).", rows.size(), bucket, key, format, content.length));
+            Dataset dataset = rows.toDataset();
+            context.output().declare(dataset.getColumns());
+            for (Map<String, Object> row : dataset.getRows()) {
+                context.output().add(row);
+            }
+            return StepResult.streamed(dataset.size());
+        }
+        long[] bytes = {0};
+        try (InputStream in = new FilterInputStream(this.buckets.open(context.tenantId(), bucket, key, context.maxFileBytes())) {
+            @Override
+            public int read() throws IOException {
+                int b = super.read();
+                bytes[0] += b < 0 ? 0 : 1;
+                return b;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int n = super.read(b, off, len);
+                bytes[0] += Math.max(0, n);
+                return n;
+            }
+        }) {
+            FileFormats.readStream(in, format, FileConfigs.options(config), context.output(), maxRows, context.maxRows(), key);
+        }
+        context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes, streamed).", context.output().size(), bucket, key, format, bytes[0]));
+        return StepResult.streamed(context.output().size());
     }
 }

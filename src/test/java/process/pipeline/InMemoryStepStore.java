@@ -176,6 +176,7 @@ public class InMemoryStepStore implements StepStore {
         row.objectKey = output.getKey();
         row.expiresAt = expiresAt;
         row.recordedAt = LocalDateTime.now();
+        row.sha256 = output.getSha256();
         this.outputs.put(stepExecutionId, row);
     }
 

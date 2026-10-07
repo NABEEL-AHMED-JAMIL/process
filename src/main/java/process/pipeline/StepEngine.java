@@ -22,11 +22,20 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
 import process.model.service.impl.TransactionServiceImpl;
+import process.pipeline.data.Limits;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
+import process.pipeline.data.RunMemory;
 import process.util.BusinessTime;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 
 import javax.annotation.PreDestroy;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Path;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -78,6 +87,14 @@ import java.util.stream.Collectors;
  *
  * Runs on its own threads (process.pipeline.engine.threads, default 4), each run inside RowSecurity.forTenant of the
  * run's workspace; each try on a thread of its own, in the same workspace, so a timeout can interrupt it.
+ *
+ * <b>Streaming (MIG-344).</b> A step whose task streams ({@link StreamingStepTask}) reads its input a batch at a time
+ * from the dataset store and writes its output a row at a time to a new dataset file, committed only when the try
+ * succeeds: it holds a batch, not the table, and has no row or cell limit. A step whose task does not stream gets its
+ * input in memory, as before, held to {@link Limits} -- an input bigger than that fails the step and says why. Each
+ * run has a memory budget ({@code process.pipeline.run-memory-mb}, {@link RunMemory}) that a streaming step's batches
+ * and an aggregate's groups count against; an aggregate spills to disk past it. Each step's log says the most it held
+ * and what it spilled; a try's spill files are removed when it ends, a run's when the run ends.
  */
 @Component
 public class StepEngine {
@@ -128,6 +145,9 @@ public class StepEngine {
     private final Sleeper sleeper;
     /** MIG-243: how long a run's datasets are kept -- the definition's hours against the workspace's data policy. */
     private RetentionPolicy retention = RetentionPolicy.DEFINITION_ONLY;
+    /** MIG-344: each run's memory budget, and the rows a streaming step reads at a time. */
+    private int runMemoryMb = RunMemory.DEFAULT_MB;
+    private int batchRows = RowSource.DEFAULT_BATCH;
 
     @Autowired
     public StepEngine(PipelineDefinitionStore definitions, StepStore steps, StepTasks tasks, DefinitionValidator validator,
@@ -158,6 +178,14 @@ public class StepEngine {
     @Autowired(required = false)
     public void useRetention(RetentionPolicy retention) {
         this.retention = retention == null ? RetentionPolicy.DEFINITION_ONLY : retention;
+    }
+
+    /** MIG-344: a run's memory budget in MB, and how many rows a streaming step reads at a time. */
+    @Autowired
+    public void useMemory(@Value("${process.pipeline.run-memory-mb:256}") int runMemoryMb,
+                          @Value("${process.pipeline.batch-rows:1024}") int batchRows) {
+        this.runMemoryMb = Math.max(16, runMemoryMb);
+        this.batchRows = Math.max(1, batchRows);
     }
 
     private static ExecutorService newRunThreads(int threads) {
@@ -309,6 +337,10 @@ public class StepEngine {
         private Dataset sourceRows;
         /** MIG-243: how long this run's datasets are kept, read once when the first is written. */
         private Duration keptFor;
+        /** MIG-344: each dataset's row count by its key, so a step knows its input's size before reading it. */
+        private final Map<String, Long> sizes = new HashMap<>();
+        /** MIG-344: the run's memory budget. */
+        private final RunMemory memory = RunMemory.ofMegabytes(runMemoryMb);
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -363,7 +395,13 @@ public class StepEngine {
                 this.stopAll(rows, 0, "Interrupt", "Not run: the run was closed before its steps started.");
                 return;
             }
-            Outcome outcome = this.steps(rows);
+            Outcome outcome;
+            try {
+                outcome = this.steps(rows);
+            } finally {
+                // MIG-344: whatever a try spilled and did not remove (one that timed out) goes with the run.
+                datasets.removeScratch(this.run.getJobQueueId(), this.attempt);
+            }
             if (outcome.interrupted) {
                 logger.info("Run {} was moved on while its steps ran; its remaining steps are Interrupt.", this.run.getJobQueueId());
                 return;
@@ -412,16 +450,23 @@ public class StepEngine {
                     continue;
                 }
                 String inputKey = named ? outputs.get(step.getInput()) : latest;
-                Dataset input = this.load(inputKey, source);
-                steps.started(row, (long) input.size());
+                Input input = new Input(inputKey, source);
+                steps.started(row, input.size());
                 this.audit(String.format("%s started on %d record(s).", label, input.size()));
                 long began = System.nanoTime();
+                this.memory.resetPeak();
                 Tried tried = this.tryStep(step, row, input, log);
                 long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - began);
+                if (tried.streamed) {
+                    log.line("INFO", String.format("Streamed in batches of %,d row(s): at most about %s held at once of the run's %s "
+                        + "memory budget%s.", batchRows, RunMemory.megabytes(this.memory.peak()), RunMemory.megabytes(this.memory.budget()),
+                        this.memory.spilled() > 0 ? String.format("; %s spilled to disk", RunMemory.megabytes(this.memory.spilled())) : ""));
+                }
                 if (tried.result != null) {
                     Dataset output = tried.result.getOutput();
                     Long out = tried.result.getRecordsOut();
-                    String passed = output != null ? this.keep(row, step, output) : inputKey;
+                    String passed = tried.outputKey != null ? this.recordStreamed(row, tried)
+                        : output != null ? this.keep(row, step, output) : inputKey;
                     outputs.put(step.getKey(), passed);
                     latest = passed;
                     String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, input.size(),
@@ -442,16 +487,71 @@ public class StepEngine {
             return outcome;
         }
 
-        /** The dataset behind a reference: the source for none, else what the dataset store holds under the key. */
-        private Dataset load(String key, Dataset source) {
+        /**
+         * The dataset behind a reference, whole: the source for none, else what the dataset store holds under the key --
+         * held to {@link Limits} (MIG-344: a streamed dataset may be bigger than a step can hold).
+         */
+        private Dataset load(String key, Dataset source, String what) {
             if (key == null) {
                 return source;
             }
-            try {
-                return datasets.read(key);
+            try (RowSource rows = datasets.open(key, batchRows)) {
+                return RowSource.materialize(rows, what);
+            } catch (IllegalStateException tooBig) {
+                throw tooBig;
             } catch (Exception ex) {
                 throw new IllegalStateException(String.format("The dataset %s could not be read back: %s", key, reasonOf(ex)), ex);
             }
+        }
+
+        /** A step's input: a reference, read only when the task asks -- whole, or a batch at a time. */
+        private final class Input {
+            final String key;
+            final Dataset source;
+            private Dataset loaded;
+            private Long size;
+
+            Input(String key, Dataset source) {
+                this.key = key;
+                this.source = source;
+            }
+
+            long size() {
+                if (this.key == null) {
+                    return this.source.size();
+                }
+                if (this.size == null) {
+                    this.size = sizes.get(this.key);
+                }
+                if (this.size == null) {
+                    try (RowSource rows = datasets.open(this.key, 1)) {
+                        this.size = rows.size();
+                    } catch (Exception ex) {
+                        throw new IllegalStateException(String.format("The dataset %s could not be read back: %s", this.key, reasonOf(ex)), ex);
+                    }
+                }
+                return this.size;
+            }
+
+            synchronized Dataset whole() {
+                if (this.loaded == null) {
+                    this.loaded = load(this.key, this.source, "The step's input");
+                }
+                return this.loaded;
+            }
+
+            RowSource open() throws Exception {
+                return this.key == null ? RowSource.of(this.source, batchRows) : datasets.open(this.key, batchRows);
+            }
+        }
+
+        /** MIG-344: where a step's output goes. */
+        String datasetKey(String stepKey) {
+            return datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, "output");
+        }
+
+        DatasetStore store() {
+            return datasets;
         }
 
         /** The run's status line when this step's failure fails it. */
@@ -460,7 +560,7 @@ public class StepEngine {
         }
 
         /** Every try of one step, each bounded by its timeout; the first success, or the last failure. */
-        private Tried tryStep(PipelineDefinition.Step step, long row, Dataset input, StepLog log) {
+        private Tried tryStep(PipelineDefinition.Step step, long row, Input input, StepLog log) {
             Optional<StepTask> task = tasks.find(step.getTask());
             // The step's own retry and timeout, else its task's registry defaults (MIG-231).
             int maxTries = task.map(found -> step.effectiveMaxAttempts(found.spec().maxAttempts())).orElse(step.effectiveMaxAttempts());
@@ -473,12 +573,14 @@ public class StepEngine {
                 if (maxTries > 1) {
                     log.line("INFO", String.format("Try %d of %d.", t, maxTries));
                 }
-                Context context = new Context(this, step, row, input, t, log);
+                boolean streams = task.isPresent() && task.get() instanceof StreamingStepTask;
+                Context context = streams ? new StreamTry(this, step, row, input, t, log) : new Context(this, step, row, input, t, log);
+                tried.streamed = streams;
                 Future<StepResult> future;
                 try {
                     future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
                         try {
-                            return task.get().run(context);
+                            return streams ? ((StreamingStepTask) task.get()).stream((StreamTry) context) : task.get().run(context);
                         } catch (RuntimeException ex) {
                             throw ex;
                         } catch (Exception ex) {
@@ -494,9 +596,16 @@ public class StepEngine {
                 if (future != null) {
                     try {
                         tried.result = future.get(timeout, TimeUnit.SECONDS);
+                        if (streams) {
+                            this.commitStreamed((StreamTry) context, tried);
+                        }
                         tried.error = null;
                         tried.timedOut = false;
                         return tried;
+                    } catch (StreamCommitFailed ex) {
+                        tried.result = null;
+                        tried.error = ex.getMessage();
+                        tried.timedOut = false;
                     } catch (TimeoutException ex) {
                         future.cancel(true);
                         tried.error = String.format("timed out after %d s", timeout);
@@ -509,9 +618,15 @@ public class StepEngine {
                         future.cancel(true);
                         Thread.currentThread().interrupt();
                         tried.error = "the step engine was stopped";
+                        if (streams) {
+                            ((StreamTry) context).discard();
+                        }
                         log.line("ERROR", String.format("Try %d stopped: the step engine is shutting down.", t));
                         return tried;
                     }
+                }
+                if (streams) {
+                    ((StreamTry) context).discard();
                 }
                 log.line(t < maxTries ? "WARN" : "ERROR", String.format("Try %d of %d failed: %s", t, maxTries, tried.error));
                 if (t < maxTries && delay > 0) {
@@ -529,7 +644,7 @@ public class StepEngine {
 
         /** The output, to the dataset store, and its reference, to run_dataset; the reference. */
         private String keep(long row, PipelineDefinition.Step step, Dataset output) {
-            String key = DatasetStore.keyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "output");
+            String key = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "output");
             try {
                 datasets.write(key, output);
             } catch (Exception ex) {
@@ -543,7 +658,46 @@ public class StepEngine {
                 columns = "[]";
             }
             steps.dataset(row, "output", key, output.size(), columns, this.expiry());
+            this.sizes.put(key, (long) output.size());
             return key;
+        }
+
+        /**
+         * MIG-344: a streaming try that succeeded -- its output file is committed (it was a partial file until now), or
+         * dropped when the step made no dataset; its spill files go either way.
+         */
+        private void commitStreamed(StreamTry context, Tried tried) {
+            try {
+                if (tried.result.isStreamed()) {
+                    DatasetStore.Output output = context.output == null ? context.startOutput() : context.output;
+                    output.commit();
+                    tried.outputKey = context.outputKey;
+                    tried.outputRows = output.size();
+                    tried.outputColumns = output.columns();
+                    // A streaming try's records out are the rows it wrote.
+                    tried.result = StepResult.streamed(output.size());
+                } else {
+                    context.discard();
+                }
+            } catch (Exception ex) {
+                context.discard();
+                throw new StreamCommitFailed(String.format("its output could not be kept: %s", reasonOf(ex)));
+            } finally {
+                context.removeScratch();
+            }
+        }
+
+        /** The run_dataset row of a streamed output; the reference. */
+        private String recordStreamed(long row, Tried tried) {
+            String columns;
+            try {
+                columns = JSON.writeValueAsString(tried.outputColumns);
+            } catch (JsonProcessingException ex) {
+                columns = "[]";
+            }
+            steps.dataset(row, "output", tried.outputKey, tried.outputRows, columns, this.expiry());
+            this.sizes.put(tried.outputKey, tried.outputRows);
+            return tried.outputKey;
         }
 
         /** The first step's input when it names none: the task payload as one row, or nothing. */
@@ -567,7 +721,7 @@ public class StepEngine {
                 throw new IllegalStateException(String.format("step <%s> has no output to read: it is not an earlier step, or it failed",
                     stepKey));
             }
-            return this.load(this.outputs.get(stepKey), this.sourceRows);
+            return this.load(this.outputs.get(stepKey), this.sourceRows, String.format("The output of step <%s>", stepKey));
         }
 
         /** A file a step made, beside the run's datasets, and its run_dataset row. */
@@ -575,6 +729,32 @@ public class StepEngine {
         private long[] keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
             String key = DatasetStore.fileKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, fileName);
             datasets.writeFile(key, content);
+            return this.recordFile(row, key, fileName, rows, columns);
+        }
+
+        /** MIG-344: a file a streaming step writes, straight to the store; its run_dataset row; its size and sha256. */
+        private StreamContext.KeptFile keepFile(long row, String stepKey, String fileName, List<String> columns, long rows,
+                                                StreamContext.FileWriter writer, Map<String, long[]> kept) throws Exception {
+            String key = DatasetStore.fileKeyOf(this.run.getJobQueueId(), this.attempt, stepKey, fileName);
+            DatasetStore.FileOutput file = datasets.createFile(key);
+            MessageDigest digest = Streams.sha256();
+            long bytes;
+            try {
+                Streams.Bounded bounded = new Streams.Bounded(file.stream(), Limits.MAX_STREAM_FILE_BYTES, "The file");
+                OutputStream out = new DigestOutputStream(bounded, digest);
+                writer.write(out);
+                out.flush();
+                bytes = bounded.count();
+                file.commit();
+            } catch (Exception | Error failed) {
+                file.abort();
+                throw failed;
+            }
+            kept.put(fileName, this.recordFile(row, key, fileName, rows, columns));
+            return new StreamContext.KeptFile(bytes, Streams.hex(digest.digest()));
+        }
+
+        private long[] recordFile(long row, String key, String fileName, long rows, List<String> columns) {
             String columnsJson;
             try {
                 columnsJson = JSON.writeValueAsString(columns == null ? Collections.emptyList() : columns);
@@ -678,6 +858,18 @@ public class StepEngine {
         StepResult result;
         String error;
         boolean timedOut;
+        /** MIG-344: the step streamed; its committed output's key, rows and columns (null key: no dataset). */
+        boolean streamed;
+        String outputKey;
+        long outputRows;
+        List<String> outputColumns;
+    }
+
+    /** A streaming try whose work succeeded but whose output could not be committed: a failed try. */
+    private static final class StreamCommitFailed extends RuntimeException {
+        StreamCommitFailed(String message) {
+            super(message);
+        }
     }
 
     /** A checked exception out of a task, carried through the try's thread. */
@@ -719,17 +911,17 @@ public class StepEngine {
     }
 
     /** What a task sees for one try. */
-    private static final class Context implements StepContext {
-        private final Execution execution;
-        private final PipelineDefinition.Step step;
-        private final long row;
-        private final Dataset input;
+    private static class Context implements StepContext {
+        final Execution execution;
+        final PipelineDefinition.Step step;
+        final long row;
+        final Execution.Input input;
         private final int tryNumber;
         private final StepLog log;
         /** The files this try kept: name -> {run_dataset_id, expiry millis}. */
-        private final Map<String, long[]> kept = new HashMap<>();
+        final Map<String, long[]> kept = new HashMap<>();
 
-        Context(Execution execution, PipelineDefinition.Step step, long row, Dataset input, int tryNumber, StepLog log) {
+        Context(Execution execution, PipelineDefinition.Step step, long row, Execution.Input input, int tryNumber, StepLog log) {
             this.execution = execution;
             this.step = step;
             this.row = row;
@@ -770,7 +962,7 @@ public class StepEngine {
 
         @Override
         public Dataset input() {
-            return this.input;
+            return this.input.whole();
         }
 
         @Override
@@ -821,6 +1013,153 @@ public class StepEngine {
         @Override
         public void warn(String message) {
             this.log.line("WARN", message);
+        }
+    }
+
+    /** MIG-344: what a streaming task sees for one try -- its input as a stream, its output as a sink. */
+    private static final class StreamTry extends Context implements StreamContext {
+        DatasetStore.Output output;
+        String outputKey;
+        private Path scratch;
+        private final RowSourceHolder sources = new RowSourceHolder();
+
+        StreamTry(Execution execution, PipelineDefinition.Step step, long row, Execution.Input input, int tryNumber, StepLog log) {
+            super(execution, step, row, input, tryNumber, log);
+        }
+
+        @Override
+        public RowSource openInput() throws Exception {
+            return this.sources.track(new Batched(this.input.open(), this.execution.memory));
+        }
+
+        @Override
+        public synchronized RowSink output() {
+            if (this.output == null) {
+                try {
+                    return this.startOutput();
+                } catch (Exception ex) {
+                    throw new IllegalStateException("The step's output could not be started: " + reasonOf(ex), ex);
+                }
+            }
+            return this.output;
+        }
+
+        synchronized DatasetStore.Output startOutput() throws Exception {
+            if (this.output == null) {
+                this.outputKey = this.execution.datasetKey(this.step.getKey());
+                this.output = this.execution.store().create(this.outputKey);
+            }
+            return this.output;
+        }
+
+        @Override
+        public synchronized Path scratch() throws IOException {
+            if (this.scratch == null) {
+                this.scratch = this.execution.store().scratch(this.jobQueueId(), this.attempt(), this.step.getKey());
+            }
+            return this.scratch;
+        }
+
+        @Override
+        public RunMemory memory() {
+            return this.execution.memory;
+        }
+
+        @Override
+        public long maxFileBytes() {
+            return Limits.MAX_STREAM_FILE_BYTES;
+        }
+
+        @Override
+        public long maxRows() {
+            return Limits.MAX_STREAM_ROWS;
+        }
+
+        @Override
+        public KeptFile keepFile(String fileName, List<String> columns, long rows, FileWriter writer) throws Exception {
+            return this.execution.keepFile(this.row, this.step.getKey(), fileName, columns, rows, writer, this.kept);
+        }
+
+        /** Drops the output (a failed, timed-out or dataset-less try) and the spill files. */
+        synchronized void discard() {
+            if (this.output != null) {
+                this.output.abort();
+            }
+            this.removeScratch();
+            this.sources.closeAll();
+        }
+
+        synchronized void removeScratch() {
+            Streams.deleteTree(this.scratch);
+            this.scratch = null;
+            this.sources.closeAll();
+        }
+    }
+
+    /** The sources a try opened, closed when it ends whether or not the task closed them. */
+    private static final class RowSourceHolder {
+        private final List<RowSource> open = new ArrayList<>();
+
+        synchronized RowSource track(RowSource source) {
+            this.open.add(source);
+            return source;
+        }
+
+        synchronized void closeAll() {
+            for (RowSource source : this.open) {
+                try {
+                    source.close();
+                } catch (Exception ignored) {
+                    // closing
+                }
+            }
+            this.open.clear();
+        }
+    }
+
+    /** A step's input a batch at a time, each batch counted against the run's memory budget while the step holds it. */
+    private static final class Batched implements RowSource {
+        private final RowSource source;
+        private final RunMemory memory;
+        private long held;
+        private double bytesPerRow = -1;
+
+        Batched(RowSource source, RunMemory memory) {
+            this.source = source;
+            this.memory = memory;
+        }
+
+        @Override
+        public List<String> columns() {
+            return this.source.columns();
+        }
+
+        @Override
+        public long size() {
+            return this.source.size();
+        }
+
+        @Override
+        public List<Map<String, Object>> next() throws Exception {
+            this.memory.release(this.held);
+            this.held = 0;
+            List<Map<String, Object>> batch = this.source.next();
+            if (batch != null) {
+                if (this.bytesPerRow < 0) {
+                    // The first batch is weighed row by row; the rest are taken to weigh the same per row.
+                    this.bytesPerRow = (double) RunMemory.estimate(batch) / batch.size();
+                }
+                this.held = (long) (this.bytesPerRow * batch.size());
+                this.memory.reserve(this.held);
+            }
+            return batch;
+        }
+
+        @Override
+        public void close() throws Exception {
+            this.memory.release(this.held);
+            this.held = 0;
+            this.source.close();
         }
     }
 }

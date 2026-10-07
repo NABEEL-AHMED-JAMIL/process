@@ -1,6 +1,7 @@
 package process.pipeline.data;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.SequenceWriter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
@@ -12,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -25,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 
 /**
  * Rows to and from the files a pipeline reads and writes (MIG-231): CSV, JSON (an array of objects, or an object with
@@ -100,6 +104,87 @@ public final class FileFormats {
             default:
                 throw new IllegalArgumentException("A file is read as csv, json, jsonl or parquet, not " + format + ".");
         }
+    }
+
+    /** Whether a format is read as a stream ({@link #readStream}); the others are read whole. */
+    public static boolean streams(String format) {
+        return "csv".equals(format) || "jsonl".equals(format);
+    }
+
+    /**
+     * MIG-344: a CSV or JSON Lines file's rows, read from a stream into a sink as they come -- never the whole file in
+     * memory. The same rows as {@link #read} makes (CSV cells as text, the BOM off the first column, empty lines
+     * skipped). Stops after {@code maxRows} when the step asked for fewer (not a failure); fails past {@code limit} rows
+     * or {@value Limits#MAX_COLUMNS} columns, naming {@code what}.
+     */
+    // CSVFormat's with* methods: the builder API reads the same; moving is Wave 6 maintainability, not a lint fix.
+    @SuppressWarnings("deprecation")
+    public static void readStream(InputStream content, String format, ReadOptions options, RowSink sink, Integer maxRows, long limit,
+                                  String what) throws Exception {
+        long wanted = maxRows == null ? Long.MAX_VALUE : maxRows;
+        if ("csv".equals(format)) {
+            CSVFormat csv = CSVFormat.RFC4180.withDelimiter(options.delimiter).withIgnoreEmptyLines();
+            if (options.header) {
+                csv = csv.withFirstRecordAsHeader();
+            }
+            try (Reader reader = new BufferedReader(new InputStreamReader(content, StandardCharsets.UTF_8), 1 << 16);
+                 CSVParser parser = csv.parse(reader)) {
+                List<String> header = options.header ? parser.getHeaderNames() : null;
+                String[] names = null;
+                if (header != null) {
+                    names = new String[header.size()];
+                    for (int i = 0; i < names.length; i++) {
+                        names[i] = stripBom(header.get(i));
+                    }
+                }
+                for (CSVRecord record : parser) {
+                    if (sink.size() >= wanted) {
+                        return;
+                    }
+                    Map<String, Object> row = new LinkedHashMap<>(record.size() * 4 / 3 + 1);
+                    for (int i = 0; i < record.size(); i++) {
+                        String column = names != null && i < names.length ? names[i] : "c" + (i + 1);
+                        row.put(column, record.get(i));
+                    }
+                    addBounded(sink, row, limit, what);
+                }
+            }
+            return;
+        }
+        if ("jsonl".equals(format)) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(content, StandardCharsets.UTF_8), 1 << 16)) {
+                String line;
+                int number = 0;
+                while ((line = reader.readLine()) != null && sink.size() < wanted) {
+                    number++;
+                    if (line.trim().isEmpty()) {
+                        continue;
+                    }
+                    Map<String, Object> row;
+                    try {
+                        row = Values.row(Values.JSON.readTree(line));
+                    } catch (IOException broken) {
+                        throw new IllegalArgumentException(String.format("Line %d is not JSON.", number));
+                    }
+                    addBounded(sink, row, limit, what);
+                }
+            }
+            return;
+        }
+        throw new IllegalArgumentException("Only csv and jsonl are read as a stream, not " + format + ".");
+    }
+
+    private static void addBounded(RowSink sink, Map<String, Object> row, long limit, String what) throws Exception {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("The read was stopped.");
+        }
+        if (sink.size() >= limit) {
+            throw new IllegalStateException(String.format("%s has more than %,d rows, the most a step holds.", what, limit));
+        }
+        if (row.size() > Limits.MAX_COLUMNS) {
+            throw new IllegalStateException(String.format("%s has %d columns; a step holds at most %d.", what, row.size(), Limits.MAX_COLUMNS));
+        }
+        sink.add(row);
     }
 
     // CSVFormat's with* methods: the builder API reads the same; moving is Wave 6 maintainability, not a lint fix.
@@ -183,9 +268,24 @@ public final class FileFormats {
      * The dataset in this format, straight to a stream -- a run dataset's download (Wave 4), which a step's file limit
      * does not bound: the dataset was already held to the row and cell limits when it was made. The stream is left open.
      */
+    public static void writeTo(Dataset dataset, String format, OutputStream target) throws IOException {
+        try {
+            writeTo(RowSource.of(dataset), format, target);
+        } catch (IOException | RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IOException(ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * MIG-344: rows in this format, a batch at a time, straight to a stream (Save File, Upload, a dataset's download):
+     * the same bytes {@link #writeTo(Dataset, String, OutputStream)} writes for the same rows. The stream is left open.
+     * Returns the rows written.
+     */
     // CSVFormat's with* methods: the builder API reads the same; moving is Wave 6 maintainability, not a lint fix.
     @SuppressWarnings("deprecation")
-    public static void writeTo(Dataset dataset, String format, OutputStream target) throws IOException {
+    public static long writeTo(RowSource rows, String format, OutputStream target) throws Exception {
         // Closing the CSV printer, or Jackson finishing a value, would close the target: the caller owns it.
         OutputStream bytes = new FilterOutputStream(target) {
             @Override
@@ -198,44 +298,67 @@ public final class FileFormats {
                 this.flush();
             }
         };
+        List<String> columns = rows.columns();
+        long written = 0;
         switch (format) {
             case "csv":
-                try (Writer writer = new OutputStreamWriter(bytes, StandardCharsets.UTF_8);
-                     CSVPrinter printer = new CSVPrinter(writer, CSVFormat.RFC4180.withHeader(dataset.getColumns().toArray(new String[0])))) {
-                    for (Map<String, Object> row : dataset.getRows()) {
-                        List<Object> cells = new ArrayList<>(dataset.getColumns().size());
-                        for (String column : dataset.getColumns()) {
-                            cells.add(Values.text(row.get(column)));
+                try (Writer writer = new BufferedWriter(new OutputStreamWriter(bytes, StandardCharsets.UTF_8), 1 << 16);
+                     CSVPrinter printer = new CSVPrinter(writer, CSVFormat.RFC4180.withHeader(columns.toArray(new String[0])))) {
+                    List<Object> cells = new ArrayList<>(columns.size());
+                    for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                        for (Map<String, Object> row : batch) {
+                            cells.clear();
+                            for (String column : columns) {
+                                cells.add(Values.text(row.get(column)));
+                            }
+                            printer.printRecord(cells);
+                            written++;
                         }
-                        printer.printRecord(cells);
+                        stopIfInterrupted();
                     }
                 }
                 break;
             case "json":
-                Values.JSON.writeValue(bytes, ordered(dataset));
+                try (SequenceWriter array = Values.JSON.writer().writeValuesAsArray(new BufferedOutputStream(bytes, 1 << 16))) {
+                    for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                        for (Map<String, Object> row : batch) {
+                            array.write(ordered(row, columns));
+                            written++;
+                        }
+                        stopIfInterrupted();
+                    }
+                }
                 break;
             case "jsonl":
-                for (Map<String, Object> row : ordered(dataset)) {
-                    bytes.write(Values.JSON.writeValueAsBytes(row));
-                    bytes.write('\n');
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    for (Map<String, Object> row : batch) {
+                        bytes.write(Values.JSON.writeValueAsBytes(ordered(row, columns)));
+                        bytes.write('\n');
+                        written++;
+                    }
+                    stopIfInterrupted();
                 }
                 break;
             default:
                 throw new IllegalArgumentException("A file is written as csv, json or jsonl, not " + format + ".");
         }
         bytes.flush();
+        return written;
     }
 
-    /** Rows with every column, in the dataset's column order. */
-    private static List<Map<String, Object>> ordered(Dataset dataset) {
-        List<Map<String, Object>> rows = new ArrayList<>(dataset.size());
-        for (Map<String, Object> row : dataset.getRows()) {
-            Map<String, Object> out = new LinkedHashMap<>();
-            for (String column : dataset.getColumns()) {
-                out.put(column, row.get(column));
-            }
-            rows.add(out);
+    private static void stopIfInterrupted() throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("The write was stopped.");
         }
-        return rows;
     }
+
+    /** A row with every column, in this column order. */
+    private static Map<String, Object> ordered(Map<String, Object> row, List<String> columns) {
+        Map<String, Object> out = new LinkedHashMap<>(columns.size() * 4 / 3 + 1);
+        for (String column : columns) {
+            out.put(column, row.get(column));
+        }
+        return out;
+    }
+
 }

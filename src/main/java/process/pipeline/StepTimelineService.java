@@ -11,6 +11,7 @@ import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.data.FileFormats;
+import process.pipeline.data.RowSource;
 import process.pipeline.data.RowCollector;
 import process.pipeline.review.RunReviews;
 import process.util.BusinessTime;
@@ -27,6 +28,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.io.IOException;
+import java.io.InputStream;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
@@ -205,10 +208,20 @@ public class StepTimelineService {
             if ("pdf".equals(wanted)) {
                 return Download.refused(400, "A dataset downloads as csv, json or jsonl; only a report is a PDF.").of(run.get());
             }
-            Dataset rows = this.datasets.read(dataset.storageKey);
+            // MIG-344: a dataset streams from the store to the download, a batch at a time -- a streamed step's output may be
+            // far bigger than memory. Opened here, so a dataset that is gone still answers 410 before anything is sent.
+            RowSource rows = this.datasets.open(dataset.storageKey, RowSource.DEFAULT_BATCH);
             String as = wanted == null ? "csv" : wanted;
             String name = String.format("run-%d-attempt-%d-%s-%s.%s", dataset.jobQueueId, dataset.attempt, dataset.stepKey, dataset.name, as);
-            return Download.file(name, as, out -> FileFormats.writeTo(rows, as, out)).of(run.get());
+            return Download.file(name, as, out -> {
+                try (RowSource source = rows) {
+                    FileFormats.writeTo(source, as, out);
+                } catch (IOException | RuntimeException failed) {
+                    throw failed;
+                } catch (Exception failed) {
+                    throw new IOException(failed.getMessage(), failed);
+                }
+            }).of(run.get());
         } catch (Exception ex) {
             return Download.refused(410, "This dataset's content is no longer available; run the job again to make it anew.").of(run.get());
         }
@@ -264,12 +277,25 @@ public class StepTimelineService {
 
     /** A file Save File kept: its own bytes in its own format, or its rows in the one asked for. */
     private Download keptFile(StepStore.DatasetFile dataset, String wanted) throws Exception {
-        byte[] content = this.datasets.readFile(dataset.storageKey);
         String own = this.steps.outputOfDataset(dataset.runDatasetId).map(output -> output.format)
             .orElseGet(() -> Optional.ofNullable(FileFormats.byExtension(dataset.name)).orElse("csv"));
         if (wanted == null || wanted.equals(own)) {
-            return Download.file(dataset.name, own, out -> out.write(content));
+            // MIG-344: streamed from the store; its size is asked first, so a file that is gone still answers 410.
+            this.datasets.fileSize(dataset.storageKey);
+            return Download.file(dataset.name, own, out -> {
+                try (InputStream in = this.datasets.openFile(dataset.storageKey)) {
+                    byte[] chunk = new byte[1 << 16];
+                    for (int n = in.read(chunk); n >= 0; n = in.read(chunk)) {
+                        out.write(chunk, 0, n);
+                    }
+                } catch (IOException | RuntimeException failed) {
+                    throw failed;
+                } catch (Exception failed) {
+                    throw new IOException(failed.getMessage(), failed);
+                }
+            });
         }
+        byte[] content = this.datasets.readFile(dataset.storageKey);
         // MIG-255: a report is a document, not rows -- it downloads as itself, and rows download as rows.
         if ("pdf".equals(own) || "pdf".equals(wanted)) {
             return Download.refused(400, "pdf".equals(own) ? "A PDF report downloads as the PDF it is."

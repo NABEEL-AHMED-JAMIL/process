@@ -51,6 +51,11 @@ public final class RunOutput {
         return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256Of(content));
     }
 
+    /** MIG-344: the same output with a sha256 worked out as its bytes were streamed (never held whole). */
+    public RunOutput withSha256(String sha256) {
+        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256);
+    }
+
     /** Lower-case hex sha256; null for no content. */
     public static String sha256Of(byte[] content) {
         if (content == null) {

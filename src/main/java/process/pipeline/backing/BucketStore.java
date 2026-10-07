@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
+import java.io.ByteArrayOutputStream;
 
 /**
  * A workspace's buckets, as a pipeline's steps reach them (MIG-231: Read S3, Read CSV/JSON/Parquet, Upload to bucket):
@@ -20,6 +21,26 @@ public interface BucketStore {
     byte[] read(long tenantId, String bucket, String key, long maxBytes) throws Exception;
 
     void upload(long tenantId, String bucket, String key, byte[] content, String contentType) throws Exception;
+
+    /**
+     * MIG-344: the object as a stream for a step that reads it as one (a CSV read row by row), failing past
+     * {@code maxBytes}. Billed as storage-service bills a trusted read: the bytes the step took. The default reads it whole.
+     * The caller closes it.
+     */
+    default InputStream open(long tenantId, String bucket, String key, long maxBytes) throws Exception {
+        return new ByteArrayInputStream(this.read(tenantId, bucket, key, maxBytes));
+    }
+
+    /** MIG-344: an upload from a stream of {@code size} bytes (a file a step spooled to disk). The default reads it whole. */
+    default void upload(long tenantId, String bucket, String key, InputStream content, long size, String contentType) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        byte[] chunk = new byte[64 * 1024];
+        int n;
+        while ((n = content.read(chunk)) != -1) {
+            bytes.write(chunk, 0, n);
+        }
+        this.upload(tenantId, bucket, key, bytes.toByteArray(), contentType);
+    }
 
     /**
      * MIG-334: the object as a stream, for the customer API's download of a file -- its bytes are never held whole. The

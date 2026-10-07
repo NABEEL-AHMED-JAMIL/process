@@ -15,7 +15,6 @@ import process.pipeline.backing.BucketStore;
 import process.pipeline.data.FileFormats;
 import process.security.TenantContext;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.Collections;
@@ -202,15 +201,18 @@ public class CustomerFileReads {
                 if (!kept.isPresent()) {
                     return Content.refused(Problem.of(410, EXPIRED_FILE).kind("file-expired"), instance);
                 }
-                byte[] bytes;
+                // MIG-344: streamed from the store, never held whole (a streamed Save File can be gigabytes).
+                InputStream content;
+                long size;
                 try {
-                    bytes = this.datasets.readFile(kept.get().storageKey);
+                    size = this.datasets.fileSize(kept.get().storageKey);
+                    content = this.datasets.openFile(kept.get().storageKey);
                 } catch (Exception gone) {
                     logger.warn("Made file {} of run {} could not be read from the datasets: {}", link.fileId, file.runId, gone.getMessage());
                     return Content.refused(Problem.of(410, "This file's content is no longer available; run the pipeline again to make it "
                         + "anew.").kind("file-expired"), instance);
                 }
-                return new Content(200, null, file.name, file.contentType, bytes.length, new ByteArrayInputStream(bytes), file.runId);
+                return new Content(200, null, file.name, file.contentType, size, content, file.runId);
             }
             String bucket = file.output != null ? file.output.bucketAlias : (String) file.upload.get("bucket");
             String key = file.output != null ? file.output.objectKey : (String) file.upload.get("key");

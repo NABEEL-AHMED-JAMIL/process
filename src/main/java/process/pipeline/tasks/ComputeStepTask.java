@@ -1,12 +1,14 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
-import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
 import process.pipeline.data.Expression;
 import process.pipeline.data.Limits;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
@@ -24,9 +26,11 @@ import java.util.Set;
  * if, round, coalesce, days_between...). Formulas run in order, so a later one reads an earlier one's column. A formula
  * that cannot be worked out for a row -- a text used as a number -- fails the step naming the row, or with
  * {@code nullOnError} leaves that column empty. Formulas are parsed when the definition is saved.
+ *
+ * MIG-344: streamed, a row at a time.
  */
 @Component
-public class ComputeStepTask extends RegisteredTask {
+public class ComputeStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("compute", "Compute", TaskKind.PROCESS)
         .description("Adds columns worked out from each row by formula: arithmetic, comparisons, if, round, coalesce, dates.")
@@ -68,7 +72,7 @@ public class ComputeStepTask extends RegisteredTask {
     }
 
     @Override
-    public StepResult run(StepContext context) {
+    public StepResult stream(StreamContext context) throws Exception {
         List<Map<String, Object>> formulas = Configs.objects(context.config(), "formulas");
         List<String> targets = new ArrayList<>();
         List<Expression> expressions = new ArrayList<>();
@@ -78,34 +82,45 @@ public class ComputeStepTask extends RegisteredTask {
             expressions.add(Expression.parse(Configs.text(formula, "expression", "")));
             lenient.add(Configs.bool(formula, "nullOnError", false));
         }
-        Dataset input = context.input();
-        Set<String> columns = new LinkedHashSet<>(input.getColumns());
-        columns.addAll(targets);
-        Limits.requireShape(input.size(), columns.size(), "The computed rows");
-
-        List<Map<String, Object>> rows = new ArrayList<>(input.size());
-        int emptied = 0;
-        for (int r = 0; r < input.size(); r++) {
-            Map<String, Object> row = new LinkedHashMap<>(input.getRows().get(r));
-            for (int f = 0; f < expressions.size(); f++) {
-                Object value;
-                try {
-                    value = expressions.get(f).evaluate(row);
-                } catch (IllegalArgumentException cannot) {
-                    if (!lenient.get(f)) {
-                        throw new IllegalStateException(String.format("Row %d, %s: %s", r + 1, targets.get(f), cannot.getMessage()));
-                    }
-                    emptied++;
-                    value = null;
+        long rows;
+        long emptied = 0;
+        try (RowSource input = context.openInput()) {
+            Set<String> columns = new LinkedHashSet<>(input.columns());
+            columns.addAll(targets);
+            // In memory the computed rows are held whole (rows x columns); streamed, only their width is bounded.
+            Limits.requireShape(context.inMemory() ? input.size() : 0, columns.size(), "The computed rows");
+            RowSink out = context.output();
+            out.declare(columns);
+            rows = input.size();
+            long r = 0;
+            for (List<Map<String, Object>> batch = input.next(); batch != null; batch = input.next()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Compute was stopped.");
                 }
-                row.put(targets.get(f), value);
+                for (Map<String, Object> source : batch) {
+                    Map<String, Object> row = new LinkedHashMap<>(source);
+                    for (int f = 0; f < expressions.size(); f++) {
+                        Object value;
+                        try {
+                            value = expressions.get(f).evaluate(row);
+                        } catch (IllegalArgumentException cannot) {
+                            if (!lenient.get(f)) {
+                                throw new IllegalStateException(String.format("Row %d, %s: %s", r + 1, targets.get(f), cannot.getMessage()));
+                            }
+                            emptied++;
+                            value = null;
+                        }
+                        row.put(targets.get(f), value);
+                    }
+                    out.add(row);
+                    r++;
+                }
             }
-            rows.add(row);
         }
-        context.log(String.format("%d formula(s) on %d row(s).", expressions.size(), input.size()));
+        context.log(String.format("%d formula(s) on %d row(s).", expressions.size(), rows));
         if (emptied > 0) {
             context.warn(String.format("%d value(s) could not be worked out and are empty.", emptied));
         }
-        return StepResult.of(new Dataset(new ArrayList<>(columns), rows));
+        return StepResult.streamed(context.output().size());
     }
 }

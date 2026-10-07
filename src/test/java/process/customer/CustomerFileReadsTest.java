@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,7 +52,10 @@ class CustomerFileReadsTest {
     private final StepStore steps = mock(StepStore.class);
     private final CustomerRunStore runs = mock(CustomerRunStore.class);
     private final RunFiles files = mock(RunFiles.class);
-    private final DatasetStore datasets = mock(DatasetStore.class);
+    // MIG-344: the store's streaming defaults (openFile, fileSize) run as written, over the stubbed readFile.
+    private final DatasetStore datasets = mock(DatasetStore.class, Mockito.withSettings().defaultAnswer(
+        invocation -> Arrays.asList("openFile", "fileSize").contains(invocation.getMethod().getName()) ? invocation.callRealMethod()
+            : Mockito.RETURNS_DEFAULTS.answer(invocation)));
     private final BucketStore buckets = mock(BucketStore.class);
     private final FileAccessLog log = mock(FileAccessLog.class);
     private final FileLinks links = new FileLinks("svc-token", Clock.systemUTC());
