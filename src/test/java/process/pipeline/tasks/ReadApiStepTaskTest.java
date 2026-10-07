@@ -97,6 +97,8 @@ class ReadApiStepTaskTest {
             row("report", "r1", "drug", "A", "reaction", "Rash"), row("report", "r2", "drug", "B", "reaction", null));
         assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 5, "rowsPath", "results", "fields", java.util.Arrays.asList(
             config("path", "drug[].name", "target", "d"), config("path", "reaction[].pt", "target", "r"))), Collections.emptyList())))
-            .hasMessageContaining("Only one column's path may fan out");
+            .hasMessageContaining("must fan out over the same list");
+        assertThat(this.task.check(config("requestId", 5, "fields", java.util.Arrays.asList(config("path", "a[].b[].c", "target", "x")))))
+            .extracting(p -> p.toString()).anyMatch(t -> t.contains("fan out once"));
     }
 }

@@ -51,4 +51,19 @@ class EnrichStepTaskTest {
         assertThatThrownBy(() -> this.task.run(this.context("maxCalls", 1))).hasMessage("The input needs 2 calls; this step makes at most 1 (maxCalls).");
         assertThat(this.api.calls).isEmpty();
     }
+
+    @Test
+    void pathsOverOneListOfTheAnswerMakeARowPerItemZippedByPosition() throws Exception {
+        Fakes.Api api = new Fakes.Api();
+        api.answer = variables -> "a".equals(variables.get("drug"))
+            ? "{\"results\":[{\"term\":\"Nausea\",\"count\":12},{\"term\":\"Rash\",\"count\":5}]}" : "{\"results\":[]}";
+        EnrichStepTask task = new EnrichStepTask(api);
+        process.pipeline.Dataset out = task.run(TaskContext.of(config("requestId", 3, "variables", config("drug", "{{drug}}"), "fields",
+            java.util.Arrays.asList(config("path", "results[].term", "target", "reaction"), config("path", "results[].count", "target", "reports"))),
+            java.util.Arrays.asList(row("drug", "a"), row("drug", "b")))).getOutput();
+        assertThat(out.getRows()).containsExactly(row("drug", "a", "reaction", "Nausea", "reports", 12L),
+            row("drug", "a", "reaction", "Rash", "reports", 5L), row("drug", "b", "reaction", null, "reports", null));
+        assertThat(task.check(config("requestId", 3, "fields", java.util.Arrays.asList(config("path", "a[].x", "target", "x"),
+            config("path", "b[].y", "target", "y"))))).hasSize(1);
+    }
 }
