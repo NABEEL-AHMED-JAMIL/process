@@ -97,4 +97,14 @@ class OutputStepTasksTest {
         assertThat(notifier.sent).hasSize(1);
         assertThat(task.check(config("title", "x", "to", "users"))).containsExactly(new DefinitionProblem("userIds", "name at least one person"));
     }
+
+    @Test
+    void sendNotificationTellsTheFirstRowsColumnsButNeverOverTheRunsPlaceholders() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        task.run(TaskContext.of(config("title", "Weekly digest, run {{run}}", "message", "{{digest}} ({{rows}} row)"),
+            java.util.Collections.singletonList(process.pipeline.Definitions.row("digest", "Nausea leads.", "run", "not this"))));
+        assertThat(notifier.sent.get(0).title).isEqualTo("Weekly digest, run 88001");
+        assertThat(notifier.sent.get(0).body).isEqualTo("Nausea leads. (1 row)");
+    }
 }
