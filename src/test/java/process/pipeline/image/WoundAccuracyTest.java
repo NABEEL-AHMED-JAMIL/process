@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class WoundAccuracyTest {
 
-    private static final RulerMeasure.Target RED_ON_SKIN = RulerMeasure.Target.RED_ON_SKIN;
+    private static final RulerMeasure.Target RED_ON_SKIN = RulerMeasure.Target.RED_REGION;
 
     static final long SEED = 325L;
     static final int PHOTOS = 60;

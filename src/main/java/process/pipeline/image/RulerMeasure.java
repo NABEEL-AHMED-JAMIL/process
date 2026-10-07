@@ -37,11 +37,10 @@ import java.util.Optional;
  *             {@value #MIN_DELTA_E}, or {@value #NOISE_FACTOR} times the border's own median difference when the
  *             background is busier. The threshold is then raised to half the region's median difference, so an edge
  *             pixel counts when it is more object than background.</li>
- *         <li>{@link Target#RED_ON_SKIN} (a wound bed on skin, the step's first rule): a pixel markedly redder than the
- *             border: its (green + blue) / 2 is at most {@value #MAX_BED_RATIO} of its red, and at least
- *             {@value #MIN_RATIO_DROP} below the border's -- a ratio, so shading does not move it. A pink ring around
- *             the red region (a wound's periwound skin) is left out, as a clinician measures from wound edge to wound
- *             edge.</li>
+ *         <li>{@link Target#RED_REGION} (a red region on a lighter background, the step's first rule): a pixel
+ *             markedly redder than the border: its (green + blue) / 2 is at most {@value #MAX_BED_RATIO} of its red, and
+ *             at least {@value #MIN_RATIO_DROP} below the border's -- a ratio, so shading does not move it. A lighter,
+ *             pinker halo around the red region is left out, so the region is measured from red edge to red edge.</li>
  *       </ul>
  *       The holes in the region (a highlight, a different colour inside) are filled in; a region under
  *       {@value #MIN_REGION_CM2} cm2 is none.</li>
@@ -81,13 +80,20 @@ public final class RulerMeasure {
     public enum Target {
         /** The largest region whose colour differs markedly from the background, of any hue: the default for a new step. */
         CONTRAST("contrast"),
-        /** A red region on skin, such as a wound bed, by how much redder it is than the skin: the step's first rule. */
-        RED_ON_SKIN("red_on_skin");
+        /** A red region on a lighter background, by how much redder it is than the background: the step's first rule. */
+        RED_REGION("red_region", "red_on_skin");
 
         private final String code;
+        /** The word this target was saved under before it had a generic name; still read, never written. */
+        private final String formerCode;
 
         Target(String code) {
+            this(code, null);
+        }
+
+        Target(String code, String formerCode) {
             this.code = code;
+            this.formerCode = formerCode;
         }
 
         /** The word a step's config uses. */
@@ -98,7 +104,7 @@ public final class RulerMeasure {
         /** The target a config word names; empty when it names none. */
         public static Optional<Target> of(String code) {
             for (Target target : values()) {
-                if (target.code.equals(code)) {
+                if (target.code.equals(code) || (target.formerCode != null && target.formerCode.equals(code))) {
                     return Optional.of(target);
                 }
             }
@@ -148,8 +154,8 @@ public final class RulerMeasure {
         }
         Pixels pixels = new Pixels(image);
         Ruler ruler = Ruler.find(pixels, LIGHT);
-        // On a light background a ruler's face can merge with it: contrast looks again for a whiter strip. red_on_skin
-        // keeps its first rule exactly, so a saved wound step measures as it always has.
+        // On a light background a ruler's face can merge with it: contrast looks again for a whiter strip. red_region
+        // keeps its first rule exactly, so a saved step measures as it always has.
         for (int k = 0; target == Target.CONTRAST && ruler == null && k < WHITER.length; k++) {
             ruler = Ruler.find(pixels, WHITER[k]);
         }
@@ -306,7 +312,7 @@ public final class RulerMeasure {
             return null;
         }
 
-        /** Near-white (luminance at least {@code least}) and near-neutral: a ruler's face, not skin. */
+        /** Near-white (luminance at least {@code least}) and near-neutral: a ruler's face, not the background. */
         private static boolean[] light(Pixels pixels, int least) {
             boolean[] light = new boolean[pixels.rgb.length];
             for (int i = 0; i < light.length; i++) {
@@ -443,7 +449,7 @@ public final class RulerMeasure {
         }
 
         static Region find(Pixels pixels, Ruler ruler, double smallest, Target target) {
-            boolean[] mask = target == Target.RED_ON_SKIN ? redOnSkin(pixels, ruler) : contrasting(pixels, ruler, smallest);
+            boolean[] mask = target == Target.RED_REGION ? redRegion(pixels, ruler) : contrasting(pixels, ruler, smallest);
             if (mask == null) {
                 return null;
             }
@@ -466,17 +472,17 @@ public final class RulerMeasure {
             return regions.counts.get(id - 1) < Math.max(30, smallest) ? 0 : id;
         }
 
-        /** red_on_skin: markedly redder than the border, by (green + blue) / 2 over red. */
-        private static boolean[] redOnSkin(Pixels pixels, Ruler ruler) {
-            double skin = borderRatio(pixels, ruler);
-            double most = Math.min(MAX_BED_RATIO, skin - MIN_RATIO_DROP);
-            boolean[] bed = new boolean[pixels.rgb.length];
-            for (int i = 0; i < bed.length; i++) {
+        /** red_region: markedly redder than the border, by (green + blue) / 2 over red. */
+        private static boolean[] redRegion(Pixels pixels, Ruler ruler) {
+            double background = borderRatio(pixels, ruler);
+            double most = Math.min(MAX_BED_RATIO, background - MIN_RATIO_DROP);
+            boolean[] red = new boolean[pixels.rgb.length];
+            for (int i = 0; i < red.length; i++) {
                 int r = pixels.red(i);
-                bed[i] = r >= 60 && !ruler.excludes(i % pixels.width, i / pixels.width)
+                red[i] = r >= 60 && !ruler.excludes(i % pixels.width, i / pixels.width)
                     && (pixels.green(i) + pixels.blue(i)) / (2.0 * r) <= most;
             }
-            return bed;
+            return red;
         }
 
         /** The border's (green + blue) / 2 over red: the median over the photo's border, the ruler left out. */

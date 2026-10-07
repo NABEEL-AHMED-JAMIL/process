@@ -159,7 +159,7 @@ public class PipelineDefinitionService {
             return invalid(ex.getProblems(), null);
         }
         Optional<PipelineDefinitionStore.Stored> latest = this.store.latest(pipeline.get().getPipelineKey());
-        // A measure step's target is written into every save; one the previous version had without it keeps red_on_skin.
+        // A measure step's target is written into every save; one the previous version had without it keeps red_region.
         MeasureImageStepTask.pinTargets(definition.getSteps(), previousSteps(latest, definition));
         String json = DefinitionCodec.toJson(definition);
         if (latest.isPresent() && latest.get().json.equals(json)) {

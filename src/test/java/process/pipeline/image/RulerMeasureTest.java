@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.within;
  */
 class RulerMeasureTest {
 
-    private static final RulerMeasure.Target RED = RulerMeasure.Target.RED_ON_SKIN;
+    private static final RulerMeasure.Target RED = RulerMeasure.Target.RED_REGION;
     private static final RulerMeasure.Target CONTRAST = RulerMeasure.Target.CONTRAST;
 
     /** Length and width within 10% of the truth, area within 15%. */
@@ -224,6 +224,7 @@ class RulerMeasureTest {
     @Test
     void aTargetIsNamedByItsConfigWord() {
         assertThat(RulerMeasure.Target.of("contrast")).contains(CONTRAST);
+        assertThat(RulerMeasure.Target.of("red_region")).contains(RED);
         assertThat(RulerMeasure.Target.of("red_on_skin")).contains(RED);
         assertThat(RulerMeasure.Target.of("wound")).isEmpty();
         assertThat(RulerMeasure.Target.of(null)).isEmpty();

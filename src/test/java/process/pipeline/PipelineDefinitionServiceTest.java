@@ -110,7 +110,7 @@ class PipelineDefinitionServiceTest {
 
     /**
      * 2026-10-06: a save writes each measure step's target. One the previous version had without a target (saved before
-     * targets existed) keeps red_on_skin, the rule it was saved under; a new step gets contrast, the default.
+     * targets existed) keeps red_region, the rule it was saved under; a new step gets contrast, the default.
      */
     @Test
     void aSaveWritesEachMeasureStepsTargetAndKeepsRedOnSkinForAStepSavedWithout() throws Exception {
@@ -131,7 +131,7 @@ class PipelineDefinitionServiceTest {
         ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
         verify(this.store).save(eq(KEY), json.capture(), eq(7L));
         PipelineDefinition saved = DefinitionCodec.fromJson(json.getValue());
-        assertThat(saved.getSteps().get(1).getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(saved.getSteps().get(1).getConfig()).containsEntry("target", "red_region");
         assertThat(saved.getSteps().get(2).getConfig()).containsEntry("target", "contrast");
     }
 

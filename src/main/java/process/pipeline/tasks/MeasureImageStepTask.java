@@ -31,8 +31,9 @@ import java.util.Set;
  * sizes (MIG-221).
  *
  * <p>{@code target} says what the object is: {@code contrast} (the default for a new step) is the largest region whose
- * colour differs markedly from the background, of any hue; {@code red_on_skin} is a red region on skin, such as a wound
- * bed. <b>A step saved without a target measures {@code red_on_skin}</b>: that was the only rule before 2026-10-06, and
+ * colour differs markedly from the background, of any hue; {@code red_region} is a red region on a lighter background
+ * (saved as {@code red_on_skin} before 2026-10-07, a word still read). <b>A step saved without a target measures
+ * {@code red_region}</b>: that was the only rule before 2026-10-06, and
  * a saved definition is never rewritten (a save is a new version), so every definition saved before then keeps its
  * results. A save writes the target explicitly ({@link #pinTargets}), so from then on a missing target means only that.
  *
@@ -54,7 +55,7 @@ public class MeasureImageStepTask extends RegisteredTask {
     public static final String CODE = "measure_image";
 
     /** The target a step without one measures: the only rule before 2026-10-06 (see the class comment). */
-    public static final String SAVED_BEFORE_TARGETS = RulerMeasure.Target.RED_ON_SKIN.code();
+    public static final String SAVED_BEFORE_TARGETS = RulerMeasure.Target.RED_REGION.code();
 
     /** The target a new step gets. */
     public static final String NEW_STEP_TARGET = RulerMeasure.Target.CONTRAST.code();
@@ -72,8 +73,9 @@ public class MeasureImageStepTask extends RegisteredTask {
             .property("target", JsonSchema.string().enumOf(NEW_STEP_TARGET, SAVED_BEFORE_TARGETS).title("What to measure")
                 .defaultValue(NEW_STEP_TARGET)
                 .description("contrast: the largest region outside the ruler whose colour differs markedly from the background "
-                    + "(the photo's border), of any colour. red_on_skin: a red region on skin, such as a wound bed, by how much "
-                    + "redder it is than the skin; a pink ring around it is left out. A step saved without this measures red_on_skin."))
+                    + "(the photo's border), of any colour. red_region: a red region on a lighter background, by how much "
+                    + "redder it is than the background; a lighter, pinker halo around it is left out. A step saved without this "
+                    + "measures red_region."))
             .property("scaleColumn", JsonSchema.string().minLength(1).maxLength(128).title("Ruler found column").defaultValue("scale_found"))
             .property("pxPerCmColumn", JsonSchema.string().minLength(1).maxLength(128).title("Scale column (px/cm)").defaultValue("px_per_cm"))
             .property("lengthColumn", JsonSchema.string().minLength(1).maxLength(128).title("Length column (cm)").defaultValue("length_cm"))
@@ -188,7 +190,7 @@ public class MeasureImageStepTask extends RegisteredTask {
 
     /**
      * Writes each measure step's target into a definition being saved, so a saved step always says what it measures. A
-     * step without one keeps red_on_skin when the pipeline's previous version had it (same key, also without a target:
+     * step without one keeps red_region when the pipeline's previous version had it (same key, also without a target:
      * saved before 2026-10-06), and otherwise -- a new step, from the console, the API or an assistant -- gets contrast,
      * the default. Returns how many targets it wrote.
      */

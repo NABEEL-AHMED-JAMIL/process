@@ -26,7 +26,7 @@ import static process.pipeline.Definitions.step;
  * MIG-255: Measure image reads each row's photo from the workspace's bucket and measures the object in code against the
  * ruler in the photo -- the sizes a model guessed were 40-68% too large. No ruler, no sizes; a photo that cannot be read
  * keeps its row with empty sizes and a note unless the step says otherwise. 2026-10-06: the target says what the object
- * is (contrast, the default for a new step, or red_on_skin); a step saved without one measures red_on_skin, as every
+ * is (contrast, the default for a new step, or red_region, read also under its former word red_on_skin); a step saved without one measures red_region, as every
  * step did before -- the e2e wound tests below run without one on purpose.
  */
 class MeasureImageStepTaskTest {
@@ -149,7 +149,7 @@ class MeasureImageStepTaskTest {
         assertThat(context.lines).anyMatch(line -> line.contains("1 photo(s) measured (contrast)"));
     }
 
-    /** A step saved before targets existed has none: it measures red_on_skin, exactly as it did (the ring left out). */
+    /** A step saved before targets existed has none: it measures red_region, exactly as it did (the ring left out). */
     @Test
     void aStepWithoutATargetMeasuresRedOnSkinAsBefore() throws Exception {
         SyntheticPhotos photo = SyntheticPhotos.photo(640, 480, 40).ellipse(4.0, 2.67, 320, 220, 0).periwound().ruler(60, 400, 8).noise(12);
@@ -170,7 +170,7 @@ class MeasureImageStepTaskTest {
         Map<String, Object> target = property("target");
 
         assertThat(target).containsEntry("default", "contrast").containsEntry("title", "What to measure");
-        assertThat(target.get("enum")).isEqualTo(Arrays.asList("contrast", "red_on_skin"));
+        assertThat(target.get("enum")).isEqualTo(Arrays.asList("contrast", "red_region"));
         assertThat(this.task.spec().aiToolName()).isEqualTo("measure_images");
     }
 
@@ -180,21 +180,21 @@ class MeasureImageStepTaskTest {
         return (Map<String, Object>) ((Map<String, Object>) schema.get("properties")).get(name);
     }
 
-    /** A save writes the target: red_on_skin for a step the previous version had without one, contrast for a new step. */
+    /** A save writes the target: red_region for a step the previous version had without one, contrast for a new step. */
     @Test
     void aSavePinsEachMeasureStepsTarget() {
         PipelineDefinition.Step old = step("size", "measure_image", config("image", image()));
         PipelineDefinition.Step renamed = step("size", "measure_image", config("image", image()));
         PipelineDefinition.Step added = step("size_2", "measure_image", config("image", image()));
-        PipelineDefinition.Step chosen = step("size_3", "measure_image", config("image", image(), "target", "red_on_skin"));
+        PipelineDefinition.Step chosen = step("size_3", "measure_image", config("image", image(), "target", "red_region"));
         PipelineDefinition.Step other = step("keep", "filter", config("where", "x > 1"));
 
         int pinned = MeasureImageStepTask.pinTargets(Arrays.asList(renamed, added, chosen, other), Arrays.asList(old));
 
         assertThat(pinned).isEqualTo(2);
-        assertThat(renamed.getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(renamed.getConfig()).containsEntry("target", "red_region");
         assertThat(added.getConfig()).containsEntry("target", "contrast");
-        assertThat(chosen.getConfig()).containsEntry("target", "red_on_skin");
+        assertThat(chosen.getConfig()).containsEntry("target", "red_region");
         assertThat(other.getConfig()).doesNotContainKey("target");
         assertThat(old.getConfig()).doesNotContainKey("target");
     }

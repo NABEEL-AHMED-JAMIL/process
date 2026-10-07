@@ -37,7 +37,7 @@
      "bucket": "${BUCKET}",
      "keyColumn": "image_key"
     },
-    "target": "red_on_skin",
+    "target": "red_region",
     "onError": "null",
     "maxRows": 50
    }
