@@ -59,6 +59,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.TreeSet;
+import process.pipeline.approval.RunApprovalStore;
+import process.pipeline.approval.RunApprovalEvents;
 
 /**
  * Runs a pipeline as ordered steps (MIG-230), for a run whose pipeline has a stored definition that is not its legacy
@@ -185,6 +187,16 @@ public class StepEngine {
     /** MIG-345: the attempts someone asked for (a resume, a restart); without it, every attempt starts at the first step. */
     private RunAttemptStore attempts;
 
+    /** MIG-346: the Approval step's requests and their events; without them an Approval step fails, saying so. */
+    private RunApprovalStore approvals;
+    private RunApprovalEvents approvalEvents;
+
+    @Autowired(required = false)
+    public void useApprovals(RunApprovalStore approvals, RunApprovalEvents approvalEvents) {
+        this.approvals = approvals;
+        this.approvalEvents = approvalEvents;
+    }
+
     @Autowired(required = false)
     public void useAttempts(RunAttemptStore attempts) {
         this.attempts = attempts;
@@ -249,8 +261,20 @@ public class StepEngine {
      * today's path, which closes the ones that cannot run.
      */
     public Optional<StepPlan> planFor(SourceJob job, JobQueue run) {
+        return this.planOf(job, run, true);
+    }
+
+    /**
+     * MIG-346: the plan of a run already under way (one waiting at an Approval step): as {@link #planFor}, but its job may
+     * have been switched off since -- a run in flight finishes, as one on a worker does.
+     */
+    public Optional<StepPlan> planToContinue(SourceJob job, JobQueue run) {
+        return this.planOf(job, run, false);
+    }
+
+    private Optional<StepPlan> planOf(SourceJob job, JobQueue run, boolean mustBeActive) {
         if (job == null || run == null || job.getTenantId() == null || job.getTaskDetail() == null
-            || job.getJobStatus() != Status.Active) {
+            || (mustBeActive && job.getJobStatus() != Status.Active)) {
             return Optional.empty();
         }
         // MIG-345: an attempt someone asked for runs the version it was planned on (a resume may run a newer one).
@@ -291,6 +315,38 @@ public class StepEngine {
                 done.run();
             }
         });
+    }
+
+    /**
+     * MIG-346: a run waiting at an Approval step, decided: approved, it continues from the next step; otherwise it fails with
+     * {@code why}. On the engine's threads, in the run's workspace; nothing happens when the run no longer waits there.
+     */
+    public void decided(StepPlan plan, RunApprovalStore.Approval approval, boolean approved, String why) {
+        long tenantId = plan.job.getTenantId();
+        this.runThreads.execute(() -> RowSecurity.forTenant(tenantId, () -> {
+            JobQueue run = plan.run;
+            CorrelationScope scope = CorrelationScope.open(run.getCorrelationId() == null ? CorrelationId.generate() : run.getCorrelationId());
+            try {
+                Execution execution = new Execution(plan);
+                if (plan.definition == null) {
+                    this.report(run, JobStatus.Failed, "The run's definition cannot be read any more: " + plan.unreadable);
+                } else if (approved) {
+                    execution.continueAfter(approval);
+                } else {
+                    execution.stopAfter(approval, why);
+                }
+            } catch (Throwable ex) {
+                logger.error("The step engine stopped on run {} after its approval: {}", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
+                try {
+                    this.report(run, JobStatus.Failed, "The step engine stopped: " + reasonOf(ex));
+                } catch (RuntimeException unreported) {
+                    logger.error("Run {} could not be reported Failed; the stall sweep will close it: {}", run.getJobQueueId(),
+                        ExceptionUtil.getRootCauseMessage(unreported));
+                }
+            } finally {
+                scope.close();
+            }
+        }));
     }
 
     /** One run, start to end. Never throws: what cannot be reported is logged, and the stall sweep closes the run. */
@@ -474,8 +530,17 @@ public class StepEngine {
                 // MIG-344: whatever a try spilled and did not remove (one that timed out) goes with the run.
                 datasets.removeScratch(this.run.getJobQueueId(), this.attempt);
             }
+            this.finish(outcome);
+        }
+
+        /** The run's end as its steps came to it: nothing for an interrupted or paused run, else Failed or Completed. */
+        private void finish(Outcome outcome) {
             if (outcome.interrupted) {
                 logger.info("Run {} was moved on while its steps ran; its remaining steps are Interrupt.", this.run.getJobQueueId());
+                return;
+            }
+            if (outcome.paused) {
+                logger.info("Run {} waits for an approval; it continues when its reviewers decide.", this.run.getJobQueueId());
                 return;
             }
             if (outcome.failure != null) {
@@ -566,9 +631,6 @@ public class StepEngine {
             Outcome outcome = new Outcome();
             Dataset source = this.source();
             this.sourceRows = source;
-            // What a step reads is a reference: the dataset key of the output it reads (run_dataset.storage_key), or
-            // null for the source. A step that makes no dataset passes on the reference it read.
-            Map<String, String> outputs = this.outputs;
             String latest = null;
             int first = 0;
             if (resumed != null) {
@@ -577,6 +639,15 @@ public class StepEngine {
                 outcome.reused = resumed.from;
                 outcome.reusedFrom = resumed.attempts();
             }
+            return this.steps(rows, first, latest, outcome);
+        }
+
+        /** The steps from {@code first} on, reading {@code latest} where a step names no input (MIG-346: a run continued). */
+        private Outcome steps(List<Long> rows, int first, String latest, Outcome outcome) {
+            Dataset source = this.sourceRows;
+            // What a step reads is a reference: the dataset key of the output it reads (run_dataset.storage_key), or
+            // null for the source. A step that makes no dataset passes on the reference it read.
+            Map<String, String> outputs = this.outputs;
             int total = this.stepList.size();
             for (int i = first; i < total; i++) {
                 PipelineDefinition.Step step = this.stepList.get(i);
@@ -620,6 +691,16 @@ public class StepEngine {
                         + "memory budget%s.", batchRows, RunMemory.megabytes(this.memory.peak()), RunMemory.megabytes(this.memory.budget()),
                         this.memory.spilled() > 0 ? String.format("; %s spilled to disk", RunMemory.megabytes(this.memory.spilled())) : ""));
                 }
+                if (tried.result != null && tried.result.isAwaiting()) {
+                    // MIG-346: an Approval step -- the run waits here; its reviewers' decision continues or fails it.
+                    String refused = this.awaitApproval(i, step, row, input, tried.result.getApproval(), log, label);
+                    if (refused == null) {
+                        outcome.paused = true;
+                        return outcome;
+                    }
+                    tried.result = null;
+                    tried.error = refused;
+                }
                 if (tried.result != null) {
                     Dataset output = tried.result.getOutput();
                     Long out = tried.result.getRecordsOut();
@@ -644,6 +725,209 @@ public class StepEngine {
                 }
             }
             return outcome;
+        }
+
+        /**
+         * MIG-346: an Approval step's request -- recorded (run_approval) with its Task inbox event in one transaction, the step
+         * left Running and saying it waits, the run's status line saying so. Returns null when the run now waits, or why the
+         * request could not be made (the step then fails as any step).
+         */
+        private String awaitApproval(int index, PipelineDefinition.Step step, long row, Input input, StepResult.ApprovalAsk ask, StepLog log,
+                                     String label) {
+            if (approvals == null || approvalEvents == null) {
+                return "approvals are not available in this Core (no run_approval store)";
+            }
+            PipelineDefinition.Reviewers reviewers = ask.reviewersKind != null && ask.reviewersValue != null
+                ? PipelineDefinition.Reviewers.of(ask.reviewersKind, ask.reviewersValue)
+                : this.settings.getReview() != null ? this.settings.getReview().effectiveReviewers()
+                : PipelineDefinition.Reviewers.of(PipelineDefinition.Reviewers.ROLE, PipelineDefinition.Reviewers.ADMINS);
+            Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+            RunApprovalStore.Approval approval = new RunApprovalStore.Approval();
+            approval.jobQueueId = this.run.getJobQueueId();
+            approval.attempt = this.attempt;
+            approval.stepExecutionId = row;
+            approval.stepIndex = index;
+            approval.stepKey = step.getKey();
+            approval.title = ask.title;
+            approval.reviewersKind = reviewers.getKind();
+            approval.reviewersValue = reviewers.getValue();
+            approval.recordsIn = input.size();
+            approval.requestedAt = now;
+            approval.expiresAt = now.plus(Duration.ofHours(Math.max(1, ask.expiresAfterHours)));
+            long id;
+            try {
+                id = local.execute(status -> {
+                    long made = approvals.insert(approval);
+                    RunApprovalEvents.Requested event = new RunApprovalEvents.Requested();
+                    event.approvalId = made;
+                    event.jobQueueId = approval.jobQueueId;
+                    event.jobId = this.plan.job.getJobId();
+                    event.jobName = this.plan.job.getJobName();
+                    event.pipelineId = this.plan.job.getTaskDetail() == null ? null : this.plan.job.getTaskDetail().getPipelineId();
+                    event.attempt = this.attempt;
+                    event.stepKey = step.getKey();
+                    event.stepIndex = index;
+                    event.title = ask.title;
+                    event.instructions = ask.instructions;
+                    event.fields = ask.fields;
+                    event.rowCount = approval.recordsIn;
+                    event.requestedAt = approval.requestedAt;
+                    event.expiresAt = approval.expiresAt;
+                    event.reviewersKind = approval.reviewersKind;
+                    event.reviewersValue = approval.reviewersValue;
+                    approvalEvents.requested(this.tenantId, event);
+                    return made;
+                });
+            } catch (RuntimeException failed) {
+                return "the approval could not be requested: " + reasonOf(failed);
+            }
+            String who = PipelineDefinition.Reviewers.ROLE.equals(reviewers.getKind())
+                ? (PipelineDefinition.Reviewers.ADMINS.equals(reviewers.getValue()) ? "the workspace's administrators" : "the role " + reviewers.getValue())
+                : "the group " + reviewers.getValue();
+            String waiting = String.format("Waiting for approval: %s", ask.title);
+            steps.waiting(row, waiting);
+            log.line("INFO", String.format("Waiting for approval by %s (request %d, in their Task inbox) until %s; approved, the run "
+                + "continues with the next step; rejected or not decided by then, it fails.", who, id, approval.expiresAt));
+            this.audit(String.format("%s waits for approval by %s (request %d): %s", label, who, id, ask.title));
+            report(this.run, JobStatus.Running, String.format("Waiting for approval at step %d <%s>: %s", index + 1, step.getKey(), ask.title));
+            return null;
+        }
+
+        /**
+         * MIG-346: the run's reviewers approved -- the Approval step completes and the steps after it run, on what it read.
+         * The outputs of the steps before it are the ones this attempt kept (nothing is read to find them).
+         */
+        void continueAfter(RunApprovalStore.Approval approval) {
+            Waited waited = this.waited(approval);
+            if (waited == null) {
+                return;
+            }
+            String line = String.format("Approved by %s%s.", approval.decider(), approval.comment == null ? "" : ": " + approval.comment);
+            steps.ended(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line);
+            new StepLog(waited.row).line("INFO", line);
+            this.audit(String.format("Step %d/%d <%s> (approval) completed: %s", approval.stepIndex + 1, this.stepList.size(),
+                approval.stepKey, line));
+            Outcome outcome = new Outcome();
+            outcome.completed = waited.completedBefore + 1;
+            outcome.failedAndContinued = waited.failedBefore;
+            // A resumed attempt's reused steps, said as a resume says them.
+            outcome.reused = waited.reused.size();
+            TreeSet<Integer> from = new TreeSet<>(waited.reused);
+            outcome.reusedFrom = (from.size() == 1 ? "attempt " : "attempts ") + from.stream().map(String::valueOf)
+                .collect(Collectors.joining(", "));
+            int next = approval.stepIndex + 1;
+            ResponseDto running = report(this.run, JobStatus.Running, next < this.stepList.size()
+                ? String.format("Approved by %s at step %d <%s>: running %s.", approval.decider(), approval.stepIndex + 1, approval.stepKey,
+                    this.stepList.subList(next, this.stepList.size()).stream().map(PipelineDefinition.Step::getKey).collect(Collectors.joining(", ")))
+                : String.format("Approved by %s at step %d <%s>, the last step.", approval.decider(), approval.stepIndex + 1, approval.stepKey));
+            if (refused(running)) {
+                this.stopAll(waited.rows, next, "Interrupt", "Not run: the run was closed before its steps continued.");
+                return;
+            }
+            Outcome done;
+            try {
+                done = this.steps(waited.rows, next, waited.latest, outcome);
+            } finally {
+                datasets.removeScratch(this.run.getJobQueueId(), this.attempt);
+            }
+            this.finish(done);
+        }
+
+        /** MIG-346: rejected (or expired) -- the Approval step fails with the reason, the steps after it are skipped, the run fails. */
+        void stopAfter(RunApprovalStore.Approval approval, String why) {
+            Waited waited = this.waited(approval);
+            if (waited == null) {
+                return;
+            }
+            steps.ended(waited.row, JobStatus.Failed.name(), null, errorJson(why, 1, false), "Failed: " + why);
+            new StepLog(waited.row).line("ERROR", why);
+            this.stopAll(waited.rows, approval.stepIndex + 1, JobStatus.Skip.name(),
+                String.format("Skipped: step <%s> was not approved.", approval.stepKey));
+            this.audit(String.format("Step %d/%d <%s> (approval) failed: %s", approval.stepIndex + 1, this.stepList.size(), approval.stepKey,
+                why));
+            report(this.run, JobStatus.Failed, String.format("Step %d <%s> failed: %s", approval.stepIndex + 1, approval.stepKey, why));
+        }
+
+        /**
+         * The run as it waits at {@code approval}: this attempt's step rows, and what the steps before it passed on. Null, with
+         * nothing changed, when the run is not waiting there any more (it was closed, or is on another attempt).
+         */
+        private Waited waited(RunApprovalStore.Approval approval) {
+            if (approval.attempt != this.attempt || !this.stillRunning()) {
+                logger.info("Run {}: approval request {} was decided, but the run no longer waits on it (attempt {}, now {}); nothing to do.",
+                    this.run.getJobQueueId(), approval.runApprovalId, approval.attempt, this.attempt);
+                return null;
+            }
+            Map<Long, StepStore.StepRow> byId = new HashMap<>();
+            Map<Integer, StepStore.StepRow> mine = new HashMap<>();
+            for (StepStore.StepRow row : steps.stepsOfRun(this.run.getJobQueueId())) {
+                byId.put(row.stepExecutionId, row);
+                if (row.attempt == this.attempt) {
+                    mine.put(row.stepIndex, row);
+                }
+            }
+            List<Long> rows = new ArrayList<>();
+            for (int i = 0; i < this.stepList.size(); i++) {
+                StepStore.StepRow row = mine.get(i);
+                if (row == null || !this.stepList.get(i).getKey().equals(row.stepKey)) {
+                    report(this.run, JobStatus.Failed, String.format("Step %d <%s> was approved, but the run's steps no longer match its "
+                        + "definition; it cannot continue.", approval.stepIndex + 1, approval.stepKey));
+                    return null;
+                }
+                rows.add(row.stepExecutionId);
+            }
+            StepStore.StepRow waiting = mine.get(approval.stepIndex);
+            if (waiting.stepExecutionId != approval.stepExecutionId || !JobStatus.Running.name().equals(waiting.status)) {
+                logger.info("Run {}: step <{}> is {} and no longer waits on approval request {}.", this.run.getJobQueueId(), approval.stepKey,
+                    waiting.status, approval.runApprovalId);
+                return null;
+            }
+            this.sourceRows = this.source();
+            Waited waited = new Waited();
+            waited.rows = rows;
+            waited.row = waiting.stepExecutionId;
+            // The steps before it, as the reuse of a resume rebuilds them: a kept output, else the input a step read.
+            List<StepStore.StepRow> before = new ArrayList<>();
+            for (int i = 0; i < approval.stepIndex; i++) {
+                before.add(mine.get(i));
+            }
+            Map<Long, StepStore.StepRow> origins = new HashMap<>();
+            for (StepStore.StepRow row : before) {
+                origins.put(row.stepExecutionId, row.reusedFrom != null ? RunRetries.origin(row, byId) : row);
+            }
+            Map<Long, StepStore.KeptOutput> kept = steps.keptOutputsOf(origins.values().stream().map(r -> r.stepExecutionId)
+                .collect(Collectors.toList()));
+            String latest = null;
+            for (int i = 0; i < approval.stepIndex; i++) {
+                PipelineDefinition.Step step = this.stepList.get(i);
+                StepStore.StepRow row = mine.get(i);
+                if (JobStatus.Completed.name().equals(row.status)) {
+                    StepStore.KeptOutput output = kept.get(origins.get(row.stepExecutionId).stepExecutionId);
+                    String passed;
+                    if (output != null) {
+                        passed = output.storageKey;
+                        if (output.rows != null) {
+                            this.sizes.put(passed, output.rows);
+                        }
+                    } else {
+                        passed = step.getInput() != null ? this.outputs.get(step.getInput()) : latest;
+                    }
+                    this.outputs.put(step.getKey(), passed);
+                    latest = passed;
+                    if (row.reusedFrom != null) {
+                        waited.reused.add(origins.get(row.stepExecutionId).attempt);
+                    } else {
+                        waited.completedBefore++;
+                    }
+                } else {
+                    waited.failedBefore++;
+                }
+            }
+            PipelineDefinition.Step gate = this.stepList.get(approval.stepIndex);
+            String read = gate.getInput() != null ? this.outputs.get(gate.getInput()) : latest;
+            this.outputs.put(gate.getKey(), read);
+            waited.latest = read;
+            return waited;
         }
 
         /** MIG-345: what the step read of each bucket object, fingerprinted, for a later resume's input check. */
@@ -918,6 +1202,16 @@ public class StepEngine {
             return this.load(this.outputs.get(stepKey), this.sourceRows, String.format("The output of step <%s>", stepKey));
         }
 
+        /** MIG-346: an earlier step's output a batch at a time (Append), never held whole. */
+        private RowSource openOutput(String stepKey) throws Exception {
+            if (!this.outputs.containsKey(stepKey)) {
+                throw new IllegalStateException(String.format("step <%s> has no output to read: it is not an earlier step, or it failed",
+                    stepKey));
+            }
+            String key = this.outputs.get(stepKey);
+            return key == null ? RowSource.of(this.sourceRows, batchRows) : datasets.open(key, batchRows);
+        }
+
         /** A file a step made, beside the run's datasets, and its run_dataset row. */
         /** Returns {run_dataset_id, expiry in epoch millis}: the manifest names the same dataset and expiry. */
         private long[] keepFile(long row, String stepKey, String fileName, byte[] content, long rows, List<String> columns) throws Exception {
@@ -1019,6 +1313,8 @@ public class StepEngine {
         /** MIG-345: the steps a resume reused, and the attempt whose they are. */
         int reused;
         String reusedFrom;
+        /** MIG-346: the run waits at an Approval step: nothing more is reported until its reviewers decide. */
+        boolean paused;
 
         void failed(String runFailure, OnError onError, PipelineDefinition.Step step) {
             switch (onError) {
@@ -1065,6 +1361,17 @@ public class StepEngine {
         List<String> outputColumns;
         /** MIG-345: the bucket objects the successful try read, fingerprinted. */
         List<InputDigests.Read> reads;
+    }
+
+    /** MIG-346: a run waiting at an Approval step: its step rows, the waiting one, and what the steps before it passed on. */
+    private static final class Waited {
+        List<Long> rows;
+        long row;
+        String latest;
+        int completedBefore;
+        int failedBefore;
+        /** The attempt each reused step before it really ran in. */
+        final List<Integer> reused = new ArrayList<>();
     }
 
     /** MIG-345: what a resume reuses: the steps before {@code from} as the attempts that ran them, and their kept outputs. */
@@ -1280,6 +1587,11 @@ public class StepEngine {
         @Override
         public RowSource openInput() throws Exception {
             return this.sources.track(new Batched(this.input.open(), this.execution.memory));
+        }
+
+        @Override
+        public RowSource openOutputOf(String stepKey) throws Exception {
+            return this.sources.track(new Batched(this.execution.openOutput(stepKey), this.execution.memory));
         }
 
         @Override

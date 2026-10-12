@@ -24,12 +24,18 @@ import java.util.regex.Pattern;
  * when one is named); Core never draws a page. The title and fields fill from the run ({{run}}, {{date}}, {{rows}}...);
  * columns choose which columns and their order (all, by default). At most maxRows rows (default 1000). The rows pass on
  * unchanged. A retried step bills once: the render's usage key is the run's step and attempt.
+ *
+ * MIG-346: {@code sections} draws several tables in one report, each under its own title (and an optional note): the rows
+ * of an earlier step ({@code input}) or of this step's input, its own columns and maxRows. Without sections the report is
+ * the one table it always was. The title, header fields, notes and watermark fill from the run and from the first row of
+ * the step's input ({{column}}): "Patients: {{patient_count}}" reads that column of a summary row.
  */
 @Component
 public class RenderPdfStepTask extends RegisteredTask {
 
     static final int DEFAULT_MAX_ROWS = 1000;
     static final int MAX_ROWS = 5000;
+    static final int MAX_SECTIONS = 20;
 
     static final TaskSpec SPEC = TaskSpec.builder("render_pdf", "Render PDF", TaskKind.OUTPUT)
         .description("Renders the rows as a PDF report (media-service) and keeps it with the run as an output file.")
@@ -50,7 +56,20 @@ public class RenderPdfStepTask extends RegisteredTask {
                 .description("Printed across every page, e.g. DRAFT."))
             .property("templateId", JsonSchema.integer().minimum(1).title("Report template")
                 .description("A report template of this workspace (Documents > Converter); the default layout when empty."))
-            .property("maxRows", JsonSchema.integer().minimum(1).maximum(MAX_ROWS).title("At most rows").defaultValue(DEFAULT_MAX_ROWS)))
+            .property("maxRows", JsonSchema.integer().minimum(1).maximum(MAX_ROWS).title("At most rows").defaultValue(DEFAULT_MAX_ROWS))
+            .property("sections", JsonSchema.array(JsonSchema.object()
+                    .required("title", JsonSchema.string().minLength(1).maxLength(200).format("template").title("Section title")
+                        .description("Above this table; fills from the run and the step's first row."))
+                    .property("input", JsonSchema.string().minLength(1).format("step").title("Rows of")
+                        .description("The earlier step whose rows this table shows; this step's input when empty."))
+                    .property("columns", JsonSchema.array(JsonSchema.string().format("column")).maxItems(50).title("Columns")
+                        .description("Which columns, in order; all of them when empty."))
+                    .property("note", JsonSchema.string().maxLength(500).format("template").title("Note")
+                        .description("A line under the title, e.g. Rows with a missing value are left out."))
+                    .property("maxRows", JsonSchema.integer().minimum(1).maximum(MAX_ROWS).title("At most rows").defaultValue(DEFAULT_MAX_ROWS)))
+                .maxItems(MAX_SECTIONS).title("Sections")
+                .description("Several tables in one report, each under its own title. Empty: one table of this step's input (Columns "
+                    + "and At most rows above). A report template shows them where it says {{sections}}.")))
         .backing(TaskSpec.MEDIA)
         .timeoutSeconds(600)
         .aiToolName("render_pdf_report")
@@ -93,25 +112,76 @@ public class RenderPdfStepTask extends RegisteredTask {
         if (!fileName.toLowerCase().endsWith(".pdf")) {
             fileName = fileName + ".pdf";
         }
-        Dataset input = context.input();
-        int maxRows = Configs.integer(config, "maxRows", DEFAULT_MAX_ROWS);
+        List<Map<String, Object>> sectionConfigs = Configs.objects(config, "sections");
+        long inputRows = context.inputSize();
+        // The run's values and the first row's columns (as send_notification fills its title): run values win a clash.
+        Map<String, Object> values = new LinkedHashMap<>();
+        Map<String, Object> first = inputRows > 0 ? context.firstInputRow() : null;
+        if (first != null) {
+            values.putAll(first);
+        }
+        values.putAll(Templates.ofRun(context, (int) Math.min(Integer.MAX_VALUE, inputRows)));
+        String title = Templates.fill(Configs.text(config, "title", fileName.substring(0, fileName.length() - 4)), values);
+        Map<String, String> fields = new LinkedHashMap<>();
+        Configs.textMap(config, "fields").forEach((label, template) -> fields.put(label, Templates.fill(template, values)));
+        String usageKey = String.format("pipeline#%d#%s#a%d", context.jobQueueId(), context.stepKey(), context.attempt());
+        String page = Configs.text(config, "orientation", "auto");
+        String watermark = Configs.text(config, "watermark", null);
+        String filledWatermark = watermark == null ? null : Templates.fill(watermark, values);
+        Long templateId = Configs.longValue(config, "templateId");
+
+        if (sectionConfigs.isEmpty()) {
+            Dataset input = context.input();
+            Table table = table(input, Configs.texts(config, "columns"), Configs.integer(config, "maxRows", DEFAULT_MAX_ROWS), "The report");
+            String orientation = "auto".equals(page) ? (table.columns.size() > PORTRAIT_COLUMNS ? "landscape" : "portrait") : page;
+            byte[] pdf = this.renderer.renderPdf(new ReportRenderer.Report(context.tenantId(), usageKey, fileName, title, fields,
+                table.columns, table.rows, templateId, orientation, filledWatermark));
+            context.keepFile(fileName, pdf, input.size(), table.columns);
+            context.recordOutput(RunOutput.file(fileName, "pdf", input.size(), pdf.length).of(pdf));
+            context.log(String.format("Rendered %d row(s) as %s (%,d bytes).", input.size(), fileName, pdf.length));
+            return StepResult.nothing((long) input.size());
+        }
+
+        List<ReportRenderer.Section> sections = new ArrayList<>();
+        int widest = 0;
+        long total = 0;
+        List<String> described = new ArrayList<>();
+        for (int i = 0; i < sectionConfigs.size(); i++) {
+            Map<String, Object> section = sectionConfigs.get(i);
+            String of = Configs.text(section, "input", null);
+            Dataset rows = of == null ? context.input() : context.dataset(of);
+            String what = String.format("Section %d (%s)", i + 1, of == null ? "this step's input" : "<" + of + ">");
+            Table table = table(rows, Configs.texts(section, "columns"), Configs.integer(section, "maxRows", DEFAULT_MAX_ROWS), what);
+            String sectionTitle = Templates.fill(Configs.text(section, "title", "Section " + (i + 1)), values);
+            String note = Configs.text(section, "note", null);
+            sections.add(new ReportRenderer.Section(sectionTitle, note == null ? null : Templates.fill(note, values), table.columns, table.rows));
+            widest = Math.max(widest, table.columns.size());
+            total += table.rows.size();
+            described.add(String.format("%s: %d row(s)", sectionTitle, table.rows.size()));
+        }
+        String orientation = "auto".equals(page) ? (widest > PORTRAIT_COLUMNS ? "landscape" : "portrait") : page;
+        byte[] pdf = this.renderer.renderPdf(new ReportRenderer.Report(context.tenantId(), usageKey, fileName, title, fields,
+            new ArrayList<>(), new ArrayList<>(), templateId, orientation, filledWatermark, sections));
+        context.keepFile(fileName, pdf, total, new ArrayList<>());
+        context.recordOutput(RunOutput.file(fileName, "pdf", total, pdf.length).of(pdf));
+        context.log(String.format("Rendered %d section(s), %d row(s) in all, as %s (%,d bytes): %s.", sections.size(), total, fileName,
+            pdf.length, String.join("; ", described)));
+        return StepResult.nothing(inputRows);
+    }
+
+    /** One table: its columns (all, or the named ones in order) and each row's values in that order, held to maxRows. */
+    private static Table table(Dataset input, List<String> named, int maxRows, String what) {
         if (input.size() > maxRows) {
-            throw new IllegalStateException(String.format("The report would have %d rows; this step renders at most %d (maxRows).",
+            throw new IllegalStateException(String.format("%s would have %d rows; this step renders at most %d (maxRows).", what,
                 input.size(), maxRows));
         }
-        List<String> columns = Configs.texts(config, "columns");
-        if (columns.isEmpty()) {
-            columns = new ArrayList<>(input.getColumns());
-        }
+        List<String> columns = named.isEmpty() ? new ArrayList<>(input.getColumns()) : named;
         for (String column : columns) {
             if (!input.getColumns().contains(column)) {
-                throw new IllegalStateException(String.format("The rows have no column '%s'.", column));
+                throw new IllegalStateException("The report".equals(what) ? String.format("The rows have no column '%s'.", column)
+                    : String.format("%s: the rows have no column '%s'.", what, column));
             }
         }
-        Map<String, Object> runValues = Templates.ofRun(context, input.size());
-        String title = Templates.fill(Configs.text(config, "title", fileName.substring(0, fileName.length() - 4)), runValues);
-        Map<String, String> fields = new LinkedHashMap<>();
-        Configs.textMap(config, "fields").forEach((label, template) -> fields.put(label, Templates.fill(template, runValues)));
         List<List<Object>> rows = new ArrayList<>(input.size());
         for (Map<String, Object> row : input.getRows()) {
             List<Object> values = new ArrayList<>(columns.size());
@@ -120,15 +190,16 @@ public class RenderPdfStepTask extends RegisteredTask {
             }
             rows.add(values);
         }
-        String usageKey = String.format("pipeline#%d#%s#a%d", context.jobQueueId(), context.stepKey(), context.attempt());
-        String page = Configs.text(config, "orientation", "auto");
-        String orientation = "auto".equals(page) ? (columns.size() > PORTRAIT_COLUMNS ? "landscape" : "portrait") : page;
-        String watermark = Configs.text(config, "watermark", null);
-        byte[] pdf = this.renderer.renderPdf(new ReportRenderer.Report(context.tenantId(), usageKey, fileName, title, fields, columns, rows,
-            Configs.longValue(config, "templateId"), orientation, watermark == null ? null : Templates.fill(watermark, runValues)));
-        context.keepFile(fileName, pdf, input.size(), columns);
-        context.recordOutput(RunOutput.file(fileName, "pdf", input.size(), pdf.length).of(pdf));
-        context.log(String.format("Rendered %d row(s) as %s (%,d bytes).", input.size(), fileName, pdf.length));
-        return StepResult.nothing((long) input.size());
+        return new Table(columns, rows);
+    }
+
+    private static final class Table {
+        final List<String> columns;
+        final List<List<Object>> rows;
+
+        Table(List<String> columns, List<List<Object>> rows) {
+            this.columns = columns;
+            this.rows = rows;
+        }
     }
 }

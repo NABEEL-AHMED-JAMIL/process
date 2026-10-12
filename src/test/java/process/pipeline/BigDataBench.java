@@ -79,6 +79,9 @@ import org.duckdb.DuckDBConnection;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryType;
 import java.util.Set;
+import process.pipeline.tasks.AppendStepTask;
+import process.pipeline.tasks.LimitStepTask;
+import process.pipeline.tasks.SortStepTask;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -120,8 +123,36 @@ class BigDataBench {
     /** The steps of a profile over one file. */
     static List<PipelineDefinition.Step> pipeline(String profile, String file) {
         List<PipelineDefinition.Step> steps = new ArrayList<>();
+        if ("cols3".equals(profile)) {
+            // MIG-365: read_file with 3 of creditcard.csv's 31 columns; "cols31" is the same read of all of them.
+            steps.add(step("read", "read_file", config("bucket", "bench", "key", file, "format", "csv", "columns",
+                Arrays.asList("Time", "Amount", "Class"))));
+            return steps;
+        }
         steps.add(step("read", "read_file", config("bucket", "bench", "key", file, "format", "csv")));
         switch (profile) {
+            case "cols31":
+                break;
+            case "sort":
+                // MIG-365: the whole file by price, largest first, then customer: a spilled external sort at 128 MB.
+                steps.add(step("sorted", "sort", config("by", Arrays.asList(config("column", "unit_price", "direction", "desc"),
+                    config("column", "customer_id")))));
+                break;
+            case "limit": {
+                // MIG-365: the first 10 rows (stops reading), and the top 100 by price over every row (holds 100).
+                steps.add(step("first", "limit", config("rows", 10)));
+                PipelineDefinition.Step top = step("top", "limit", config("rows", 100, "by", Collections.singletonList(
+                    config("column", "unit_price", "direction", "desc"))));
+                top.setInput("read");
+                steps.add(top);
+                break;
+            }
+            case "union": {
+                // MIG-346: the file read twice and stacked: 2x its rows, by column name, with a source column.
+                steps.add(step("again", "read_file", config("bucket", "bench", "key", file, "format", "csv")));
+                steps.add(step("both", "append", config("steps", Arrays.asList("read", "again"), "sourceColumn", "part")));
+                break;
+            }
             case "orders":
                 steps.add(step("valid", "validate", config("contractName", "orders", "onInvalid", "drop")));
                 steps.add(step("calc", "compute", config("formulas", Arrays.asList(
@@ -307,7 +338,8 @@ class BigDataBench {
     static List<StepTask> tasks(LocalBuckets buckets) {
         return new ArrayList<>(Arrays.asList(new ReadFileStepTask(buckets), new ValidateStepTask(new LocalContracts()),
             new ComputeStepTask(), new FilterStepTask(), new AggregateStepTask(), new JoinStepTask(), new SaveFileStepTask(),
-            new UploadBucketStepTask(buckets), new SelectStepTask(), new TransformStepTask()));
+            new UploadBucketStepTask(buckets), new SelectStepTask(), new TransformStepTask(), new SortStepTask(),
+            new LimitStepTask(), new AppendStepTask()));
     }
 
     // ---------------------------------------------------------------------------------------------------- measuring
@@ -557,7 +589,8 @@ class BigDataBench {
             name, lines, total, lines / total, rssBytes() / MB, last == null ? "?" : last.replace('|', '/'), allocated / MB, buckets.uploaded.get()));
         for (StepStore.StepRow step : steps.stepsOfRun(runId)) {
             for (String line : steps.logText(runId, 1, step.stepKey)) {
-                if (line.contains("Streamed in batches") || line.contains("partitions on disk") || line.contains("memory")) {
+                if (line.contains("Streamed in batches") || line.contains("partitions on disk") || line.contains("memory")
+                    || line.contains("Sorted") || line.contains("Kept") || line.contains("Stacked") || line.contains("row(s) from")) {
                     report(String.format("| %s | | log | %s | | | | | | | | | %s |", name, step.stepKey, line.replace('|', '/')));
                 }
             }

@@ -224,3 +224,6 @@ databaseChangeLog:
   # V205: MIG-345 -- retry a failed run from the step that failed: run_attempt, run_input_file, step_execution.reused_from.
   - include:
       file: db/changelog/yaml/V205.0-run-retry.yaml
+  # V206: MIG-346 -- an Approval step pauses a run mid-way: run_approval, one row per request, decided in the Task inbox.
+  - include:
+      file: db/changelog/yaml/V206.0-run-approval.yaml

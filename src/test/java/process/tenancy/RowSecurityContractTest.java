@@ -38,6 +38,12 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("InboxQueueSweep: in code #1",
             "the inbox queue sweep (MIG-360) reads which jobs of every workspace have inbox files waiting and no run in flight (ids"
                 + " only); each job's next run is started as its own workspace");
+        paths.put("RunApprovals: in code #1",
+            "the approval sweep (MIG-346) reads every workspace's approval requests past their time; each is expired as its own"
+                + " workspace");
+        paths.put("RunApprovals: in code #2",
+            "the approval sweep (MIG-346) reads every workspace's approval requests whose run no longer waits on them; each is"
+                + " cancelled as its own workspace");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");

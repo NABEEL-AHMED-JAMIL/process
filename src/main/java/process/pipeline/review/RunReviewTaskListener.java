@@ -15,6 +15,9 @@ import process.util.UserNameResolver;
 
 import java.io.IOException;
 import java.util.Collections;
+import process.pipeline.approval.RunApprovals;
+import process.pipeline.approval.RunApprovalEvents;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * MIG-361: a run's internal review decided in the Task inbox. workflow-service announces every request's change on
@@ -49,6 +52,14 @@ public class RunReviewTaskListener {
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
+    /** MIG-346: an Approval step's request decided in the Task inbox moves its run on; absent in hand-built tests. */
+    private RunApprovals approvals;
+
+    @Autowired(required = false)
+    public void setApprovals(RunApprovals approvals) {
+        this.approvals = approvals;
+    }
+
     @KafkaListener(id = "run-review-tasks", topics = INSTANCE_CHANGED, groupId = "process-run-review-tasks",
         autoStartup = "${review.tasks.listen:true}", properties = {"auto.offset.reset=earliest"})
     public void onChange(String message) {
@@ -57,6 +68,10 @@ public class RunReviewTaskListener {
             change = JSON.readTree(message).path("payload");
         } catch (IOException unreadable) {
             logger.warn("Skipped an unreadable {} event: {}", INSTANCE_CHANGED, unreadable.getMessage());
+            return;
+        }
+        if (RunApprovalEvents.DEFINITION_KEY.equals(change.path("definitionKey").asText(null))) {
+            this.onApproval(change);
             return;
         }
         Long run = runOf(change.path("subjectId").asText(null));
@@ -80,6 +95,36 @@ public class RunReviewTaskListener {
             run, decision, reviewer, name, comment, instanceId, taskId)));
         logger.info("Run {} of workspace {}: the Task inbox's {} (request {}, task {}, by {}): {}", run, tenantId, decision, instanceId,
             taskId, reviewer, recorded.getMessage());
+    }
+
+    /**
+     * MIG-346: a request of the built-in pipeline-step-approval workflow ("pipeline-approval:N", N the run_approval) that
+     * ended Approved or Rejected: the run waiting at that Approval step continues, or fails with the reviewer's comment.
+     */
+    private void onApproval(JsonNode change) {
+        String subject = change.path("subjectId").asText("");
+        String state = change.path("state").asText("");
+        long tenantId = change.path("tenantId").asLong(0);
+        long instanceId = change.path("instanceId").asLong(0);
+        JsonNode decided = change.path("decision");
+        if (this.approvals == null || !subject.startsWith(RunApprovalEvents.SUBJECT_PREFIX)
+            || !("Approved".equals(state) || "Rejected".equals(state)) || tenantId <= 0 || !decided.isObject()) {
+            return;
+        }
+        long approvalId;
+        try {
+            approvalId = Long.parseLong(subject.substring(RunApprovalEvents.SUBJECT_PREFIX.length()));
+        } catch (NumberFormatException notOne) {
+            return;
+        }
+        Long reviewer = decided.path("actedBy").isIntegralNumber() ? decided.get("actedBy").asLong() : null;
+        String comment = decided.path("comment").isTextual() ? decided.get("comment").asText() : null;
+        long taskId = decided.path("taskId").asLong(0);
+        String name = reviewer == null ? null : this.names.namesFor(Collections.singleton(reviewer)).get(reviewer);
+        RunApprovals.Outcome outcome = this.approvals.decideFromInbox(tenantId, approvalId, "Approved".equals(state),
+            reviewer, name, comment, instanceId, taskId);
+        logger.info("Approval request {} of workspace {}: the Task inbox's {} (request {}, task {}, by {}): {}", approvalId, tenantId, state,
+            instanceId, taskId, reviewer, outcome);
     }
 
     /** The run a request is about, or null for one that is not a run's review. */

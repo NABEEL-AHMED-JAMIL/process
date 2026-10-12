@@ -150,6 +150,46 @@ public final class Fakes {
         }
     }
 
+    /** MIG-346: integration-service's webhooks, recording each send; a delivery is Delivered unless told otherwise. */
+    public static final class Webhooks implements WebhookSender {
+        public final List<Send> sent = new ArrayList<>();
+        public final Map<String, Long> deliveries = new LinkedHashMap<>();
+        public String deliveryStatus = "Delivered";
+        public String refusal;
+
+        @Override
+        public Optional<String> unavailable() {
+            return Optional.empty();
+        }
+
+        @Override
+        public Sent send(Send send) {
+            if (this.refusal != null) {
+                throw new IllegalArgumentException(this.refusal);
+            }
+            Sent answer = new Sent();
+            answer.eventId = send.eventId;
+            answer.replay = this.deliveries.containsKey(send.eventId);
+            if (!answer.replay) {
+                this.sent.add(send);
+                this.deliveries.put(send.eventId, 5000L + this.deliveries.size());
+            }
+            answer.deliveryId = this.deliveries.get(send.eventId);
+            answer.status = "Pending";
+            return answer;
+        }
+
+        @Override
+        public Delivery delivery(long tenantId, long webhookId, long deliveryId) {
+            Delivery delivery = new Delivery();
+            delivery.status = this.deliveryStatus;
+            delivery.attempts = "Pending".equals(this.deliveryStatus) ? 0 : 1;
+            delivery.responseStatus = "Delivered".equals(this.deliveryStatus) ? 200 : "Pending".equals(this.deliveryStatus) ? null : 500;
+            delivery.lastError = "Delivered".equals(this.deliveryStatus) || "Pending".equals(this.deliveryStatus) ? null : "HTTP 500";
+            return delivery;
+        }
+    }
+
     /** A JSON text as a tree, for a fake's answer. */
     public static JsonNode json(String text) {
         try {

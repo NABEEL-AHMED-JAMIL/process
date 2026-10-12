@@ -55,6 +55,11 @@ public interface StepStore {
 
     void log(long stepExecutionId, int lineNo, String level, String message);
 
+    /** MIG-346: a step that waits (an Approval step): it stays Running, its status line says what for. */
+    default void waiting(long stepExecutionId, String message) {
+        this.notRun(stepExecutionId, "Running", message);
+    }
+
     long dataset(long stepExecutionId, String name, String storageKey, long rows, String columnsJson, Instant expiresAt);
 
     List<StepRow> stepsOfRun(long jobQueueId);

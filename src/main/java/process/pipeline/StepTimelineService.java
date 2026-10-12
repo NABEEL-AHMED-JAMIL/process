@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import process.pipeline.approval.RunApprovalStore;
 
 /**
  * A run's steps for the console's timeline (MIG-230, for MIG-251's Executions detail): each step's status, times,
@@ -131,6 +132,14 @@ public class StepTimelineService {
         this.attempts = attempts;
     }
 
+    /** MIG-346: the Approval steps' requests, shown on their steps. */
+    private RunApprovalStore approvals;
+
+    @Autowired(required = false)
+    public void useApprovals(RunApprovalStore approvals) {
+        this.approvals = approvals;
+    }
+
     @Autowired(required = false)
     public void useNames(UserNameResolver names) {
         this.names = names;
@@ -173,12 +182,23 @@ public class StepTimelineService {
             Map<Long, Integer> attemptOf = new HashMap<>();
             rows.forEach(row -> attemptOf.put(row.stepExecutionId, row.attempt));
             timeline.put("pipelineDefinitionId", ofAttempt.isEmpty() ? null : ofAttempt.get(0).pipelineDefinitionId);
+            // MIG-346: an Approval step's request (a reused step shows the one that approved it).
+            Map<Long, RunApprovalStore.Approval> approvalsOf = this.approvals == null ? Collections.emptyMap()
+                : this.approvals.ofSteps(ofAttempt.stream().filter(row -> "approval".equals(row.taskCode))
+                    .map(row -> row.reusedFrom != null ? row.reusedFrom : row.stepExecutionId).collect(Collectors.toList()));
+            boolean[] waiting = {false};
             timeline.put("steps", ofAttempt.stream().map(row -> {
                 long datasetsOf = row.reusedFrom != null ? row.reusedFrom : row.stepExecutionId;
                 Map<String, Object> step = step(row, datasets.getOrDefault(datasetsOf, Collections.emptyList()));
                 step.put("reusedFromAttempt", row.reusedFrom == null ? null : attemptOf.get(row.reusedFrom));
+                RunApprovalStore.Approval approval = approvalsOf.get(datasetsOf);
+                if (approval != null) {
+                    step.put("approval", approvalView(approval));
+                    waiting[0] |= approval.pending() && row.reusedFrom == null;
+                }
                 return step;
             }).collect(Collectors.toList()));
+            timeline.put("waitingForApproval", waiting[0]);
         }
         timeline.put("attemptDetails", this.attemptDetails(run.get().getJobQueueId()));
         timeline.put("aiSteps", ai.stream().filter(step -> (step.attempt == null ? 1 : step.attempt) == shown).collect(Collectors.toList()));
@@ -516,6 +536,27 @@ public class StepTimelineService {
         step.put("datasets", Collections.emptyList());
         step.put("log", "run");
         return step;
+    }
+
+    /** MIG-346: an Approval step's request as the timeline shows it; times are UTC instants. */
+    private static Map<String, Object> approvalView(RunApprovalStore.Approval a) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("approvalId", a.runApprovalId);
+        out.put("status", a.status);
+        out.put("waiting", a.pending());
+        out.put("title", a.title);
+        Map<String, Object> reviewers = new LinkedHashMap<>();
+        reviewers.put("kind", a.reviewersKind);
+        reviewers.put("value", a.reviewersValue);
+        out.put("reviewers", reviewers);
+        out.put("requestedAt", a.requestedAt == null ? null : a.requestedAt.toString());
+        out.put("expiresAt", a.expiresAt == null ? null : a.expiresAt.toString());
+        out.put("decidedAt", a.decidedAt == null ? null : a.decidedAt.toString());
+        out.put("decidedByUserId", a.decidedByUserId);
+        out.put("decidedBy", a.pending() ? null : a.decider());
+        out.put("comment", a.comment);
+        out.put("workflowInstanceId", a.workflowInstanceId);
+        return out;
     }
 
     private static Map<String, Object> step(StepStore.StepRow row, List<StepStore.DatasetRow> datasets) {

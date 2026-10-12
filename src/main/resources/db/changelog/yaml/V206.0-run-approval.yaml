@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 206.0-run-approval
+      author: nabeel.amd93
+      description: "MIG-346: an Approval step anywhere in a pipeline pauses its run until the reviewers decide in the Task inbox -- run_approval, one row per request (the run, attempt and step, the reviewers, when it expires, and the decision: who, when, what they said)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V206.0-run-approval/V206__run_approval.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V206.0-run-approval/V206__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
