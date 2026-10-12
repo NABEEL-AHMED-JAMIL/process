@@ -4,6 +4,7 @@ import process.api.AiModelChoiceRestApi;
 import process.api.FormRestApi;
 import process.api.PublicFormRestApi;
 import process.api.FormSubmissionRestApi;
+import process.api.DocumentTriggerRestApi;
 import process.api.InboxTriggerRestApi;
 import process.api.PipelineDefinitionRestApi;
 import process.api.RunReviewRestApi;
@@ -112,7 +113,7 @@ class CoreProbeCoverageTest {
         SourceJobRestApi.class, SourceTaskRestApi.class, PipelineRestApi.class, KafkaConnectionProfileRestApi.class,
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
-        AiModelChoiceRestApi.class, InboxTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
+        AiModelChoiceRestApi.class, InboxTriggerRestApi.class, DocumentTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
         RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,

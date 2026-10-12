@@ -1,6 +1,7 @@
 package process.pipeline.tasks;
 
 import process.pipeline.Dataset;
+import process.pipeline.RunDocuments;
 import process.pipeline.RunOutput;
 import process.pipeline.StepContext;
 
@@ -26,6 +27,21 @@ final class TaskContext implements StepContext {
     String inputKey;
     /** MIG-360: a batch run's files; null for the run's own file alone. */
     List<String> inputKeys;
+    /** MIG-364: the approved documents the run was started for, the first one's values, and how often they were read. */
+    List<RunDocuments.Document> documents = new ArrayList<>();
+    Map<String, Object> documentValues = new LinkedHashMap<>();
+    int documentReads;
+
+    @Override
+    public List<RunDocuments.Document> documents() {
+        return this.documents;
+    }
+
+    @Override
+    public Map<String, Object> documentValues() {
+        this.documentReads++;
+        return this.documentValues;
+    }
 
     TaskContext(Map<String, Object> config, Dataset input) {
         this.config = config;

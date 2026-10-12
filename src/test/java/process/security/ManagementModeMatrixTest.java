@@ -52,6 +52,7 @@ class ManagementModeMatrixTest {
     /** Build or run: refused to the customer's own people in a MANAGED workspace. */
     static final Set<String> BUILDER_ACTIONS = new TreeSet<>(Arrays.asList(
         "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
+        "DocumentTriggerRestApi.delete", "DocumentTriggerRestApi.save",
         "EventRouteRestApi.delete", "EventRouteRestApi.save",
         "FormRestApi.createShareLink", "FormRestApi.revokeShareLink", "FormRestApi.save", "FormRestApi.setSharePolicy",
         "FormRestApi.status",

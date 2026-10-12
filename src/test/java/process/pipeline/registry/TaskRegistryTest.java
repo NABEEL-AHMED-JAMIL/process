@@ -36,7 +36,7 @@ class TaskRegistryTest {
         assertThat(kinds).containsOnly(
             entry("aggregate", "Process"), entry("ai_prompt", "Process"), entry("append", "Process"), entry("approval", "Process"),
             entry("limit", "Process"), entry("sort", "Process"), entry("send_webhook", "Output"), entry("compute", "Process"), entry("enrich", "Process"), entry("filter", "Process"), entry("join", "Process"),
-            entry("legacy", "Legacy"), entry("measure_image", "Process"), entry("read_api", "Read"), entry("read_database", "Read"), entry("read_file", "Read"),
+            entry("legacy", "Legacy"), entry("measure_image", "Process"), entry("read_api", "Read"), entry("read_database", "Read"), entry("read_documents", "Read"), entry("read_file", "Read"),
             entry("read_s3", "Read"), entry("render_pdf", "Output"), entry("sample", "Read"), entry("save_file", "Output"), entry("select", "Process"),
             entry("send_notification", "Output"), entry("transform", "Process"), entry("upload_bucket", "Output"),
             entry("validate", "Process"), entry("write_database", "Output"));

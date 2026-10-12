@@ -38,6 +38,9 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("InboxQueueSweep: in code #1",
             "the inbox queue sweep (MIG-360) reads which jobs of every workspace have inbox files waiting and no run in flight (ids"
                 + " only); each job's next run is started as its own workspace");
+        paths.put("DocumentQueueSweep: in code #1",
+            "the document queue sweep (MIG-364) reads which jobs of every workspace have approved documents waiting and no run in"
+                + " flight (ids only); each job's next run is started as its own workspace");
         paths.put("RunApprovals: in code #1",
             "the approval sweep (MIG-346) reads every workspace's approval requests past their time; each is expired as its own"
                 + " workspace");

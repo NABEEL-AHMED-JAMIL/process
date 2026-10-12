@@ -33,6 +33,7 @@ import process.pipeline.tasks.AppendStepTask;
 import process.pipeline.tasks.ApprovalStepTask;
 import process.pipeline.tasks.LimitStepTask;
 import process.pipeline.tasks.SendWebhookStepTask;
+import process.pipeline.tasks.ReadDocumentsStepTask;
 import process.pipeline.tasks.SortStepTask;
 
 import static org.mockito.Mockito.mock;
@@ -48,6 +49,7 @@ public final class AllTasks {
     public final AiPort ai = mock(AiPort.class);
     public final ReportRenderer reports = mock(ReportRenderer.class);
     public final Fakes.Webhooks webhooks = new Fakes.Webhooks();
+    public final Fakes.Documents documents = new Fakes.Documents();
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -58,7 +60,7 @@ public final class AllTasks {
             new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(), new MeasureImageStepTask(this.buckets),
             new RenderPdfStepTask(this.reports), new AppendStepTask(), new SortStepTask(),
             new LimitStepTask(), new ApprovalStepTask(),
-            new SendWebhookStepTask(this.webhooks)));
+            new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents)));
     }
 
     public StepTasks tasks() {

@@ -35,6 +35,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import process.ScratchJpa;
 import process.ScratchPostgres;
 import process.api.DashboardRestApi;
+import process.api.DocumentTriggerRestApi;
 import process.api.FileChatRestApi;
 import process.api.KafkaConnectionProfileRestApi;
 import process.api.KafkaSecretRestApi;
@@ -69,6 +70,8 @@ import process.api.SourceTaskRestApi;
 import process.api.TaskReferenceRestApi;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
+import process.documents.DocumentTriggerService;
+import process.documents.JdbcDocumentTriggerStore;
 import process.engine.BulkAction;
 import process.engine.ProducerBulkEngine;
 import process.filechat.FileIndexLock;
@@ -110,6 +113,7 @@ import process.model.service.impl.SourceTaskServiceImpl;
 import process.model.service.impl.TransactionServiceImpl;
 import process.notifications.JobMail;
 import process.notifications.NotificationPort;
+import process.pipeline.backing.Fakes;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.settings.PipelineConfigService;
@@ -417,6 +421,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final FileChatRestApi fileChat;
     final AiModelChoiceRestApi modelChoice;
     final InboxTriggerRestApi inboxTriggers;
+    /** MIG-364: a job's document trigger; its type is checked on a fake Document Intelligence that knows every type. */
+    final DocumentTriggerRestApi documentTriggers;
     /** Wave 5 Forms (lite): the workspace inbox a submission is written to, and the bucket it is written through. */
     final FormInbox formInbox = mock(FormInbox.class);
     final BucketStore formBuckets = mock(BucketStore.class);
@@ -521,6 +527,10 @@ final class CoreProbeFixture implements AutoCloseable {
             new StepReferences(stepTasks)));
         this.inboxTriggers = new InboxTriggerRestApi(new InboxTriggerService(new JdbcInboxTriggerStore(this.db.appJdbc()), this.engine,
             transactions, this.jpa.transactionManager()));
+        DocumentTriggerService documentTriggerService = new DocumentTriggerService(new JdbcDocumentTriggerStore(this.db.appJdbc()), this.engine,
+            transactions, this.jpa.transactionManager());
+        documentTriggerService.useDocuments(new Fakes.Documents());
+        this.documentTriggers = new DocumentTriggerRestApi(documentTriggerService);
         FormService formService = new FormService(new JdbcFormStore(this.db.appJdbc()), transactions);
         FormSubmissionService formSubmissionService = new FormSubmissionService(new JdbcFormStore(this.db.appJdbc()), formService,
             this.formInbox, this.formBuckets, this.engine, transactions, this.jpa.transactionManager());

@@ -89,6 +89,23 @@ public interface StepContext {
     }
 
     /**
+     * MIG-364: the approved documents this run was started for (a job's "When a document is approved" trigger) -- one, or
+     * the batch that waited -- in the order they were approved; empty for any other run.
+     */
+    default List<RunDocuments.Document> documents() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * MIG-364: the first of {@link #documents()}' values, for {@code {{document.<field>}}}: the type's fields by key, and
+     * id, file_name, type_version, approval, approved_by, date_approved; read from Document Intelligence once per run, the
+     * first time a step asks. Empty when no document started the run.
+     */
+    default Map<String, Object> documentValues() throws Exception {
+        return Collections.emptyMap();
+    }
+
+    /**
      * The output of an earlier step of this run, by its key (a join's other side, MIG-231). An exception when that step
      * made none (it failed and continued, or only acted) or is not earlier.
      */

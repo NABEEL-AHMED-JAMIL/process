@@ -197,6 +197,31 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         return jobQueue;
     }
 
+    /**
+     * MIG-364: approved documents start the job -- one, or a batch that waited for it (the document trigger's batch size).
+     * The run has no input file: its documents are the document_approval rows that name it, which the step engine reads
+     * (read_documents with no type, {{document.<field>}}). The caller has checked Run now's rules; the one-in-flight index
+     * still refuses a racing second run (OneRunInFlight).
+     */
+    public JobQueue addDocumentJobInQueue(SourceJob sourceJob, long documentTypeId, List<Long> extractionIds) {
+        this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
+        JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
+            BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: a document was approved.", false);
+        jobQueue.setRunManual(false);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        logger.info("Run {} of job {} queued by approved document(s) {} (type {}).", jobQueue.getJobQueueId(), sourceJob.getJobId(),
+            extractionIds, documentTypeId);
+        this.bulkAction.changeJobLastJobRun(sourceJob.getJobId(), jobQueue.getStartTime());
+        List<String> ids = new ArrayList<>(extractionIds.size());
+        extractionIds.forEach(id -> ids.add(String.valueOf(id)));
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), extractionIds.size() == 1
+            ? String.format("Job %s now in the queue: document %s of type %d was approved.", sourceJob.getJobId(), ids.get(0), documentTypeId)
+            : String.format("Job %s now in the queue: %d approved documents of type %d: %s.", sourceJob.getJobId(), ids.size(), documentTypeId,
+                namesOf(ids)));
+        this.bulkAction.sendJobStatusNotification(sourceJob.getJobId());
+        return jobQueue;
+    }
+
     /** A batch's file names for its audit line: the first ten, and how many more. */
     private static String namesOf(List<String> fileNames) {
         int shown = Math.min(10, fileNames.size());

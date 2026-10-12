@@ -1,0 +1,17 @@
+{
+  "eventId": "5d0c6f1e-2b7a-4c9e-8f31-7a6b5c4d3e21",
+  "eventType": "platform.document.approved.v1",
+  "occurredAt": "2026-10-12T14:05:06.789Z",
+  "tenantId": 2961,
+  "producer": "ai",
+  "traceId": "c0ffee00-1234-4abc-9def-000000000364",
+  "payload": {
+    "extractionId": 1180,
+    "ocrDocumentId": 2207,
+    "documentTypeId": 1007,
+    "typeKey": "invoice",
+    "typeVersion": 2,
+    "approval": "reviewer",
+    "approvedBy": 4644
+  }
+}

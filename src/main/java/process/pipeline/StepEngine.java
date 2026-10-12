@@ -1,6 +1,7 @@
 package process.pipeline;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.barco.platform.correlation.CorrelationId;
 import org.barco.platform.correlation.CorrelationScope;
@@ -23,10 +24,12 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.service.NotifyService;
 import process.model.service.impl.TransactionServiceImpl;
+import process.pipeline.backing.DocumentDatasets;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.data.RunMemory;
+import process.pipeline.data.Values;
 import process.util.BusinessTime;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
@@ -205,6 +208,16 @@ public class StepEngine {
     @Autowired(required = false)
     public void useRunInputs(RunInputs runInputs) {
         this.runInputs = runInputs;
+    }
+
+    /** MIG-364: the documents a run was started for (the document trigger's store) and where their values are read. */
+    private RunDocuments runDocuments;
+    private DocumentDatasets documentDatasets;
+
+    @Autowired(required = false)
+    public void useRunDocuments(RunDocuments runDocuments, DocumentDatasets documentDatasets) {
+        this.runDocuments = runDocuments;
+        this.documentDatasets = documentDatasets;
     }
 
     /** MIG-243: the data policy's retention (PolicyRetention); without one, the definition's hours alone, as before. */
@@ -434,6 +447,9 @@ public class StepEngine {
         private final RunMemory memory = RunMemory.ofMegabytes(runMemoryMb);
         /** MIG-360: the files the run was started for, read once, when a step first asks. */
         private volatile List<String> inputKeys;
+        /** MIG-364: the documents the run was started for, and the first one's values, each read once, when a step first asks. */
+        private volatile List<RunDocuments.Document> documents;
+        private volatile Map<String, Object> documentValues;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -459,6 +475,58 @@ public class StepEngine {
                 this.inputKeys = keys;
             }
             return keys;
+        }
+
+        /** MIG-364: the run's approved documents -- one query, the first time (none for a run nothing was approved for). */
+        List<RunDocuments.Document> documents() {
+            List<RunDocuments.Document> found = this.documents;
+            if (found == null) {
+                found = runDocuments == null ? Collections.emptyList()
+                    : Collections.unmodifiableList(new ArrayList<>(runDocuments.documentsOf(this.run.getJobQueueId())));
+                this.documents = found;
+            }
+            return found;
+        }
+
+        /**
+         * MIG-364: the first document's values for {{document.<field>}}, read from Document Intelligence once per run (a
+         * trusted read, billed to the workspace): its fields, its tables as JSON text, and id, file_name, type_version,
+         * status, approval, approved_by, date_approved, dataset_row_id.
+         */
+        synchronized Map<String, Object> documentValues() throws Exception {
+            if (this.documentValues != null) {
+                return this.documentValues;
+            }
+            List<RunDocuments.Document> found = this.documents();
+            if (found.isEmpty() || documentDatasets == null) {
+                this.documentValues = Collections.emptyMap();
+                return this.documentValues;
+            }
+            RunDocuments.Document first = found.get(0);
+            DocumentDatasets.Request request = new DocumentDatasets.Request();
+            request.tenantId = this.tenantId;
+            request.documentTypeId = first.documentTypeId;
+            request.extractionIds = Collections.singletonList(first.extractionId);
+            request.limit = 1;
+            request.jobQueueId = this.run.getJobQueueId();
+            request.readKey = String.format("%d#%d#document", this.run.getJobQueueId(), this.attempt);
+            DocumentDatasets.Page page = documentDatasets.read(request);
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put("id", first.extractionId);
+            values.put("type_version", first.typeVersion);
+            if (!page.rows.isEmpty()) {
+                JsonNode d = page.rows.get(0);
+                values.put("file_name", Values.scalar(d.get("fileName")));
+                values.put("status", Values.scalar(d.get("status")));
+                values.put("approval", Values.scalar(d.get("approval")));
+                values.put("approved_by", Values.scalar(d.get("approvedBy")));
+                values.put("date_approved", Values.scalar(d.get("dateApproved")));
+                values.put("dataset_row_id", Values.scalar(d.get("datasetRowId")));
+                d.path("fields").fields().forEachRemaining(f -> values.putIfAbsent(f.getKey(), Values.scalar(f.getValue())));
+                d.path("tables").fields().forEachRemaining(t -> values.putIfAbsent(t.getKey(), Values.scalar(t.getValue())));
+            }
+            this.documentValues = Collections.unmodifiableMap(values);
+            return this.documentValues;
         }
 
         void go() {
@@ -1552,6 +1620,16 @@ public class StepEngine {
         @Override
         public List<String> inputKeys() {
             return this.execution.inputKeys();
+        }
+
+        @Override
+        public List<RunDocuments.Document> documents() {
+            return this.execution.documents();
+        }
+
+        @Override
+        public Map<String, Object> documentValues() throws Exception {
+            return this.execution.documentValues();
         }
 
         @Override

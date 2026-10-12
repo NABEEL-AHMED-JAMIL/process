@@ -1,14 +1,20 @@
 package process.pipeline.backing;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import process.pipeline.data.Values;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -196,6 +202,137 @@ public final class Fakes {
             return Values.JSON.readTree(text);
         } catch (Exception broken) {
             throw new IllegalArgumentException(broken);
+        }
+    }
+
+    /**
+     * MIG-364: Document Intelligence's documents (ai-service's trusted read) and the read_documents watermark. Each document
+     * belongs to a workspace and a type; a read sees only its own workspace's (as ai-service's row security does), a page
+     * at a time in the cursor's order. Every request is kept, to see how a step read.
+     */
+    public static final class Documents implements DocumentDatasets, DocumentReadMarks {
+        public static final ObjectMapper JSON = new ObjectMapper();
+
+        public final List<String> fields = new ArrayList<>(Arrays.asList("invoice_number", "vendor_id", "total"));
+        public final List<String> tables = new ArrayList<>(Collections.singletonList("line_items"));
+        public final Map<String, List<String>> tableColumns = new LinkedHashMap<>();
+        /** {tenant, type, status, row}: every document, in dataset order. */
+        public final List<Object[]> documents = new ArrayList<>();
+        public final List<Request> requests = new ArrayList<>();
+        public String refusal;
+        /** run_document_read: job#step#type -> {jobQueueId, upTo, rows}; and the runs that completed. */
+        public final Map<String, List<long[]>> marks = new LinkedHashMap<>();
+        public final Set<Long> completed = new HashSet<>();
+        private long nextRow = 1000;
+        private long nextExtraction = 5000;
+
+        public Documents() {
+            this.tableColumns.put("line_items", Arrays.asList("sku", "quantity", "amount"));
+        }
+
+        /** An approved document of the type in the workspace: its dataset row id. */
+        public long approve(long tenant, long type, String invoice, String vendor, double total, int lines) {
+            ObjectNode row = JSON.createObjectNode();
+            long rowId = this.nextRow++;
+            long extraction = this.nextExtraction++;
+            row.put("datasetRowId", rowId);
+            row.put("extractionId", extraction);
+            row.put("ocrDocumentId", extraction + 100);
+            row.put("fileName", invoice + ".pdf");
+            row.put("typeVersion", 1);
+            row.put("status", APPROVED);
+            row.put("approval", rowId % 2 == 0 ? "auto" : "reviewer");
+            row.putNull("approvedBy");
+            row.put("dateApproved", "2026-10-12 09:00:00");
+            row.put("dateDecided", "2026-10-12 09:00:00");
+            row.putArray("rulesFailed");
+            row.putNull("rejectReason");
+            row.putObject("fields").put("invoice_number", invoice).put("vendor_id", vendor).put("total", total);
+            ArrayNode items = row.putObject("tables").putArray("line_items");
+            for (int i = 0; i < lines; i++) {
+                items.addObject().put("sku", "SKU-" + i).put("quantity", i + 1).put("amount", 10.0 * (i + 1));
+            }
+            this.documents.add(new Object[] {tenant, type, APPROVED, row});
+            return rowId;
+        }
+
+        public long extractionOf(long rowId) {
+            for (Object[] d : this.documents) {
+                JsonNode row = (JsonNode) d[3];
+                if (row.path("datasetRowId").asLong() == rowId) {
+                    return row.path("extractionId").asLong();
+                }
+            }
+            throw new IllegalArgumentException("no row " + rowId);
+        }
+
+        @Override
+        public Page read(Request r) {
+            this.requests.add(copy(r));
+            if (this.refusal != null) {
+                throw new IllegalArgumentException(this.refusal);
+            }
+            Page page = new Page();
+            page.documentTypeId = r.documentTypeId;
+            page.typeKey = "invoice";
+            page.name = "AP invoice";
+            page.fields.addAll(this.fields);
+            page.tables.addAll(this.tables);
+            page.tableColumns.putAll(this.tableColumns);
+            String status = r.status == null ? APPROVED : r.status;
+            for (Object[] d : this.documents) {
+                JsonNode row = (JsonNode) d[3];
+                long cursor = APPROVED.equals(status) ? row.path("datasetRowId").asLong() : row.path("extractionId").asLong();
+                if ((Long) d[0] != r.tenantId || (Long) d[1] != r.documentTypeId || !status.equals(d[2]) || cursor <= r.after) {
+                    continue;
+                }
+                if (r.extractionIds != null && !r.extractionIds.contains(row.path("extractionId").asLong())) {
+                    continue;
+                }
+                if (page.rows.size() == r.limit) {
+                    break;
+                }
+                page.rows.add(row);
+                page.next = cursor;
+            }
+            if (page.rows.size() < r.limit) {
+                page.next = null;
+            }
+            return page;
+        }
+
+        private static Request copy(Request r) {
+            Request c = new Request();
+            c.tenantId = r.tenantId;
+            c.documentTypeId = r.documentTypeId;
+            c.status = r.status;
+            c.after = r.after;
+            c.from = r.from;
+            c.to = r.to;
+            c.extractionIds = r.extractionIds;
+            c.limit = r.limit;
+            c.names = r.names;
+            c.jobQueueId = r.jobQueueId;
+            c.readKey = r.readKey;
+            return c;
+        }
+
+        @Override
+        public long watermark(long jobId, String stepKey, long documentTypeId) {
+            long mark = 0;
+            for (long[] m : this.marks.getOrDefault(jobId + "#" + stepKey + "#" + documentTypeId, Collections.emptyList())) {
+                if (this.completed.contains(m[0])) {
+                    mark = Math.max(mark, m[1]);
+                }
+            }
+            return mark;
+        }
+
+        @Override
+        public void record(long jobQueueId, String stepKey, long jobId, long documentTypeId, long upTo, long rows, int attempt) {
+            List<long[]> list = this.marks.computeIfAbsent(jobId + "#" + stepKey + "#" + documentTypeId, k -> new ArrayList<>());
+            list.removeIf(m -> m[0] == jobQueueId);
+            list.add(new long[] {jobQueueId, upTo, rows});
         }
     }
 }

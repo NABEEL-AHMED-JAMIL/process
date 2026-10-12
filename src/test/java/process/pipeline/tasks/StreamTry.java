@@ -1,6 +1,7 @@
 package process.pipeline.tasks;
 
 import process.pipeline.Dataset;
+import process.pipeline.RunDocuments;
 import process.pipeline.RunOutput;
 import process.pipeline.StreamContext;
 import process.pipeline.data.RowSink;
@@ -139,9 +140,19 @@ final class StreamTry implements StreamContext {
 
     @Override public KeptFile keepFile(String fileName, List<String> columns, long rows, FileWriter writer) { throw new UnsupportedOperationException(); }
 
-    @Override public long tenantId() { return 1; }
+    /** MIG-364: the run's job, and the approved documents it was started for. */
+    Long jobId;
+    long runId = 2;
+    List<RunDocuments.Document> documents = new ArrayList<>();
+    long tenant = 1;
 
-    @Override public long jobQueueId() { return 2; }
+    @Override public Long jobId() { return this.jobId; }
+
+    @Override public List<RunDocuments.Document> documents() { return this.documents; }
+
+    @Override public long tenantId() { return this.tenant; }
+
+    @Override public long jobQueueId() { return this.runId; }
 
     @Override public int attempt() { return 1; }
 

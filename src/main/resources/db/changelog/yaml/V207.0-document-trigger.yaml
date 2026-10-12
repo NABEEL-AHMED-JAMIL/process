@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 207.0-document-trigger
+      author: nabeel.amd93
+      description: "MIG-364: approved documents feed pipelines -- job_document_trigger (start this job when a document of a type is approved, batch size), document_approval (each approval's outcome per job: Started, Waiting or Skipped; unique per document, version and job -- start once), run_document_read (the highest dataset row a read_documents step read per run: a completed run's is the job's watermark); three tenant tables under row security as V181; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V207.0-document-trigger/V207__document_trigger.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V207.0-document-trigger/V207__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
