@@ -80,8 +80,8 @@ public class RunApprovals {
                 Optional<RunApprovalStore.Approval> row = this.store.decide(approvalId, approved ? RunApprovalStore.APPROVED
                     : RunApprovalStore.REJECTED, reviewerUserId, reviewerName, said, instanceId, taskId, Instant.now());
                 row.ifPresent(a -> this.audit.saveJobAuditLogs(a.jobQueueId, String.format("Approval request %d at step <%s>: %s by %s in the "
-                    + "Task inbox (request %d, task %d)%s.", a.runApprovalId, a.stepKey, approved ? "approved" : "rejected", a.decider(),
-                    instanceId, taskId, said == null ? "" : ": " + said)));
+                    + "Task inbox (request %d, task %d)%s", a.runApprovalId, a.stepKey, approved ? "approved" : "rejected", a.decider(),
+                    instanceId, taskId, said == null ? "." : ": " + (said.matches(".*[.?!]$") ? said : said + "."))));
                 return row;
             });
             if (decided == null || !decided.isPresent()) {

@@ -396,6 +396,13 @@ public class StepEngine {
         return answer == null || ProcessUtil.ERROR.equals(answer.getStatus());
     }
 
+    /** A line ending in one full stop: "Approved by Ana: checked." rather than "checked..". */
+    static String sentence(String text) {
+        String trimmed = text.trim();
+        char last = trimmed.isEmpty() ? '.' : trimmed.charAt(trimmed.length() - 1);
+        return last == '.' || last == '?' || last == '!' ? trimmed : trimmed + ".";
+    }
+
     /** What went wrong, in the words of the exception that said it: its own message, else its cause's, else its type. */
     static String reasonOf(Throwable ex) {
         for (Throwable at = ex; at != null; at = at.getCause() == at ? null : at.getCause()) {
@@ -802,7 +809,7 @@ public class StepEngine {
             if (waited == null) {
                 return;
             }
-            String line = String.format("Approved by %s%s.", approval.decider(), approval.comment == null ? "" : ": " + approval.comment);
+            String line = sentence(String.format("Approved by %s%s", approval.decider(), approval.comment == null ? "" : ": " + approval.comment));
             steps.ended(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line);
             new StepLog(waited.row).line("INFO", line);
             this.audit(String.format("Step %d/%d <%s> (approval) completed: %s", approval.stepIndex + 1, this.stepList.size(),

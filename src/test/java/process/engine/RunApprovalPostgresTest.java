@@ -416,8 +416,10 @@ class RunApprovalPostgresTest {
     void aFailureAfterTheApprovalIsRetriedFromThereWithoutAskingAgain() throws Exception {
         long run = this.waiting(false);
         long id = ((Number) this.request(run, 1).get("run_approval_id")).longValue();
-        assertThat(this.approvals.decideFromInbox(TENANT, id, true, REVIEWER, "Ana Ruiz", null, 921L, 922L).moved).isTrue();
+        assertThat(this.approvals.decideFromInbox(TENANT, id, true, REVIEWER, "Ana Ruiz", "Checked.", 921L, 922L).moved).isTrue();
         this.settle();
+        assertThat(login.queryForObject("SELECT status_message FROM step_execution WHERE job_queue_id = ? AND step_key = 'approve'",
+            String.class, run)).as("one full stop").isEqualTo("Approved by Ana Ruiz (user " + REVIEWER + "): Checked.");
         assertThat(this.run(run).get("job_status")).isEqualTo("Failed");
         assertThat(this.run(run).get("job_status_message")).isEqualTo("Step 4 <check> failed: 2 row(s) break the contract");
 

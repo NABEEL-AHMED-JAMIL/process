@@ -104,7 +104,7 @@ public class ApprovalStepTask extends RegisteredTask {
             ask.reviewersValue = Configs.text(who, "value", null);
         }
         ask.expiresAfterHours = Configs.integer(config, "expiresAfterHours", DEFAULT_HOURS);
-        context.log(String.format("Asking for approval: %s.", ask.title));
+        context.log("Asking for approval: " + ask.title + (ask.title.matches(".*[.?!]$") ? "" : "."));
         return StepResult.awaiting(ask, size);
     }
 }
