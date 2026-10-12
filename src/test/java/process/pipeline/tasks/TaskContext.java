@@ -24,6 +24,8 @@ final class TaskContext implements StepContext {
     Long owner = 7L;
     String inputBucket;
     String inputKey;
+    /** MIG-360: a batch run's files; null for the run's own file alone. */
+    List<String> inputKeys;
 
     TaskContext(Map<String, Object> config, Dataset input) {
         this.config = config;
@@ -92,6 +94,11 @@ final class TaskContext implements StepContext {
     @Override
     public String inputKey() {
         return this.inputKey;
+    }
+
+    @Override
+    public List<String> inputKeys() {
+        return this.inputKeys != null ? this.inputKeys : StepContext.super.inputKeys();
     }
 
     @Override

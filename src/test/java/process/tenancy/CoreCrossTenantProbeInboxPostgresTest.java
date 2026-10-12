@@ -9,6 +9,7 @@ import process.inbox.InboxTriggerRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,6 +77,7 @@ class CoreCrossTenantProbeInboxPostgresTest {
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).as("nothing of B's, the platform's or the colleague's changed").isEqualTo(before);
         verify(fx.engine, never()).addInboxJobInQueue(any(), anyString(), anyString(), anyString(), anyString());
+        verify(fx.engine, never()).addInboxJobInQueue(any(), anyString(), anyString(), anyList(), anyList());
 
         // A's own job still takes its trigger.
         assertThat(fx.probe("POST sourceJob.json/inboxTrigger/save(mine)", ADMIN_OF_A,

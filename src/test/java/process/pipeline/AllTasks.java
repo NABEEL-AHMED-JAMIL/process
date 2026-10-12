@@ -29,6 +29,11 @@ import process.pipeline.tasks.WriteDatabaseStepTask;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import process.pipeline.tasks.AppendStepTask;
+import process.pipeline.tasks.ApprovalStepTask;
+import process.pipeline.tasks.LimitStepTask;
+import process.pipeline.tasks.SendWebhookStepTask;
+import process.pipeline.tasks.SortStepTask;
 
 import static org.mockito.Mockito.mock;
 
@@ -42,6 +47,7 @@ public final class AllTasks {
     public final Fakes.Notifier notifier = new Fakes.Notifier();
     public final AiPort ai = mock(AiPort.class);
     public final ReportRenderer reports = mock(ReportRenderer.class);
+    public final Fakes.Webhooks webhooks = new Fakes.Webhooks();
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -50,7 +56,9 @@ public final class AllTasks {
             new JoinStepTask(), new EnrichStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
             new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier),
             new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(), new MeasureImageStepTask(this.buckets),
-            new RenderPdfStepTask(this.reports)));
+            new RenderPdfStepTask(this.reports), new AppendStepTask(), new SortStepTask(),
+            new LimitStepTask(), new ApprovalStepTask(),
+            new SendWebhookStepTask(this.webhooks)));
     }
 
     public StepTasks tasks() {

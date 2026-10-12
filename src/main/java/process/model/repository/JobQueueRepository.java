@@ -104,6 +104,11 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
         + "and COALESCE(start_time, date_created) is not null "
         + "and COALESCE(start_time, date_created) < ?1 "
+        // MIG-346: a run waiting at an Approval step is not silent -- its request has its own expiry (the approval sweep) --
+        // and one decided within the sweep's six hours (ProducerBulkEngine.STALLED_AFTER_MINUTES) has only just started its
+        // remaining steps. decided_at is an instant, so it is compared with now(), not with the wall-clock cutoff.
+        + "and not exists (select 1 from run_approval a where a.job_queue_id = job_queue.job_queue_id "
+        + "and (a.status = 'PENDING' or a.decided_at >= now() - interval '360 minutes')) "
         + "order by job_queue_id asc", nativeQuery = true)
     List<JobQueue> findStalledRuns(Timestamp startedBefore);
 

@@ -44,6 +44,23 @@ public final class RunOwnership {
         return find(runs, jobs, jobQueueId, false);
     }
 
+    /**
+     * MIG-361: the run of this workspace, for a path no caller is signed in on (a listener, run as the workspace by
+     * RowSecurity.forTenant): the run's job is the workspace's and not deleted.
+     */
+    public static Optional<Owned> ofWorkspace(JobQueueRepository runs, SourceJobRepository jobs, Long jobQueueId, long tenantId) {
+        if (jobQueueId == null) {
+            return Optional.empty();
+        }
+        Optional<JobQueue> run = runs.findById(jobQueueId);
+        Optional<SourceJob> job = run.flatMap(r -> r.getJobId() == null ? Optional.empty() : jobs.findById(r.getJobId()));
+        if (!run.isPresent() || !job.isPresent() || !Objects.equals(job.get().getTenantId(), tenantId)
+            || Status.Delete.equals(job.get().getJobStatus()) || !Objects.equals(run.get().getTenantId(), job.get().getTenantId())) {
+            return Optional.empty();
+        }
+        return Optional.of(new Owned(run.get(), job.get()));
+    }
+
     private static Optional<Owned> find(JobQueueRepository runs, SourceJobRepository jobs, Long jobQueueId, boolean asPerson) {
         if (jobQueueId == null) {
             return Optional.empty();

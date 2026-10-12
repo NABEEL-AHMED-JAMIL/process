@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 205.0-run-retry
+      author: nabeel.amd93
+      description: "MIG-345: a failed run retried from the step that failed (or from the start) as a new attempt of the same run -- run_attempt (who asked, how, from which step, on which definition), run_input_file (the sha256 of each file a step read, so a resume can tell an input changed), step_execution.reused_from (a step of a resumed attempt that is an earlier attempt's, not run again)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V205.0-run-retry/V205__run_retry.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V205.0-run-retry/V205__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

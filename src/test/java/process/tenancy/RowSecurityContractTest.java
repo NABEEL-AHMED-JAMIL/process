@@ -32,6 +32,18 @@ class RowSecurityContractTest extends RowSecurityContract {
             "pre-dispatch claims and prepares every workspace's queued runs");
         paths.put("DispatchRelay: in code #1",
             "the dispatch relay publishes every workspace's hand-offs");
+        paths.put("CustomerEventRelay: in code #1",
+            "the customer event relay (MIG-333) reads every workspace's unpublished api_event_out rows (ids and kinds, in order); each is"
+                + " built, published and stamped as its own workspace");
+        paths.put("InboxQueueSweep: in code #1",
+            "the inbox queue sweep (MIG-360) reads which jobs of every workspace have inbox files waiting and no run in flight (ids"
+                + " only); each job's next run is started as its own workspace");
+        paths.put("RunApprovals: in code #1",
+            "the approval sweep (MIG-346) reads every workspace's approval requests past their time; each is expired as its own"
+                + " workspace");
+        paths.put("RunApprovals: in code #2",
+            "the approval sweep (MIG-346) reads every workspace's approval requests whose run no longer waits on them; each is"
+                + " cancelled as its own workspace");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");
@@ -64,10 +76,6 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("RunWorkspace.of",
             "a worker's callback names only its run: the run's workspace is read by its id, before anything else");
         // /internal: service-token endpoints another service calls for any workspace
-        paths.put("InternalBillingDirectoryRestApi.tenants",
-            "billing lists every live workspace to invoice (service token)");
-        paths.put("InternalBillingDirectoryRestApi.userNames",
-            "billing names the people on its invoices by id, whichever workspace they are in (service token)");
         paths.put("InternalNotificationRelayRestApi.notice",
             "a service's notice names its recipient by id; a platform administrator has no workspace (service token)");
         paths.put("InternalNotificationRelayRestApi.mail",
@@ -76,8 +84,6 @@ class RowSecurityContractTest extends RowSecurityContract {
             "AI asks whether any workspace's pipeline still uses a prompt before it deletes it (service token)");
         paths.put("InternalStorageDirectoryRestApi.kafkaReferences",
             "storage asks which Kafka profiles of any workspace name an object before it deletes it (service token)");
-        paths.put("InternalStorageDirectoryRestApi.userNames",
-            "storage names the people on its rows by id, whichever workspace they are in (service token)");
         paths.put("FormShareLinks: in code #1",
             "a share link's visitor names no workspace: the link is found by its token's hash alone");
         paths.put("InternalLineageRestApi.runs",

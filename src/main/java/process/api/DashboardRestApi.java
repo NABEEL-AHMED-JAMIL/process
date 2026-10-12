@@ -1,7 +1,5 @@
 package process.api;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,8 +55,6 @@ public class DashboardRestApi {
     // No try/catch per endpoint (MIG-103): each one caught everything and answered 500, so a
     // malformed date looked exactly like a dead connection pool. GlobalExceptionHandler decides --
     // a RequestRefused is a 200 carrying ERROR and its sentence, anything else the fixed 500.
-
-    private Logger logger = LoggerFactory.getLogger(DashboardRestApi.class);
 
     private final DashboardService dashboardService;
 

@@ -19,10 +19,18 @@ import process.pipeline.Dataset;
  */
 public final class Limits {
 
-    public static final int MAX_ROWS = 50_000;
+    // MIG-344: read once from system properties so the big-data harness (BigDataBench) can measure the in-memory path
+    // past today's bounds; unset, they are today's values. Not constants any more, so no caller inlines them.
+    public static final int MAX_ROWS = Integer.getInteger("process.pipeline.limits.max-rows", 50_000);
     public static final int MAX_COLUMNS = 200;
-    public static final long MAX_CELLS = 1_000_000L;
-    public static final long MAX_FILE_BYTES = 50L * 1024 * 1024;
+    public static final long MAX_CELLS = Long.getLong("process.pipeline.limits.max-cells", 1_000_000L);
+    public static final long MAX_FILE_BYTES = Long.getLong("process.pipeline.limits.max-file-bytes", 50L * 1024 * 1024);
+    /**
+     * MIG-344: a streaming step's bounds. Its rows are on disk, not in memory, so the cell limit does not apply; these
+     * only stop a runaway (a read of the wrong object): rows a streamed dataset may have, and bytes a streamed file.
+     */
+    public static final long MAX_STREAM_ROWS = Long.getLong("process.pipeline.limits.max-stream-rows", 1_000_000_000L);
+    public static final long MAX_STREAM_FILE_BYTES = Long.getLong("process.pipeline.limits.max-stream-file-bytes", 50L * 1024 * 1024 * 1024);
     public static final int MAX_CALLS = 500;
     public static final int MAX_OBJECTS = 1_000;
 

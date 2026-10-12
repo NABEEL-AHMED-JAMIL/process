@@ -2,6 +2,7 @@ package process.pipeline.tasks;
 
 import org.junit.jupiter.api.Test;
 import process.pipeline.DefinitionProblem;
+import process.pipeline.Definitions;
 import process.pipeline.StepResult;
 import process.pipeline.backing.Fakes;
 import process.pipeline.backing.PipelineNotifier;
@@ -96,5 +97,45 @@ class OutputStepTasksTest {
         task.run(TaskContext.of(config("title", "none", "when", "no_rows"), this.rows));
         assertThat(notifier.sent).hasSize(1);
         assertThat(task.check(config("title", "x", "to", "users"))).containsExactly(new DefinitionProblem("userIds", "name at least one person"));
+    }
+
+    @Test
+    void sendNotificationTellsTheFirstRowsColumnsButNeverOverTheRunsPlaceholders() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        task.run(TaskContext.of(config("title", "Weekly digest, run {{run}}", "message", "{{digest}} ({{rows}} row)"),
+            Collections.singletonList(Definitions.row("digest", "Nausea leads.", "run", "not this"))));
+        assertThat(notifier.sent.get(0).title).isEqualTo("Weekly digest, run 88001");
+        assertThat(notifier.sent.get(0).body).isEqualTo("Nausea leads. (1 row)");
+    }
+
+    @Test
+    void aRunStartedForAFileNamesItAsInputKeyAndInputName() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        TaskContext context = TaskContext.of(config("title", "{{input_name}}", "message", "{{input_key}}"), this.rows);
+        context.inputKey = "intake/2026-10-06/77-scan-001.jpeg";
+        task.run(context);
+        assertThat(notifier.sent.get(0).title).isEqualTo("77-scan-001.jpeg");
+        assertThat(notifier.sent.get(0).body).isEqualTo("intake/2026-10-06/77-scan-001.jpeg");
+        task.run(TaskContext.of(config("title", "{{input_name}}"), this.rows));
+        assertThat(notifier.sent.get(1).title).as("no file: left as written").isEqualTo("{{input_name}}");
+    }
+
+    /** MIG-360: a run that took a batch of waiting inbox files says how many, and which. */
+    @Test
+    void aBatchRunNamesItsFilesAsInputCountAndInputKeys() throws Exception {
+        Fakes.Notifier notifier = new Fakes.Notifier();
+        SendNotificationStepTask task = new SendNotificationStepTask(notifier);
+        TaskContext context = TaskContext.of(config("title", "{{input_count}} file(s)", "message", "{{input_keys}}"), this.rows);
+        context.inputKey = "intake/a.jpeg";
+        context.inputKeys = Arrays.asList("intake/a.jpeg", "intake/b.jpeg");
+        task.run(context);
+        assertThat(notifier.sent.get(0).title).isEqualTo("2 file(s)");
+        assertThat(notifier.sent.get(0).body).isEqualTo("intake/a.jpeg,intake/b.jpeg");
+        TaskContext one = TaskContext.of(config("title", "{{input_count}} file(s)"), this.rows);
+        one.inputKey = "intake/a.jpeg";
+        task.run(one);
+        assertThat(notifier.sent.get(1).title).isEqualTo("1 file(s)");
     }
 }

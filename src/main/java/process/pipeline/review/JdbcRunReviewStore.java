@@ -10,8 +10,14 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,6 +47,40 @@ public class JdbcRunReviewStore implements RunReviewStore {
         List<Status> found = this.jdbc.query("SELECT " + STATUS_COLUMNS + " FROM run_review WHERE job_queue_id = ?",
             JdbcRunReviewStore::status, jobQueueId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
+    /** MIG-326: a page of runs' status rows in one query. */
+    @Override
+    public Map<Long, Status> statusesOf(Collection<Long> jobQueueIds) {
+        Map<Long, Status> found = new HashMap<>();
+        if (jobQueueIds == null || jobQueueIds.isEmpty()) {
+            return found;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(jobQueueIds));
+        for (Status status : this.jdbc.query("SELECT " + STATUS_COLUMNS + " FROM run_review WHERE job_queue_id IN (" + marks(ids.size())
+            + ")", JdbcRunReviewStore::status, ids.toArray())) {
+            found.put(status.jobQueueId, status);
+        }
+        return found;
+    }
+
+    /** MIG-326: a page of runs' decisions in one query, each run's oldest first. */
+    @Override
+    public Map<Long, List<Decision>> decisionsOf(Collection<Long> jobQueueIds) {
+        Map<Long, List<Decision>> found = new HashMap<>();
+        if (jobQueueIds == null || jobQueueIds.isEmpty()) {
+            return found;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(jobQueueIds));
+        for (Decision decision : this.jdbc.query("SELECT " + DECISION_COLUMNS + " FROM run_review_decision WHERE job_queue_id IN ("
+            + marks(ids.size()) + ") ORDER BY job_queue_id, decided_at, run_review_decision_id", JdbcRunReviewStore::decision, ids.toArray())) {
+            found.computeIfAbsent(decision.jobQueueId, id -> new ArrayList<>()).add(decision);
+        }
+        return found;
+    }
+
+    private static String marks(int n) {
+        return String.join(", ", Collections.nCopies(n, "?"));
     }
 
     @Override
@@ -122,5 +162,20 @@ public class JdbcRunReviewStore implements RunReviewStore {
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         OffsetDateTime at = rs.getObject(column, OffsetDateTime.class);
         return at == null ? null : at.toInstant();
+    }
+
+    @Override
+    public List<Long> undecidedReviewedRuns(long tenantId, int limit) {
+        // Per job on (job_id, job_queue_id), and only for the jobs whose pipeline asks for a review: a job that runs every
+        // minute without one never crowds the list.
+        return this.jdbc.queryForList("SELECT q.job_queue_id FROM job_queue q "
+            + "JOIN source_job j ON j.job_id = q.job_id AND j.tenant_id = q.tenant_id "
+            + "JOIN source_task t ON t.task_detail_id = j.task_detail_id "
+            + "JOIN pipeline p ON p.pipeline_id = t.pipeline_id AND p.tenant_id = q.tenant_id AND p.status <> 'Delete' "
+            + "WHERE q.tenant_id = ? AND q.job_status = 'Completed' AND j.job_status <> 'Delete' "
+            + "AND EXISTS (SELECT 1 FROM pipeline_definition d WHERE d.pipeline_key = p.pipeline_key "
+            + "AND d.definition::jsonb -> 'settings' -> 'review' IS NOT NULL) "
+            + "AND NOT EXISTS (SELECT 1 FROM run_review r WHERE r.job_queue_id = q.job_queue_id AND r.status <> 'PENDING') "
+            + "ORDER BY q.job_queue_id DESC LIMIT ?", Long.class, tenantId, limit);
     }
 }

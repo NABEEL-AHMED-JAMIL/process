@@ -3,11 +3,15 @@ package process.pipeline.data;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -95,6 +99,65 @@ public final class Values {
         return at;
     }
 
+    /**
+     * Every value at a dot path that may fan out: {@code entry[].resource} (or {@code entry[*].resource}) is the resource
+     * of every element of entry, as one array; {@code a[0].b} picks one element as {@link #at} does. A path without
+     * {@code []} is {@link #at}. A part that is absent or null under one element is left out, so the answer is an array
+     * (possibly empty) whenever the path fans out, and a missing node only for a malformed path.
+     */
+    public static JsonNode all(JsonNode node, String path) {
+        if (path == null || path.trim().isEmpty() || node == null) {
+            return node;
+        }
+        if (!path.contains("[]") && !path.contains("[*]")) {
+            return at(node, path);
+        }
+        List<JsonNode> current = Collections.singletonList(node);
+        for (String part : path.trim().split("\\.")) {
+            int bracket = part.indexOf('[');
+            String name = bracket >= 0 ? part.substring(0, bracket) : part;
+            List<JsonNode> next = new ArrayList<>();
+            for (JsonNode n : current) {
+                JsonNode v = name.isEmpty() ? n : n.path(name);
+                if (!v.isMissingNode() && !v.isNull()) {
+                    next.add(v);
+                }
+            }
+            while (bracket >= 0) {
+                int close = part.indexOf(']', bracket);
+                if (close < 0) {
+                    return MissingNode.getInstance();
+                }
+                String inside = part.substring(bracket + 1, close).trim();
+                List<JsonNode> step = new ArrayList<>();
+                for (JsonNode n : next) {
+                    if (inside.isEmpty() || inside.equals("*")) {
+                        if (n.isArray()) {
+                            n.forEach(step::add);
+                        }
+                    } else {
+                        int index;
+                        try {
+                            index = Integer.parseInt(inside);
+                        } catch (NumberFormatException notIndex) {
+                            return MissingNode.getInstance();
+                        }
+                        JsonNode v = n.path(index);
+                        if (!v.isMissingNode() && !v.isNull()) {
+                            step.add(v);
+                        }
+                    }
+                }
+                next = step;
+                bracket = part.indexOf('[', close);
+            }
+            current = next;
+        }
+        ArrayNode out = JSON.createArrayNode();
+        current.forEach(out::add);
+        return out;
+    }
+
     /** Text, for concatenation and comparison: null stays null, numbers in their plain form. */
     public static String text(Object value) {
         if (value == null) {
@@ -119,7 +182,9 @@ public final class Values {
             return new BigDecimal(value.toString());
         }
         String text = value.toString().trim();
-        if (text.isEmpty()) {
+        if (text.isEmpty() || !readsAsNumber(text)) {
+            // MIG-344: not a number by BigDecimal's own grammar -- answered without throwing. A NumberFormatException
+            // per cell (every "north" a filter or aggregate compares) was most of their time.
             return null;
         }
         try {
@@ -127,6 +192,56 @@ public final class Values {
         } catch (NumberFormatException notANumber) {
             return null;
         }
+    }
+
+    /**
+     * Whether {@code new BigDecimal(text)} would accept the text, by its grammar: an optional sign, digits with at most
+     * one point (at least one digit), then optionally e or E, an optional sign and digits. Digits are any
+     * {@link Character#isDigit} (BigDecimal reads them all). An exponent too big still fails in BigDecimal and is caught.
+     */
+    static boolean readsAsNumber(String text) {
+        int n = text.length();
+        int i = 0;
+        if (i < n && (text.charAt(i) == '+' || text.charAt(i) == '-')) {
+            i++;
+        }
+        int digits = 0;
+        boolean point = false;
+        for (; i < n; i++) {
+            char c = text.charAt(i);
+            if (c == '.') {
+                if (point) {
+                    return false;
+                }
+                point = true;
+            } else if (Character.isDigit(c)) {
+                digits++;
+            } else {
+                break;
+            }
+        }
+        if (digits == 0) {
+            return false;
+        }
+        if (i == n) {
+            return true;
+        }
+        char e = text.charAt(i);
+        if (e != 'e' && e != 'E') {
+            return false;
+        }
+        i++;
+        if (i < n && (text.charAt(i) == '+' || text.charAt(i) == '-')) {
+            i++;
+        }
+        int exponent = 0;
+        for (; i < n; i++) {
+            if (!Character.isDigit(text.charAt(i))) {
+                return false;
+            }
+            exponent++;
+        }
+        return exponent > 0;
     }
 
     /** A number as a row value: a whole number as a long when it fits, else a double. */

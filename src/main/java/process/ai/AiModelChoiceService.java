@@ -18,6 +18,8 @@ import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.SourceJobService;
+import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.StepReferences;
 import process.security.JobOwnership;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
@@ -47,6 +49,10 @@ import static process.util.ProcessUtil.SUCCESS;
  *   <li>what each AI step of a run asked for and ran on (run_ai_step), for the run's manifest.</li>
  * </ul>
  *
+ * A job's AI steps are its pipeline's old AI fields (fieldType ai with a prompt) and, since the console review of 2026-10-07,
+ * its step-engine definition's AI steps: every step the Task Registry backs with ai-service that names a prompt (MIG-245's
+ * ai_prompt, with or without an image) -- {@link StepReferences#aiSteps}. The engine runs those on the model asked here too.
+ *
  * A job is the caller's when they may see it (JobOwnership: the workspace, and for a tenant user the jobs that name
  * them); a source task when it is their workspace's. Anything else reads as not found. An option is accepted only when
  * ai-service lists it for that step in the job's own workspace, on an active connection -- so another workspace's
@@ -74,9 +80,11 @@ public class AiModelChoiceService {
     private final AiPort ai;
     private final ModelChoiceStore store;
     private final SourceJobService sourceJobs;
+    private final PipelineDefinitionStore definitions;
+    private final StepReferences references;
 
     public AiModelChoiceService(SourceJobRepository jobs, SourceTaskRepository tasks, JobQueueRepository runs, PipelineRepository pipelines,
-        AiPort ai, ModelChoiceStore store, SourceJobService sourceJobs) {
+        AiPort ai, ModelChoiceStore store, SourceJobService sourceJobs, PipelineDefinitionStore definitions, StepReferences references) {
         this.jobs = jobs;
         this.tasks = tasks;
         this.runs = runs;
@@ -84,6 +92,28 @@ public class AiModelChoiceService {
         this.ai = ai;
         this.store = store;
         this.sourceJobs = sourceJobs;
+        this.definitions = definitions;
+        this.references = references;
+    }
+
+    /** One AI step of a job's pipeline: an old pipeline's AI field, or a step-engine step backed by ai-service naming a prompt. */
+    static final class AiStep {
+        final String key;
+        final String label;
+        final String runIn;
+        final Long promptId;
+
+        AiStep(String key, String label, String runIn, Long promptId) {
+            this.key = key;
+            this.label = label;
+            this.runIn = runIn;
+            this.promptId = promptId;
+        }
+
+        static AiStep of(PipelineField field) {
+            return new AiStep(field.getTagKey(), field.getLabel(), "worker".equals(field.getRunIn()) ? RunAiStep.WORKER : RunAiStep.SERVER,
+                field.getPromptId());
+        }
     }
 
     /**
@@ -100,19 +130,19 @@ public class AiModelChoiceService {
         SourceJob j = job.get();
         Map<String, String> schedule = ModelProfiles.read(this.store.scheduleProfiles(j.getJobId(), j.getTenantId()));
         List<Map<String, Object>> steps = new ArrayList<>();
-        for (PipelineField field : this.aiStepsOf(j.getTaskDetail(), j.getTenantId())) {
+        for (AiStep field : this.aiStepsOf(j.getTaskDetail(), j.getTenantId())) {
             Map<String, Object> step = new LinkedHashMap<>();
-            step.put("stepKey", field.getTagKey());
-            step.put("label", field.getLabel());
-            step.put("runIn", "worker".equals(field.getRunIn()) ? RunAiStep.WORKER : RunAiStep.SERVER);
-            step.put("promptId", field.getPromptId());
-            if (schedule.containsKey(field.getTagKey())) {
-                step.put("modelOptionId", schedule.get(field.getTagKey()));
+            step.put("stepKey", field.key);
+            step.put("label", field.label);
+            step.put("runIn", field.runIn);
+            step.put("promptId", field.promptId);
+            if (schedule.containsKey(field.key)) {
+                step.put("modelOptionId", schedule.get(field.key));
             }
             try {
-                step.put("options", this.ai.stepModelOptions(j.getTenantId(), taskIdOf(j), field.getTagKey(), field.getPromptId()));
+                step.put("options", this.ai.stepModelOptions(j.getTenantId(), taskIdOf(j), field.key, field.promptId));
             } catch (AiPort.AiUnavailableException ex) {
-                this.logger.warn("Job {}: the models of step <{}> could not be read: {}", j.getJobId(), field.getTagKey(), ex.getMessage());
+                this.logger.warn("Job {}: the models of step <{}> could not be read: {}", j.getJobId(), field.key, ex.getMessage());
                 step.put("optionsError", "The AI service could not be reached to list this step's models.");
             }
             steps.add(step);
@@ -183,13 +213,13 @@ public class AiModelChoiceService {
         if (!task.isPresent()) {
             return new ResponseDto(ERROR, TASK_NOT_FOUND);
         }
-        Optional<PipelineField> step = this.stepOf(task.get(), stepKey);
+        Optional<AiStep> step = this.stepOf(task.get(), stepKey);
         if (!step.isPresent()) {
             return new ResponseDto(ERROR, String.format("This task's pipeline has no AI step <%s>.", stepKey));
         }
         try {
             return new ResponseDto(SUCCESS, "The models this step may run on.", this.ai.stepModelOptions(task.get().getTenantId(),
-                task.get().getTaskDetailId(), step.get().getTagKey(), step.get().getPromptId()));
+                task.get().getTaskDetailId(), step.get().key, step.get().promptId));
         } catch (AiPort.AiUnavailableException ex) {
             this.logger.warn("Task {}: the models of step <{}> could not be read: {}", taskDetailId, stepKey, ex.getMessage());
             return new ResponseDto(ERROR, "The AI service could not be reached to list this step's models.");
@@ -207,7 +237,7 @@ public class AiModelChoiceService {
         if (!task.isPresent()) {
             return new ResponseDto(ERROR, TASK_NOT_FOUND);
         }
-        Optional<PipelineField> step = this.stepOf(task.get(), dto.getStepKey());
+        Optional<AiStep> step = this.stepOf(task.get(), dto.getStepKey());
         if (!step.isPresent()) {
             return new ResponseDto(ERROR, String.format("This task's pipeline has no AI step <%s>.", dto.getStepKey()));
         }
@@ -222,8 +252,8 @@ public class AiModelChoiceService {
             }
         }
         try {
-            return this.ai.saveStepModelOptions(task.get().getTenantId(), task.get().getTaskDetailId(), step.get().getTagKey(),
-                step.get().getPromptId(), options, TenantContext.getAppUserId());
+            return this.ai.saveStepModelOptions(task.get().getTenantId(), task.get().getTaskDetailId(), step.get().key,
+                step.get().promptId, options, TenantContext.getAppUserId());
         } catch (AiPort.AiUnavailableException ex) {
             this.logger.warn("Task {}: the models of step <{}> could not be saved: {}", dto.getTaskDetailId(), dto.getStepKey(), ex.getMessage());
             return new ResponseDto(ERROR, "The AI service could not be reached, so the step's models were not changed.");
@@ -245,9 +275,9 @@ public class AiModelChoiceService {
      */
     private Checked check(SourceJob job, List<AiModelChoiceDto.StepChoice> choices) {
         Checked checked = new Checked();
-        Map<String, PipelineField> steps = new LinkedHashMap<>();
-        for (PipelineField field : this.aiStepsOf(job.getTaskDetail(), job.getTenantId())) {
-            steps.put(field.getTagKey(), field);
+        Map<String, AiStep> steps = new LinkedHashMap<>();
+        for (AiStep field : this.aiStepsOf(job.getTaskDetail(), job.getTenantId())) {
+            steps.put(field.key, field);
         }
         List<String> seen = new ArrayList<>();
         for (AiModelChoiceDto.StepChoice choice : choices == null ? Collections.<AiModelChoiceDto.StepChoice>emptyList() : choices) {
@@ -270,10 +300,10 @@ public class AiModelChoiceService {
                 checked.refusal = notAllowed;
                 return checked;
             }
-            PipelineField field = steps.get(key);
+            AiStep field = steps.get(key);
             List<AiPort.ModelOption> allowed;
             try {
-                allowed = this.ai.stepModelOptions(job.getTenantId(), taskIdOf(job), key, field.getPromptId());
+                allowed = this.ai.stepModelOptions(job.getTenantId(), taskIdOf(job), key, field.promptId);
             } catch (AiPort.AiUnavailableException ex) {
                 this.logger.warn("Job {}: the models of step <{}> could not be read: {}", job.getJobId(), key, ex.getMessage());
                 checked.refusal = AI_UNREACHABLE;
@@ -312,18 +342,33 @@ public class AiModelChoiceService {
             .filter(t -> TenantOwnership.isOwnedByCaller(t.getTenantId()));
     }
 
-    private Optional<PipelineField> stepOf(SourceTask task, String stepKey) {
+    private Optional<AiStep> stepOf(SourceTask task, String stepKey) {
         String key = stepKey == null ? null : stepKey.trim();
-        return this.aiStepsOf(task, task.getTenantId()).stream().filter(f -> Objects.equals(f.getTagKey(), key)).findFirst();
+        return this.aiStepsOf(task, task.getTenantId()).stream().filter(f -> Objects.equals(f.key, key)).findFirst();
     }
 
-    /** The AI steps of the task's pipeline, in the task's workspace; none without a pipeline. */
-    private List<PipelineField> aiStepsOf(SourceTask task, Long tenantId) {
+    /**
+     * The AI steps of the task's pipeline, in the task's workspace; none without a pipeline. The old pipeline's AI fields
+     * first, in position order, then the step-engine definition's AI steps in step order (a key both name is listed once).
+     */
+    List<AiStep> aiStepsOf(SourceTask task, Long tenantId) {
         if (task == null || task.getPipelineId() == null || task.getPipelineId().trim().isEmpty() || tenantId == null) {
             return Collections.emptyList();
         }
-        List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(task.getPipelineId().trim(), tenantId, Status.Delete);
-        return found.isEmpty() ? Collections.emptyList() : AiStepService.stepsOf(found.get(0));
+        String pipelineId = task.getPipelineId().trim();
+        List<AiStep> steps = new ArrayList<>();
+        List<Pipeline> found = this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot(pipelineId, tenantId, Status.Delete);
+        if (!found.isEmpty()) {
+            AiStepService.stepsOf(found.get(0)).forEach(f -> steps.add(AiStep.of(f)));
+        }
+        this.definitions.latestFor(tenantId, pipelineId).flatMap(this.references::read).ifPresent(definition -> {
+            for (StepReferences.Ref ref : this.references.aiSteps(definition)) {
+                if (steps.stream().noneMatch(s -> Objects.equals(s.key, ref.stepKey()))) {
+                    steps.add(new AiStep(ref.stepKey(), ref.label(), RunAiStep.SERVER, ref.id));
+                }
+            }
+        });
+        return steps;
     }
 
     private static Long taskIdOf(SourceJob job) {

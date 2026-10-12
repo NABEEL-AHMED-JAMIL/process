@@ -58,7 +58,9 @@ public final class DefinitionCodec {
         LoaderOptions options = new LoaderOptions();
         options.setAllowDuplicateKeys(false);
         options.setMaxAliasesForCollections(0);
-        return new Yaml(new SafeConstructor(), new Representer(), new DumperOptions(), options, new PlainResolver());
+        // The constructor is given the same options (SnakeYAML 1.33 deprecates the bare ones; 2.x has no others).
+        DumperOptions dumper = new DumperOptions();
+        return new Yaml(new SafeConstructor(options), new Representer(dumper), dumper, options, new PlainResolver());
     }
 
     private static Yaml writer() {

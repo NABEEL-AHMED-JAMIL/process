@@ -292,7 +292,10 @@ public class KafkaHealth {
                 }
                 row.put("lag", lag);
                 row.put("readers", readers.size());
-                row.put("state", d == null ? "Missing" : !live ? "No consumer" : ((Integer) row.get("offline")) > 0 ? "Offline"
+                // MIG-321: a topic nothing is kept on and nothing reads is idle, not unread -- a step pipeline's
+                // topic never carries a message, and "No consumer" there sent people looking for a missing worker.
+                boolean idle = !live && Long.valueOf(0L).equals(row.get("messages"));
+                row.put("state", d == null ? "Missing" : idle ? "Idle" : !live ? "No consumer" : ((Integer) row.get("offline")) > 0 ? "Offline"
                     : ((Integer) row.get("underReplicated")) > 0 ? "Under-replicated" : "Healthy");
                 maxLag = Math.max(maxLag, lag);
                 topicRows.add(row);

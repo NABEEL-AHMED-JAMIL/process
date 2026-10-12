@@ -22,6 +22,8 @@ public class FileAccessLog {
 
     public static final String DOWNLOAD = "download";
     public static final String RUN_DATASET = "run_dataset";
+    /** MIG-334: a file read through the customer API's signed link. */
+    public static final String API_FILE = "api_file";
 
     private static final Logger logger = LoggerFactory.getLogger(FileAccessLog.class);
 
@@ -49,6 +51,27 @@ public class FileAccessLog {
                 reason == null || reason.length() <= 512 ? reason : reason.substring(0, 512)));
         } catch (RuntimeException ex) {
             logger.warn("The file access of run dataset {} by user {} could not be recorded: {}", runDatasetId, userId, ex.getMessage());
+        }
+    }
+
+    /**
+     * MIG-334: one read of a file through the customer API's signed link, served or refused -- written in the link's
+     * workspace with the API client that asked for the link (no person), the file id and, for a run's file, the run.
+     */
+    public void apiFile(long tenantId, String clientId, String fileId, Long jobQueueId, String fileName, boolean served, int status,
+        String reason) {
+        logger.info("File access: API file {} by client {} in workspace {}: {} {}", fileId, clientId, tenantId, served ? "served" : "refused",
+            status);
+        if (tenantId < 1) {
+            return;
+        }
+        try {
+            RowSecurity.forTenant(tenantId, () -> this.jdbc.update("INSERT INTO file_access_log (tenant_id, user_id, action, kind, client_id, "
+                    + "file_id, job_queue_id, file_name, outcome, http_status, reason) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)", tenantId,
+                DOWNLOAD, API_FILE, clientId, fileId, jobQueueId, fileName == null || fileName.length() <= 512 ? fileName : fileName.substring(0, 512),
+                served ? "served" : "refused", status, reason == null || reason.length() <= 512 ? reason : reason.substring(0, 512)));
+        } catch (RuntimeException ex) {
+            logger.warn("The API file access of {} by client {} could not be recorded: {}", fileId, clientId, ex.getMessage());
         }
     }
 }

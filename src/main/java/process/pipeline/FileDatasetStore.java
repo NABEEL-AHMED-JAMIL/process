@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import process.pipeline.data.RowSource;
+import process.pipeline.data.RowsFile;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,14 +20,18 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.io.BufferedOutputStream;
+import java.util.Collection;
 
 /**
  * Datasets on the local disk of the replica that runs the run (MIG-230). A run's steps all run on one replica, in one
@@ -40,6 +46,8 @@ import java.util.stream.Stream;
 public class FileDatasetStore implements DatasetStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** How much readFile asks of the file at once: the JDK's per-thread temporary buffer stays this small. */
+    private static final int READ_CHUNK = 1 << 16;
 
     private final Path root;
 
@@ -51,6 +59,20 @@ public class FileDatasetStore implements DatasetStore {
 
     @Override
     public void write(String storageKey, Dataset dataset) throws IOException {
+        if (RowsFile.isRowsKey(storageKey)) {
+            // MIG-344: a step that holds its output in memory writes it as a row file too.
+            RowsFile.Writer out = RowsFile.create(this.resolve(storageKey));
+            try {
+                out.declare(dataset.getColumns());
+                for (Map<String, Object> row : dataset.getRows()) {
+                    out.add(row);
+                }
+                out.commit();
+            } finally {
+                out.abort();
+            }
+            return;
+        }
         Path file = this.resolve(storageKey);
         Files.createDirectories(file.getParent());
         Map<String, Object> document = new LinkedHashMap<>();
@@ -70,7 +92,16 @@ public class FileDatasetStore implements DatasetStore {
     }
 
     @Override
-    public Dataset read(String storageKey) throws IOException {
+    public Dataset read(String storageKey) throws Exception {
+        if (RowsFile.isRowsKey(storageKey)) {
+            try (RowSource rows = RowsFile.open(this.resolve(storageKey), RowSource.DEFAULT_BATCH)) {
+                List<Map<String, Object>> all = new ArrayList<>((int) Math.min(Integer.MAX_VALUE - 8, rows.size()));
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    all.addAll(batch);
+                }
+                return new Dataset(rows.columns(), all);
+            }
+        }
         try (InputStream in = Files.newInputStream(this.resolve(storageKey))) {
             Map<String, Object> document = JSON.readValue(in, new TypeReference<Map<String, Object>>() {});
             @SuppressWarnings("unchecked")
@@ -78,6 +109,140 @@ public class FileDatasetStore implements DatasetStore {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> rows = (List<Map<String, Object>>) document.getOrDefault("rows", new ArrayList<>());
             return new Dataset(columns, rows);
+        }
+    }
+
+    // ---- MIG-344: datasets and files as streams ----------------------------------------------------------------------
+
+    @Override
+    public String outputKeyOf(long jobQueueId, int attempt, String stepKey, String name) {
+        return DatasetStore.rowsKeyOf(jobQueueId, attempt, stepKey, name);
+    }
+
+    @Override
+    public Output create(String storageKey) throws Exception {
+        if (!RowsFile.isRowsKey(storageKey)) {
+            return DatasetStore.super.create(storageKey);
+        }
+        RowsFile.Writer writer = RowsFile.create(this.resolve(storageKey));
+        return new Output() {
+            @Override
+            public void declare(Collection<String> columns) {
+                writer.declare(columns);
+            }
+
+            @Override
+            public void add(Map<String, Object> row) throws IOException {
+                writer.add(row);
+            }
+
+            @Override
+            public long size() {
+                return writer.size();
+            }
+
+            @Override
+            public List<String> columns() {
+                return writer.columns();
+            }
+
+            @Override
+            public long commit() throws IOException {
+                return writer.commit();
+            }
+
+            @Override
+            public void abort() {
+                writer.abort();
+            }
+        };
+    }
+
+    @Override
+    public RowSource open(String storageKey, int batch) throws Exception {
+        if (RowsFile.isRowsKey(storageKey)) {
+            return RowsFile.open(this.resolve(storageKey), batch);
+        }
+        return DatasetStore.super.open(storageKey, batch);
+    }
+
+    @Override
+    public FileOutput createFile(String storageKey) {
+        Path file = this.resolve(storageKey);
+        Path partial = file.resolveSibling(file.getFileName() + "." + UUID.randomUUID().toString().substring(0, 8) + ".partial");
+        OutputStream stream;
+        try {
+            Files.createDirectories(file.getParent());
+            stream = new BufferedOutputStream(Files.newOutputStream(partial), 1 << 16);
+        } catch (IOException ex) {
+            throw new IllegalStateException("The file could not be started: " + ex.getMessage(), ex);
+        }
+        return new FileOutput() {
+            private boolean done;
+
+            @Override
+            public OutputStream stream() {
+                return stream;
+            }
+
+            @Override
+            public void commit() throws IOException {
+                stream.close();
+                this.done = true;
+                Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            }
+
+            @Override
+            public void abort() {
+                if (this.done) {
+                    return;
+                }
+                this.done = true;
+                try {
+                    stream.close();
+                } catch (IOException ignored) {
+                    // a file we are deleting
+                }
+                try {
+                    Files.deleteIfExists(partial);
+                } catch (IOException ignored) {
+                    // the sweep takes what is left
+                }
+            }
+        };
+    }
+
+    @Override
+    public InputStream openFile(String storageKey) throws IOException {
+        return Files.newInputStream(this.resolve(storageKey));
+    }
+
+    @Override
+    public long fileSize(String storageKey) throws IOException {
+        return Files.size(this.resolve(storageKey));
+    }
+
+    /** scratch/{run}/{attempt}/{step}/{try}: beside datasets/, never a dataset key. */
+    @Override
+    public Path scratch(long jobQueueId, int attempt, String stepKey) throws IOException {
+        Path dir = this.root.resolve("scratch").resolve(String.valueOf(jobQueueId)).resolve(String.valueOf(attempt))
+            .resolve(stepKey).resolve(UUID.randomUUID().toString().substring(0, 8)).normalize();
+        if (!dir.startsWith(this.root.resolve("scratch"))) {
+            throw new IllegalArgumentException("Not a step key: " + stepKey);
+        }
+        return Files.createDirectories(dir);
+    }
+
+    @Override
+    public void removeScratch(long jobQueueId, int attempt) {
+        Streams.deleteTree(this.root.resolve("scratch").resolve(String.valueOf(jobQueueId)).resolve(String.valueOf(attempt)));
+        Path run = this.root.resolve("scratch").resolve(String.valueOf(jobQueueId));
+        try {
+            if (isEmpty(run)) {
+                Files.deleteIfExists(run);
+            }
+        } catch (IOException ignored) {
+            // the sweep takes it
         }
     }
 
@@ -95,9 +260,33 @@ public class FileDatasetStore implements DatasetStore {
         }
     }
 
+    /**
+     * The file's bytes, read in 64 KB chunks into one array of its size. Not Files.readAllBytes: that reads through a
+     * FileChannel in one call the size of the file, and the JDK copies through a temporary direct buffer of that size which it
+     * then keeps cached on the calling thread (jdk.nio.maxCachedBufferSize is unlimited by default). One json download of an
+     * 815 MB kept file left 880 MB of native memory on a Tomcat thread for good, and process_app at 2.0 of its 2 GB (code
+     * review 2026-10-07). The bytes returned are the same.
+     */
     @Override
     public byte[] readFile(String storageKey) throws IOException {
-        return Files.readAllBytes(this.resolve(storageKey));
+        Path file = this.resolve(storageKey);
+        long size = Files.size(file);
+        if (size > Integer.MAX_VALUE - 8) {
+            throw new IOException("The file is too large to read whole (" + size + " bytes).");
+        }
+        byte[] content = new byte[(int) size];
+        int read = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            while (read < content.length) {
+                int n = in.read(content, read, Math.min(READ_CHUNK, content.length - read));
+                if (n < 0) {
+                    break;
+                }
+                read += n;
+            }
+        }
+        // A dataset file is written whole and moved into place (writeFile), so it never changes under a read.
+        return read == content.length ? content : Arrays.copyOf(content, read);
     }
 
     @Override
@@ -114,6 +303,7 @@ public class FileDatasetStore implements DatasetStore {
      */
     @Override
     public int sweepLeftovers(Duration olderThan) throws IOException {
+        this.sweepScratch(olderThan);
         Path top = this.root.resolve("datasets");
         if (!Files.isDirectory(top)) {
             return 0;
@@ -141,6 +331,34 @@ public class FileDatasetStore implements DatasetStore {
             }
         }
         return removed;
+    }
+
+    /** MIG-344: a run's scratch a crash left (a run that ends removes its own): every run folder not touched since the cutoff. */
+    private void sweepScratch(Duration olderThan) throws IOException {
+        Path top = this.root.resolve("scratch");
+        if (!Files.isDirectory(top)) {
+            return;
+        }
+        FileTime cutoff = FileTime.from(Instant.now().minus(olderThan));
+        List<Path> runs;
+        try (Stream<Path> list = Files.list(top)) {
+            runs = list.collect(Collectors.toList());
+        }
+        for (Path run : runs) {
+            boolean stale;
+            try (Stream<Path> walk = Files.walk(run)) {
+                stale = walk.allMatch(path -> {
+                    try {
+                        return Files.getLastModifiedTime(path).compareTo(cutoff) < 0;
+                    } catch (IOException gone) {
+                        return true;
+                    }
+                });
+            }
+            if (stale) {
+                Streams.deleteTree(run);
+            }
+        }
     }
 
     private void pruneEmpty(Path dir) throws IOException {

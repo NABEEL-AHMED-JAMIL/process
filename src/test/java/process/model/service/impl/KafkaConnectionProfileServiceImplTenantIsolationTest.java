@@ -212,6 +212,23 @@ public class KafkaConnectionProfileServiceImplTenantIsolationTest {
     }
 
     @Test
+    void aWorkspaceProfileOnThePlatformsNetworkIsNotSaved() throws Exception {
+        when(this.kafkaTemplateProvider.outboundRefusal("identity_service:9100"))
+            .thenReturn("The address identity_service is on a private network.");
+        KafkaConnectionProfileDto dto = new KafkaConnectionProfileDto();
+        dto.setProfileName("internal");
+        dto.setBootstrapServers("identity_service:9100");
+        dto.setSecurityProtocol("PLAINTEXT");
+
+        this.actAsTenant(TENANT_B);
+        ResponseDto response = this.service.addProfile(dto);
+
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).contains("private network");
+        verify(this.profileRepository, never()).save(any());
+    }
+
+    @Test
     void thePlatformAdminsOwnTestIsStillRecorded() throws Exception {
         when(this.profileRepository.findById(700L)).thenReturn(Optional.of(this.profileOwnedBy(null)));
 

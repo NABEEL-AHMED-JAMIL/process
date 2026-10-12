@@ -368,6 +368,9 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         try {
             props = this.kafkaTemplateProvider.commonClientProps(profile);
             return this.describeCluster(profile, props);
+        } catch (IllegalArgumentException refused) {
+            // A workspace profile pointing at the platform's network (MIG-323 S9).
+            return new ResponseDto(ERROR, refused.getMessage());
         } finally {
             // MIG-214: an unsaved profile's downloaded stores are the probe's alone; they go when it is done.
             if (props != null && profile.getKafkaConnectionProfileId() == null) {
@@ -471,7 +474,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
                 return new ResponseDto(ERROR, unresolved.getMessage());
             }
         }
-        Map<String, Object> adminProps = this.kafkaTemplateProvider.commonClientProps(resolved);
+        Map<String, Object> adminProps;
+        try {
+            adminProps = this.kafkaTemplateProvider.commonClientProps(resolved);
+        } catch (IllegalArgumentException refused) {
+            // A workspace profile pointing at the platform's network (MIG-323 S9).
+            return new ResponseDto(ERROR, refused.getMessage());
+        }
         try (AdminClient adminClient = AdminClient.create(adminProps)) {
             DescribeTopicsResult result = adminClient.describeTopics(Collections.singleton(topicName));
             TopicDescription description = result.values().get(topicName).get(10, TimeUnit.SECONDS);
@@ -513,6 +522,13 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         }
         if (!this.isWellFormedBootstrapServers(dto.getBootstrapServers())) {
             return new ResponseDto(ERROR, "bootstrapServers must be a comma-separated list of host:port pairs.");
+        }
+        // A workspace's profile may not point at the platform's network (MIG-323 S9); only a workspace caller saves one.
+        if (!TenantContext.isPlatformAdmin()) {
+            String unreachable = this.kafkaTemplateProvider.outboundRefusal(dto.getBootstrapServers());
+            if (unreachable != null) {
+                return new ResponseDto(ERROR, unreachable);
+            }
         }
         if (isNull(dto.getSecurityProtocol()) || !VALID_SECURITY_PROTOCOLS.contains(dto.getSecurityProtocol())) {
             return new ResponseDto(ERROR, "securityProtocol must be one of " + VALID_SECURITY_PROTOCOLS + ".");

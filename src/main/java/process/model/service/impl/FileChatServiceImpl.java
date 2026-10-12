@@ -763,7 +763,7 @@ public class FileChatServiceImpl implements FileChatService {
      * Only the image path cares. A PDF with no text layer is read by a vision model, and until
      * this argument existed that model was a single globally-configured default answering a
      * hardcoded prompt -- so the "Vision Assistant" agent, whose entire configuration is a model
-     * of its own and 2,804 characters of instructions about what to look for in a medical image,
+     * of its own and 2,804 characters of instructions about what to look for in an image,
      * had no effect whatsoever on the thing that actually looked at the pixels. The agent's
      * settings are the product here; a global default that silently overrides them is the bug.
      *

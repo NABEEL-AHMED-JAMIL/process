@@ -209,3 +209,21 @@ databaseChangeLog:
   # V200: scale review P0 #1/#2 -- job_queue (job_id, job_queue_id) for a job's newest runs; the run's Chicago day for the report.
   - include:
       file: db/changelog/yaml/V200.0-run-history-indexes.yaml
+  # V201: MIG-332 -- the customer API's inbound work: idempotency receipts per client, runs started through the API, event routes, events.
+  - include:
+      file: db/changelog/yaml/V201.0-customer-api.yaml
+  # V202: MIG-334 -- the customer API's read side: run_output's file id and sha256, the API's downloads in file_access_log, and job_queue (tenant_id, job_queue_id) for GET /v1/runs.
+  - include:
+      file: db/changelog/yaml/V202.0-customer-reads.yaml
+  # V203: MIG-333 -- the customer API's events out: api_event_out, written by triggers on job_queue, run_output and form_submission and by the review service, relayed to platform.customer.events.v1.
+  - include:
+      file: db/changelog/yaml/V203.0-customer-events.yaml
+  # V204: MIG-360 -- an inbox arrival is never dropped: Waiting while its job is busy, started by the job's next run; job_inbox_trigger.batch_size.
+  - include:
+      file: db/changelog/yaml/V204.0-inbox-queue.yaml
+  # V205: MIG-345 -- retry a failed run from the step that failed: run_attempt, run_input_file, step_execution.reused_from.
+  - include:
+      file: db/changelog/yaml/V205.0-run-retry.yaml
+  # V206: MIG-346 -- an Approval step pauses a run mid-way: run_approval, one row per request, decided in the Task inbox.
+  - include:
+      file: db/changelog/yaml/V206.0-run-approval.yaml

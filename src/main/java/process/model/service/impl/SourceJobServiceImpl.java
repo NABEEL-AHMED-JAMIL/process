@@ -247,6 +247,66 @@ public class SourceJobServiceImpl implements SourceJobService {
         return new ResponseDto(SUCCESS, String.format("Job save with jobId %d.", sourceJob.getJobId()));
     }
 
+    /** How many runs the schedule editor's preview lists. */
+    static final int PREVIEW_RUNS = 5;
+
+    /**
+     * The schedule editor's "Next runs" (MIG-321): the timetable copied onto a Scheduler that is never saved, exactly as a
+     * save would copy it, then stepped on by the same applyInitialSchedule and applyNextRun the scheduler itself runs --
+     * so the preview cannot disagree with the runs. The times are Chicago wall clock, as every naive time here is.
+     */
+    @Override
+    public ResponseDto schedulePreview(SchedulerDto schedulerDto) {
+        String problem = previewProblem(schedulerDto);
+        if (problem != null) {
+            return new ResponseDto(ERROR, problem);
+        }
+        Scheduler scheduler = new Scheduler();
+        this.applySchedulerFields(scheduler, schedulerDto, null);
+        List<String> runs = new ArrayList<>();
+        if (!scheduler.isExpired() && scheduler.getNextRunAt() != null) {
+            runs.add(scheduler.getNextRunAt().toString());
+            while (runs.size() < PREVIEW_RUNS) {
+                ProcessTimeUtil.applyNextRun(scheduler);
+                if (scheduler.isExpired() || scheduler.getNextRunAt() == null) {
+                    break;
+                }
+                runs.add(scheduler.getNextRunAt().toString());
+            }
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("runs", runs);
+        // Fewer than asked for: the end date stops it first.
+        data.put("ends", runs.size() < PREVIEW_RUNS);
+        return new ResponseDto(SUCCESS, runs.isEmpty() ? "This timetable has no run left: its end date has passed."
+            : String.format("The next %d run%s.", runs.size(), runs.size() == 1 ? "" : "s"), data);
+    }
+
+    /** What a preview needs, in the editor's words; null when it has it. */
+    static String previewProblem(SchedulerDto dto) {
+        if (dto == null || ProcessUtil.isNull(dto.getFrequency())) {
+            return "Choose how often it runs.";
+        }
+        if (!ProcessTimeUtil.frequency.contains(dto.getFrequency())) {
+            return String.format("'%s' is not a frequency: one of %s.", dto.getFrequency(), ProcessTimeUtil.frequency);
+        }
+        if (Frequency.Cron.name().equals(dto.getFrequency())) {
+            String cron = CronSchedule.problem(dto.getCronExpression());
+            return cron == null ? null : "SourceJob schedule: " + cron;
+        }
+        if (dto.getStartDate() == null || dto.getStartTime() == null) {
+            return "Choose the start date and time.";
+        }
+        try {
+            if (Long.parseLong(String.valueOf(dto.getIntervalValue()).trim()) < 1) {
+                return "Repeat every needs a whole number of 1 or more.";
+            }
+        } catch (NumberFormatException notANumber) {
+            return "Repeat every needs a whole number of 1 or more.";
+        }
+        return null;
+    }
+
     /**
      * Copies one posted timetable onto a Scheduler row and seeds its next run.
      *

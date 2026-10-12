@@ -34,9 +34,9 @@
     <Class name="process.util.ProcessUtil"/>
     <Bug pattern="MS_MUTABLE_ARRAY"/>
   </Match>
-  <!-- WoundMeasure: `i / w` is a pixel's row number, integer division by design; the sum of rows is then averaged as a double. -->
+  <!-- RulerMeasure: `i / w` is a pixel's row number, integer division by design; the sum of rows is then averaged as a double. -->
   <Match>
-    <Class name="process.pipeline.image.WoundMeasure$Region"/>
+    <Class name="process.pipeline.image.RulerMeasure$Region"/>
     <Bug pattern="ICAST_IDIV_CAST_TO_DOUBLE"/>
   </Match>
   <!-- The query reads a temporary file this method named itself (quote-escaped); no request text reaches it. -->

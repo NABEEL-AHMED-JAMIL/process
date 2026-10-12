@@ -21,7 +21,15 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import process.api.CustomerEventsRestApi;
+import process.api.CustomerEmbedRestApi;
+import process.api.CustomerFileLinkRestApi;
+import process.api.CustomerFilesRestApi;
+import process.api.CustomerRunsRestApi;
+import process.api.CustomerRunRetryRestApi;
+import process.api.CustomerPipelinesRestApi;
 import process.api.DashboardRestApi;
+import process.api.EventRouteRestApi;
 import process.api.EngineSettingsRestApi;
 import process.api.FileChatRestApi;
 import process.api.KafkaConnectionProfileRestApi;
@@ -105,7 +113,15 @@ class CoreProbeCoverageTest {
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
-        RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class,
+        RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
+        // the customer API (MIG-332): an API client's token, its workspace and scopes
+        CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
+        // MIG-345: the retry of a run, an API client's
+        CustomerRunRetryRestApi.class,
+        // MIG-334: a file's signed link -- no principal; the link's signature names the one file and workspace it opens
+        CustomerFileLinkRestApi.class,
+        // MIG-335: a run's view link -- no principal; the link's signature names the one run and workspace it opens
+        CustomerEmbedRestApi.class,
         // a share link's visitor: the link's token, no tenant principal (MIG-278)
         PublicFormRestApi.class,
         // worker callbacks: a run's X-Worker-Token, no tenant principal
@@ -150,14 +166,12 @@ class CoreProbeCoverageTest {
 
         // /internal: the gateway answers 404 for /internal from outside, and each checks X-Internal-Token first.
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";
-        NOTHING_TO_AIM.put("POST internal/billingDirectory/tenants", service
-            + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/billingDirectory/usageFacts", service
-            + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
-        NOTHING_TO_AIM.put("POST internal/billingDirectory/userNames", service
             + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/identity/events", service
             + " (InternalIdentityEventsRestApiPostgresTest.withoutTheServiceTokenNothingIsWritten)");
+        NOTHING_TO_AIM.put("GET sourceJob.json/schedulePreview", "a timetable in the query, stepped by the scheduler's rules on a "
+            + "Scheduler that is never saved; reads no row and names nothing of any workspace (SchedulePreviewTest)");
         NOTHING_TO_AIM.put("GET internal/jwks", "Identity's public signing keys, the same answer to anyone -- no token by design, "
             + "and /internal is kept inside by the gateway; names nothing of a tenant's");
         NOTHING_TO_AIM.put("POST internal/kafka/publish", service
@@ -176,6 +190,9 @@ class CoreProbeCoverageTest {
             + " (InternalRunVerificationRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/pipelines/countUsingPrompt", service
             + " (InternalRunVerificationRestApiTest.thePromptDeleteGuardCountsThePipelinesUsingAPrompt)");
+        NOTHING_TO_AIM.put("POST internal/pipelines/apiRequestUsers", service
+            + " (InternalRunVerificationRestApiTest.apiRequestUsersAnswersTheServiceTokenForOneWorkspace; the workspace it names "
+            + "is the only one row security shows: PipelineUsagePostgresTest.anotherWorkspacesPipelinesAreNeverAnApiRequestsUsers)");
         NOTHING_TO_AIM.put("POST internal/secretRef/{ref}/redeem", service
             + " (InternalSecretRestApiTest.withoutTheTokenNothingIsRedeemed)");
         // MIG-278: the visitor of a share link names no workspace and has no principal; the link's token names the one
@@ -196,8 +213,6 @@ class CoreProbeCoverageTest {
         NOTHING_TO_AIM.put("POST internal/slo/runs", service
             + " (InternalSloRestApiTest.noTokenOrTheWrongOneIsRefusedBeforeAnythingIsRead)");
         NOTHING_TO_AIM.put("POST internal/storageDirectory/kafkaReferences", service
-            + " (InternalStorageDirectoryRestApiTest.withoutTheInternalTokenNothingIsRead)");
-        NOTHING_TO_AIM.put("POST internal/storageDirectory/userNames", service
             + " (InternalStorageDirectoryRestApiTest.withoutTheInternalTokenNothingIsRead)");
     }
 

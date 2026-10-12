@@ -52,6 +52,7 @@ class ManagementModeMatrixTest {
     /** Build or run: refused to the customer's own people in a MANAGED workspace. */
     static final Set<String> BUILDER_ACTIONS = new TreeSet<>(Arrays.asList(
         "AiModelChoiceRestApi.saveSchedule", "AiModelChoiceRestApi.saveStepOptions",
+        "EventRouteRestApi.delete", "EventRouteRestApi.save",
         "FormRestApi.createShareLink", "FormRestApi.revokeShareLink", "FormRestApi.save", "FormRestApi.setSharePolicy",
         "FormRestApi.status",
         "InboxTriggerRestApi.delete", "InboxTriggerRestApi.save",
@@ -81,6 +82,14 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
         // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
         // starts a job, as Run now and the inbox upload do for an existing schedule.
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerPipelinesRestApi.startRun", "MIG-332: the customer API starting a run, as Run now (owner"
+            + " 2026-09-29: MANAGED customers may run)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerRunsRestApi.decide", "MIG-334: the customer's review through the API -- the customer "
+            + "approves or rejects a run's output, as RunReviewRestApi.decide (MIG-237)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerRunsRestApi.viewLink", "MIG-335: a signed link to read one run -- a read the customer's "
+            + "portal shows its own people; nothing is built or stored");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerEventsRestApi.send", "MIG-332: the customer's own event, started through the routes our"
+            + " team or the customer set");
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.submit", "filling in a form: data entry, which may start the job the form names");
         // MIG-278: a visitor of a share link fills in the form the workspace published; no workspace person is acting.
         CUSTOMERS_IN_EITHER_MODE.put("PublicFormRestApi.submit", "a share link's visitor filling in the form: data entry (MIG-278)");
@@ -88,6 +97,11 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.upload", "a file or signature for a form being filled in: data entry (MIG-277)");
         // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");
+        // MIG-345: retrying a failed run is running an existing schedule's run again, as Run now (owner 2026-09-29).
+        CUSTOMERS_IN_EITHER_MODE.put("StepTimelineRestApi.retryRun", "retrying a failed run, from its failed step or the start: Run "
+            + "now's rule (MIG-345)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerRunRetryRestApi.retry", "MIG-345: the customer API retrying a failed run, as the console's "
+            + "retry and Run now");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.prepareContext", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.sendMessage", "asking about their own files");

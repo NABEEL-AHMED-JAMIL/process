@@ -11,7 +11,9 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,6 +70,31 @@ class ReadFileStepTaskTest {
             .hasMessage("This run was not started by a file; name the bucket and the file to read.");
         assertThat(this.task.check(config("bucket", "lake"))).containsExactly(new DefinitionProblem("key",
             "name both the bucket and the file, or neither (the file the run was started for)"));
+    }
+
+    /** MIG-360: a run that took a batch of waiting inbox files reads them all, in order, each row with its file. */
+    @Test
+    void aBatchRunReadsEveryFileItWasStartedFor() throws Exception {
+        this.buckets.objects.put("inbox/intake/a.csv", "id\n1\n2\n".getBytes(StandardCharsets.UTF_8));
+        this.buckets.objects.put("inbox/intake/b.csv", "id,extra\n3,x\n".getBytes(StandardCharsets.UTF_8));
+        TaskContext context = TaskContext.of(config(), Collections.emptyList());
+        context.inputBucket = "inbox";
+        context.inputKey = "intake/a.csv";
+        context.inputKeys = Arrays.asList("intake/a.csv", "intake/b.csv");
+        Dataset out = this.task.run(context).getOutput();
+        assertThat(out.getRows()).containsExactly(row("id", "1", "_source_key", "intake/a.csv"), row("id", "2", "_source_key", "intake/a.csv"),
+            row("id", "3", "extra", "x", "_source_key", "intake/b.csv"));
+        assertThat(context.lines).contains("INFO Reading the 2 files the run was started for, in the order they arrived.");
+        Dataset capped = this.task.run(withKeys(config("maxRows", 2))).getOutput();
+        assertThat(capped.getRows()).hasSize(2);
+    }
+
+    private static TaskContext withKeys(Map<String, Object> config) {
+        TaskContext context = TaskContext.of(config, Collections.emptyList());
+        context.inputBucket = "inbox";
+        context.inputKey = "intake/a.csv";
+        context.inputKeys = Arrays.asList("intake/a.csv", "intake/b.csv");
+        return context;
     }
 
     @Test

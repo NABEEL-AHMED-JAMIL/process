@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 /** {@link StepStore} in memory, for the engine's unit tests: the rows as the engine left them. */
 public class InMemoryStepStore implements StepStore {
@@ -29,8 +32,58 @@ public class InMemoryStepStore implements StepStore {
 
     @Override
     public synchronized Optional<Long> pinnedDefinition(long jobQueueId) {
+        // The latest attempt's (MIG-345), as JdbcStepStore orders it.
         return this.rows.values().stream().filter(r -> r.jobQueueId == jobQueueId && r.pipelineDefinitionId != null)
+            .sorted((a, b) -> a.attempt != b.attempt ? Integer.compare(b.attempt, a.attempt) : Integer.compare(a.stepIndex, b.stepIndex))
             .map(r -> r.pipelineDefinitionId).findFirst();
+    }
+
+    /** MIG-345: run_input_file in memory, by step execution. */
+    public final Map<Long, List<InputDigests.Read>> inputs = new LinkedHashMap<>();
+    /** MIG-345: the datasets the sweep removed (retention_log), by run_dataset id. */
+    public final Set<Long> swept = new HashSet<>();
+
+    @Override
+    public synchronized void reused(long id, long fromStepExecutionId, Long recordsIn, Long recordsOut, String message) {
+        StepRow row = this.rows.get(id);
+        row.status = "Completed";
+        row.reusedFrom = fromStepExecutionId;
+        row.recordsIn = recordsIn;
+        row.recordsOut = recordsOut;
+        row.startedAt = null;
+        row.endedAt = null;
+        row.tries = 0;
+        row.statusMessage = message;
+    }
+
+    @Override
+    public synchronized void inputRead(long id, InputDigests.Read read) {
+        List<InputDigests.Read> reads = this.inputs.computeIfAbsent(id, k -> new ArrayList<>());
+        reads.removeIf(r -> r.bucket.equals(read.bucket) && r.key.equals(read.key));
+        reads.add(read);
+    }
+
+    @Override
+    public synchronized Map<Long, List<InputDigests.Read>> inputsOf(Collection<Long> ids) {
+        Map<Long, List<InputDigests.Read>> found = new LinkedHashMap<>();
+        for (Long id : ids) {
+            if (this.inputs.containsKey(id)) {
+                found.put(id, new ArrayList<>(this.inputs.get(id)));
+            }
+        }
+        return found;
+    }
+
+    @Override
+    public synchronized Map<Long, KeptOutput> keptOutputsOf(Collection<Long> ids) {
+        Map<Long, KeptOutput> kept = new LinkedHashMap<>();
+        for (DatasetRow dataset : this.datasets) {
+            if ("output".equals(dataset.name) && ids.contains(dataset.stepExecutionId)) {
+                kept.put(dataset.stepExecutionId, new KeptOutput(dataset.stepExecutionId, this.storageKeys.get(dataset.runDatasetId),
+                    dataset.rowCount, this.datasetExpiry.get(dataset.runDatasetId), this.swept.contains(dataset.runDatasetId)));
+            }
+        }
+        return kept;
     }
 
     @Override
@@ -176,6 +229,7 @@ public class InMemoryStepStore implements StepStore {
         row.objectKey = output.getKey();
         row.expiresAt = expiresAt;
         row.recordedAt = LocalDateTime.now();
+        row.sha256 = output.getSha256();
         this.outputs.put(stepExecutionId, row);
     }
 

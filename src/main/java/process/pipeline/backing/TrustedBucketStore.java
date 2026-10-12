@@ -2,6 +2,7 @@ package process.pipeline.backing;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import process.pipeline.InputDigests;
 import process.model.dto.ObjectContentDto;
 import process.storage.TrustedAccess;
 import process.storage.TrustedCaller;
@@ -13,6 +14,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.io.FilterInputStream;
+import java.io.IOException;
 
 /**
  * A pipeline's bucket steps through storage-service's trusted contract (MIG-231), as {@link TrustedCaller#CORE_PIPELINES}
@@ -81,8 +84,63 @@ public class TrustedBucketStore implements BucketStore {
                     throw new IllegalStateException(String.format("%s/%s is more than %,d bytes, the most a step reads.", bucket, key, maxBytes));
                 }
             }
-            return out.toByteArray();
+            byte[] bytes = out.toByteArray();
+            // MIG-345: a step's read is fingerprinted, so a resume can tell the file changed since.
+            InputDigests.whole(bucket, key, bytes);
+            return bytes;
         }
+    }
+
+    /** MIG-344: read as a stream, never held whole; past {@code maxBytes} the read fails. Billed for the bytes taken. */
+    @Override
+    public InputStream open(long tenantId, String bucket, String key, long maxBytes) {
+        ObjectContentDto content = this.storage.readForWorkflow(this.access(tenantId, "pipeline read file"), bucket, key);
+        if (content.getSize() > maxBytes) {
+            try {
+                content.getContent().close();
+            } catch (IOException ignored) {
+                // refused before reading
+            }
+            throw new IllegalStateException(String.format("%s/%s is %,d bytes; a step reads at most %,d.", bucket, key, content.getSize(), maxBytes));
+        }
+        InputStream in = content.getContent();
+        // MIG-345: fingerprinted on the way while a step reads it (nothing more is read), for a resume's input check.
+        return InputDigests.digesting(bucket, key, new FilterInputStream(in) {
+            private long count;
+
+            @Override
+            public int read() throws IOException {
+                int b = super.read();
+                this.grow(b < 0 ? 0 : 1);
+                return b;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int n = super.read(b, off, len);
+                this.grow(Math.max(0, n));
+                return n;
+            }
+
+            private void grow(long n) {
+                this.count += n;
+                if (this.count > maxBytes) {
+                    throw new IllegalStateException(String.format("%s/%s is more than %,d bytes, the most a step reads.", bucket, key, maxBytes));
+                }
+            }
+        });
+    }
+
+    /** MIG-344: an upload from a stream of known size, never held whole. */
+    @Override
+    public void upload(long tenantId, String bucket, String key, InputStream content, long size, String contentType) {
+        this.storage.uploadForWorkflow(this.access(tenantId, "pipeline upload"), bucket, key, content, size, contentType);
+    }
+
+    @Override
+    public Streamed stream(long tenantId, String bucket, String key) {
+        ObjectContentDto content = this.storage.readForWorkflow(this.access(tenantId, "customer api file"), bucket, key);
+        return new Streamed(content.getContent(), content.getSize(), content.getContentType());
     }
 
     @Override

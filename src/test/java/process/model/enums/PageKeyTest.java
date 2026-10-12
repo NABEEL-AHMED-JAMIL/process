@@ -32,6 +32,13 @@ public class PageKeyTest {
         assertThat(PageKey.pagesGating("/form.json/submit")).containsExactly(PageKey.FORMS);
         assertThat(PageKey.pagesGating("/formSubmission.json/export")).containsExactly(PageKey.FORM_SUBMISSIONS);
         assertThat(PageKey.fromKey("form-submissions")).contains(PageKey.FORM_SUBMISSIONS);
+        // Review 2026-10-07 (H8): Submissions reads the forms list and a form's fields too -- reads only.
+        assertThat(PageKey.pagesGating("/form.json/list")).containsExactlyInAnyOrder(PageKey.FORMS, PageKey.FORM_SUBMISSIONS);
+        assertThat(PageKey.pagesGating("/form.json/fetch")).containsExactlyInAnyOrder(PageKey.FORMS, PageKey.FORM_SUBMISSIONS);
+        for (String write : new String[] {"/form.json/save", "/form.json/status", "/form.json/submit", "/form.json/upload",
+            "/form.json/shareLinks/create", "/form.json/sharePolicy", "/form.json/linkableJobs", "/form.json/listX"}) {
+            assertThat(PageKey.pagesGating(write)).as(write).containsExactly(PageKey.FORMS);
+        }
     }
 
     @Test

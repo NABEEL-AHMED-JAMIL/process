@@ -1,5 +1,7 @@
 package process.pipeline;
 
+import org.barco.platform.correlation.CorrelationId;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import process.util.BusinessTime;
@@ -12,7 +14,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -29,7 +36,8 @@ public class JdbcStepStore implements StepStore {
     static final int MAX_STATUS_MESSAGE = 1024;
 
     private static final String STEP_COLUMNS = "step_execution_id, job_queue_id, attempt, step_index, step_key, task_code, status, "
-        + "started_at, ended_at, records_in, records_out, tries, on_error, status_message, error::text AS error, pipeline_definition_id";
+        + "started_at, ended_at, records_in, records_out, tries, on_error, status_message, error::text AS error, pipeline_definition_id, "
+        + "reused_from";
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -65,8 +73,25 @@ public class JdbcStepStore implements StepStore {
     @Override
     public Optional<Long> pinnedDefinition(long jobQueueId) {
         List<Long> found = this.jdbc.queryForList("SELECT pipeline_definition_id FROM step_execution WHERE job_queue_id = ? "
-            + "AND pipeline_definition_id IS NOT NULL ORDER BY attempt, step_index LIMIT 1", Long.class, jobQueueId);
+            + "AND pipeline_definition_id IS NOT NULL ORDER BY attempt DESC, step_index LIMIT 1", Long.class, jobQueueId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
+    /** MIG-326: the latest attempt's definition of each run, in one query (a page of runs read 50 single queries). */
+    @Override
+    public Map<Long, Long> pinnedDefinitions(Collection<Long> jobQueueIds) {
+        Map<Long, Long> pinned = new HashMap<>();
+        if (jobQueueIds == null || jobQueueIds.isEmpty()) {
+            return pinned;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(jobQueueIds));
+        String marks = String.join(", ", Collections.nCopies(ids.size(), "?"));
+        this.jdbc.query("SELECT DISTINCT ON (job_queue_id) job_queue_id, pipeline_definition_id FROM step_execution "
+            + "WHERE job_queue_id IN (" + marks + ") AND pipeline_definition_id IS NOT NULL ORDER BY job_queue_id, attempt DESC, step_index",
+            (ResultSet rs) -> {
+                pinned.put(rs.getLong(1), rs.getLong(2));
+            }, ids.toArray());
+        return pinned;
     }
 
     @Override
@@ -107,6 +132,59 @@ public class JdbcStepStore implements StepStore {
     public void notRun(long stepExecutionId, String status, String message) {
         this.jdbc.update("UPDATE step_execution SET status = ?, status_message = ?, date_updated = now() WHERE step_execution_id = ?",
             status, cut(message, MAX_STATUS_MESSAGE), stepExecutionId);
+    }
+
+    @Override
+    public void reused(long stepExecutionId, long fromStepExecutionId, Long recordsIn, Long recordsOut, String message) {
+        this.jdbc.update("UPDATE step_execution SET status = 'Completed', reused_from = ?, records_in = ?, records_out = ?, "
+            + "started_at = NULL, ended_at = NULL, tries = 0, status_message = ?, date_updated = now() WHERE step_execution_id = ?",
+            fromStepExecutionId, recordsIn, recordsOut, cut(message, MAX_STATUS_MESSAGE), stepExecutionId);
+    }
+
+    @Override
+    public void inputRead(long stepExecutionId, InputDigests.Read read) {
+        this.jdbc.update("INSERT INTO run_input_file (step_execution_id, bucket, object_key, byte_count, sha256, whole) "
+            + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (step_execution_id, bucket, object_key) DO UPDATE SET byte_count = EXCLUDED.byte_count, "
+            + "sha256 = EXCLUDED.sha256, whole = EXCLUDED.whole, date_updated = now()", stepExecutionId, cut(read.bucket, 255),
+            cut(read.key, 1024), read.bytes, read.sha256, read.whole);
+    }
+
+    @Override
+    public Map<Long, List<InputDigests.Read>> inputsOf(Collection<Long> stepExecutionIds) {
+        Map<Long, List<InputDigests.Read>> reads = new HashMap<>();
+        if (stepExecutionIds == null || stepExecutionIds.isEmpty()) {
+            return reads;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(stepExecutionIds));
+        String marks = String.join(", ", Collections.nCopies(ids.size(), "?"));
+        this.jdbc.query("SELECT step_execution_id, bucket, object_key, byte_count, sha256, whole FROM run_input_file "
+            + "WHERE step_execution_id IN (" + marks + ") ORDER BY step_execution_id, run_input_file_id", (ResultSet rs) -> {
+                reads.computeIfAbsent(rs.getLong("step_execution_id"), id -> new ArrayList<>()).add(new InputDigests.Read(
+                    rs.getString("bucket"), rs.getString("object_key"), rs.getLong("byte_count"), rs.getString("sha256"), rs.getBoolean("whole")));
+            }, ids.toArray());
+        return reads;
+    }
+
+    @Override
+    public Map<Long, KeptOutput> keptOutputsOf(Collection<Long> stepExecutionIds) {
+        Map<Long, KeptOutput> kept = new HashMap<>();
+        if (stepExecutionIds == null || stepExecutionIds.isEmpty()) {
+            return kept;
+        }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(stepExecutionIds));
+        String marks = String.join(", ", Collections.nCopies(ids.size(), "?"));
+        // What the sweep removed first, so a dataset still there (a later write under the same name) wins.
+        this.jdbc.query("SELECT step_execution_id, storage_key, row_count, expires_at FROM retention_log WHERE step_execution_id IN ("
+            + marks + ") AND name = 'output'", (ResultSet rs) -> {
+                long id = rs.getLong("step_execution_id");
+                kept.put(id, new KeptOutput(id, rs.getString("storage_key"), (Long) rs.getObject("row_count"), instant(rs, "expires_at"), true));
+            }, ids.toArray());
+        this.jdbc.query("SELECT step_execution_id, storage_key, row_count, expires_at FROM run_dataset WHERE step_execution_id IN ("
+            + marks + ") AND name = 'output'", (ResultSet rs) -> {
+                long id = rs.getLong("step_execution_id");
+                kept.put(id, new KeptOutput(id, rs.getString("storage_key"), (Long) rs.getObject("row_count"), instant(rs, "expires_at"), false));
+            }, ids.toArray());
+        return kept;
     }
 
     @Override
@@ -188,24 +266,41 @@ public class JdbcStepStore implements StepStore {
 
     @Override
     public void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt) {
+        // MIG-334: a new file id each time -- a later try's file is another file than the earlier try's.
         this.jdbc.update("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, run_dataset_id, "
-            + "bucket_alias, object_key, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (step_execution_id) DO UPDATE SET "
+            + "bucket_alias, object_key, expires_at, file_id, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            + "ON CONFLICT (step_execution_id) DO UPDATE SET "
             + "kind = EXCLUDED.kind, name = EXCLUDED.name, format = EXCLUDED.format, row_count = EXCLUDED.row_count, "
             + "byte_count = EXCLUDED.byte_count, run_dataset_id = EXCLUDED.run_dataset_id, bucket_alias = EXCLUDED.bucket_alias, "
-            + "object_key = EXCLUDED.object_key, expires_at = EXCLUDED.expires_at, date_updated = now()", stepExecutionId,
+            + "object_key = EXCLUDED.object_key, expires_at = EXCLUDED.expires_at, file_id = EXCLUDED.file_id, sha256 = EXCLUDED.sha256, "
+            + "date_updated = now()", stepExecutionId,
             output.getKind(), output.getName(), output.getFormat(), output.getRows(), output.getBytes(), runDatasetId,
-            output.getBucket(), output.getKey(), expiresAt == null ? null : Timestamp.from(expiresAt));
+            output.getBucket(), output.getKey(), expiresAt == null ? null : Timestamp.from(expiresAt), CorrelationId.generate(),
+            output.getSha256());
     }
 
     private static final String OUTPUT_COLUMNS = "o.run_output_id, o.step_execution_id, s.job_queue_id, s.attempt, s.step_index, "
         + "s.step_key, s.task_code, o.kind, o.name, o.format, o.row_count, o.byte_count, o.run_dataset_id, o.bucket_alias, "
-        + "o.object_key, o.expires_at, COALESCE(o.date_updated, o.date_created) AS recorded_at "
+        + "o.object_key, o.expires_at, COALESCE(o.date_updated, o.date_created) AS recorded_at, o.file_id, o.sha256 "
         + "FROM run_output o JOIN step_execution s ON s.step_execution_id = o.step_execution_id ";
 
     @Override
     public List<OutputRow> outputsOfRun(long jobQueueId) {
         return this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE s.job_queue_id = ? ORDER BY s.attempt, s.step_index",
             JdbcStepStore::output, jobQueueId);
+    }
+
+    @Override
+    public Optional<OutputRow> outputByFileId(String fileId) {
+        List<OutputRow> found = this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE o.file_id = ?", JdbcStepStore::output, fileId);
+        return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
+    @Override
+    public String fileIdOf(long runOutputId) {
+        this.jdbc.update("UPDATE run_output SET file_id = ? WHERE run_output_id = ? AND file_id IS NULL", CorrelationId.generate(), runOutputId);
+        List<String> id = this.jdbc.queryForList("SELECT file_id FROM run_output WHERE run_output_id = ?", String.class, runOutputId);
+        return id.isEmpty() ? null : id.get(0);
     }
 
     @Override
@@ -234,6 +329,8 @@ public class JdbcStepStore implements StepStore {
         row.objectKey = rs.getString("object_key");
         row.expiresAt = instant(rs, "expires_at");
         row.recordedAt = wallClock(rs, "recorded_at");
+        row.fileId = rs.getString("file_id");
+        row.sha256 = rs.getString("sha256");
         return row;
     }
 
@@ -263,6 +360,7 @@ public class JdbcStepStore implements StepStore {
         row.statusMessage = rs.getString("status_message");
         row.error = rs.getString("error");
         row.pipelineDefinitionId = (Long) rs.getObject("pipeline_definition_id");
+        row.reusedFrom = (Long) rs.getObject("reused_from");
         return row;
     }
 

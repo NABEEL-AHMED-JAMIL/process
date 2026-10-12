@@ -11,6 +11,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.barco.platform.net.OutboundAddresses;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,6 +91,27 @@ public class KafkaTemplateProvider {
     @Value("${kafka.topic.default-replication-factor:1}")
     private short defaultReplicationFactor;
 
+    /**
+     * Where a workspace's own profile may point (MIG-323 S9): public addresses, and the private hosts listed in
+     * kafka.outbound.allowed-hosts. The platform's own profiles are not judged.
+     */
+    private OutboundAddresses outbound = new OutboundAddresses(Collections.<String>emptyList());
+
+    @Value("${kafka.outbound.allowed-hosts:}")
+    void setOutboundAllowedHosts(String hosts) {
+        this.outbound = new OutboundAddresses(OutboundAddresses.list(hosts));
+    }
+
+    /** For the tests: a guard with its own resolver. */
+    void useOutbound(OutboundAddresses outbound) {
+        this.outbound = outbound;
+    }
+
+    /** Why a workspace's bootstrap servers may not be used, or null when they may. */
+    public String outboundRefusal(String bootstrapServers) {
+        return this.outbound.refusal(bootstrapServers);
+    }
+
     /** rwx------ : the only mode a directory holding private keys should ever have. */
     private static final Set<PosixFilePermission> OWNER_ONLY = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList(PosixFilePermission.OWNER_READ,
@@ -137,6 +159,13 @@ public class KafkaTemplateProvider {
     }
 
     public Map<String, Object> commonClientProps(KafkaConnectionProfile profile) {
+        // At use as well as at save: a workspace row saved before the guard still may not reach the platform's network.
+        if (profile.getTenantId() != null) {
+            String refused = this.outboundRefusal(profile.getBootstrapServers());
+            if (refused != null) {
+                throw new IllegalArgumentException(refused);
+            }
+        }
         Map<String, Object> props = new HashMap<>();
         // Tuning the operator typed by hand goes on first, so that nothing in it can restate where
         // we connect, how we authenticate or whether the wire is encrypted -- the profile decides

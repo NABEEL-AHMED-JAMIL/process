@@ -7,7 +7,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -78,6 +83,35 @@ public class PipelineDefinitionStore {
     }
 
     /**
+     * MIG-326: {@link #latestFor(long, String)} for a page of the workspace's pipelines in one query, by pipeline id (one
+     * with no definition is left out): the same row each single read gives -- the lowest-keyed live pipeline of that id,
+     * its highest version.
+     */
+    public Map<String, Stored> latestFor(long tenantId, Collection<String> pipelineIds) {
+        Map<String, Stored> found = new HashMap<>();
+        List<String> ids = new ArrayList<>();
+        for (String id : pipelineIds == null ? Collections.<String>emptyList() : pipelineIds) {
+            if (id != null && !id.trim().isEmpty() && !ids.contains(id.trim())) {
+                ids.add(id.trim());
+            }
+        }
+        if (ids.isEmpty()) {
+            return found;
+        }
+        List<Object> args = new ArrayList<>();
+        args.add(tenantId);
+        args.addAll(ids);
+        this.jdbc.query("SELECT DISTINCT ON (k.pipeline_id) k.pipeline_id AS of_pipeline, " + COLUMNS + " FROM ("
+            + "SELECT DISTINCT ON (p.pipeline_id) p.pipeline_id, p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id IN ("
+            + String.join(", ", Collections.nCopies(ids.size(), "?")) + ") AND p.status <> 'Delete' ORDER BY p.pipeline_id, p.pipeline_key) k "
+            + "JOIN pipeline_definition d ON d.pipeline_key = k.pipeline_key ORDER BY k.pipeline_id, d.version DESC",
+            (ResultSet rs) -> {
+                found.put(rs.getString("of_pipeline"), row(rs, 0));
+            }, args.toArray());
+        return found;
+    }
+
+    /**
      * MIG-237: the latest definition of a workspace's pipeline as it stood at {@code asOf} -- the one a run made then
      * followed when nothing pinned it (a run a worker ran). Empty when the pipeline had none yet.
      */
@@ -89,6 +123,48 @@ public class PipelineDefinitionStore {
             + "SELECT p.pipeline_key FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id = ? AND p.status <> 'Delete' "
             + "ORDER BY p.pipeline_key LIMIT 1) AND d.date_created <= ? ORDER BY d.version DESC LIMIT 1", PipelineDefinitionStore::row,
             tenantId, pipelineId.trim(), asOf));
+    }
+
+    /** A live pipeline's latest definition with the pipeline's own id and name: what {@link #latestMentioning} answers. */
+    public static final class Named {
+        public Stored stored;
+        public String pipelineId;
+        public String pipelineName;
+    }
+
+    /**
+     * The latest definition of every live pipeline -- of one workspace, or of every workspace when {@code tenantId} is
+     * null (the caller declares that) -- whose text holds one of these ids as a whole number. A cheap first cut for
+     * {@link StepReferences}, which then reads each definition's steps to see whether the number really is a reference
+     * (a prompt, an API request) and not, say, a row limit that happens to match.
+     */
+    public List<Named> latestMentioning(Long tenantId, Collection<Long> ids) {
+        List<String> numbers = new ArrayList<>();
+        for (Long id : ids == null ? Collections.<Long>emptyList() : ids) {
+            if (id != null && id > 0 && !numbers.contains(String.valueOf(id))) {
+                numbers.add(String.valueOf(id));
+            }
+        }
+        if (numbers.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("SELECT * FROM (SELECT DISTINCT ON (d.pipeline_key) p.pipeline_id AS of_pipeline, "
+            + "p.pipeline_name AS of_pipeline_name, " + COLUMNS + " FROM pipeline_definition d JOIN pipeline p ON p.pipeline_key = d.pipeline_key "
+            + "WHERE p.status <> 'Delete'");
+        if (tenantId != null) {
+            sql.append(" AND p.tenant_id = ?");
+            args.add(tenantId);
+        }
+        sql.append(" ORDER BY d.pipeline_key, d.version DESC) latest WHERE latest.definition ~ ?");
+        args.add("(^|[^0-9])(" + String.join("|", numbers) + ")([^0-9]|$)");
+        return this.jdbc.query(sql + " ORDER BY latest.pipeline_key", (rs, n) -> {
+            Named named = new Named();
+            named.stored = row(rs, n);
+            named.pipelineId = rs.getString("of_pipeline");
+            named.pipelineName = rs.getString("of_pipeline_name");
+            return named;
+        }, args.toArray());
     }
 
     public Optional<Stored> byId(long pipelineDefinitionId) {

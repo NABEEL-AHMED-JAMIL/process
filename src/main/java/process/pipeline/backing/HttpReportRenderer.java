@@ -68,7 +68,12 @@ public class HttpReportRenderer implements ReportRenderer {
         for (String label : request.fields.keySet()) {
             html.append("<p class=\"report-meta\"><strong>").append(escape(label)).append("</strong>: {{field:").append(label).append("}}</p>");
         }
-        html.append("<p class=\"report-meta\">{{rowCount}} rows | generated {{generatedAt}}</p>{{table}}");
+        if (request.sections.isEmpty()) {
+            html.append("<p class=\"report-meta\">{{rowCount}} rows | generated {{generatedAt}}</p>{{table}}");
+        } else {
+            // MIG-346: several tables, each under its own title (media-service's {{sections}}).
+            html.append("<p class=\"report-meta\">generated {{generatedAt}}</p>{{sections}}");
+        }
         ObjectNode template = this.json.createObjectNode();
         template.put("name", "Pipeline report");
         template.put("bodyHtml", html.toString());
@@ -110,6 +115,22 @@ public class HttpReportRenderer implements ReportRenderer {
         ArrayNode rows = dataset.putArray("rows");
         for (List<Object> row : request.rows) {
             rows.add(this.json.valueToTree(row));
+        }
+        if (!request.sections.isEmpty()) {
+            ArrayNode sections = dataset.putArray("sections");
+            for (ReportRenderer.Section section : request.sections) {
+                ObjectNode one = sections.addObject();
+                one.put("title", section.title);
+                if (section.note != null && !section.note.trim().isEmpty()) {
+                    one.put("note", section.note);
+                }
+                ArrayNode sectionColumns = one.putArray("columns");
+                section.columns.forEach(sectionColumns::add);
+                ArrayNode sectionRows = one.putArray("rows");
+                for (List<Object> row : section.rows) {
+                    sectionRows.add(this.json.valueToTree(row));
+                }
+            }
         }
         HttpUrl url = HttpUrl.get(this.renderUrl).newBuilder().addQueryParameter("tenantId", String.valueOf(request.tenantId))
             .addQueryParameter("usageKey", request.usageKey).build();

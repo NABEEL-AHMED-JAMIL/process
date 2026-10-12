@@ -29,6 +29,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
+import process.pipeline.PipelineUsage;
 import process.security.RunCallbackTokens;
 
 import java.nio.charset.StandardCharsets;
@@ -54,6 +55,9 @@ import java.util.Optional;
  *
  * /internal/pipelines/countUsingPrompt: how many live pipelines name a prompt, which AI asks before
  * every prompt delete and refuses the delete if it cannot find out.
+ *
+ * /internal/pipelines/apiRequestUsers: which of a workspace's step-engine pipelines run its API requests, which
+ * integration-service asks for an API collection's "Used by" and before a request's delete.
  */
 @RestController
 @RequestMapping("/internal")
@@ -66,6 +70,11 @@ public class InternalRunVerificationRestApi {
     private final PipelineRepository pipelines;
     private final ModelChoiceStore modelChoices;
     private final byte[] token;
+    /** Which pipelines use a prompt or an API request, step-engine ones included; absent in a test that does not ask. */
+    private PipelineUsage usage;
+
+    /** A collection's requests in one question; integration-service asks per collection, folder or request. */
+    static final int MAX_REQUEST_IDS = 2000;
 
     public InternalRunVerificationRestApi(RunCallbackTokens tokens, JobQueueRepository runs, SourceJobRepository jobs,
         PipelineRepository pipelines, ModelChoiceStore modelChoices, @Value("${internal.service-token:}") String token) {
@@ -75,6 +84,11 @@ public class InternalRunVerificationRestApi {
         this.pipelines = pipelines;
         this.modelChoices = modelChoices;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Autowired(required = false)
+    public void setUsage(PipelineUsage usage) {
+        this.usage = usage;
     }
 
     /**
@@ -155,7 +169,44 @@ public class InternalRunVerificationRestApi {
         long id = ((Number) promptId).longValue();
         Map<String, Object> answer = new LinkedHashMap<>();
         answer.put("promptId", id);
-        answer.put("count", this.pipelines.countUsingPrompt(id));
+        // Since the console review of 2026-10-07 a step-engine pipeline whose AI step names the prompt counts too.
+        answer.put("count", this.usage == null ? this.pipelines.countUsingPrompt(id) : this.usage.countUsingPrompt(id));
+        return new ResponseEntity<>(answer, HttpStatus.OK);
+    }
+
+    /**
+     * Body {tenantId, requestIds: [..]}: the workspace's live step-engine pipelines whose steps run one of these API
+     * requests (Read API, Enrich -- any task whose config names an api-request), one row per pipeline and request:
+     * {pipelineKey, pipelineId, pipelineName, definitionVersion, requestId, version (the collection version the steps pin;
+     * null for the request as it is now), unpinned, steps}. integration-service shows them as an API's "Used by" and
+     * refuses to delete a request while any pipeline runs it. Runs as that workspace (row-level security).
+     */
+    @PostMapping(value = "/pipelines/apiRequestUsers", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> apiRequestUsers(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
+        @RequestBody(required = false) Map<String, Object> body) {
+        if (!this.admits(presented)) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        Object tenant = body == null ? null : body.get("tenantId");
+        Object requested = body == null ? null : body.get("requestIds");
+        if (!(tenant instanceof Number) || ((Number) tenant).longValue() <= 0 || !(requested instanceof List)) {
+            return new ResponseEntity<>(Collections.singletonMap("message", "tenantId and requestIds are required."), HttpStatus.BAD_REQUEST);
+        }
+        List<Long> requestIds = new ArrayList<>();
+        for (Object id : (List<?>) requested) {
+            if (id instanceof Number) {
+                requestIds.add(((Number) id).longValue());
+            }
+        }
+        if (requestIds.size() > MAX_REQUEST_IDS) {
+            return new ResponseEntity<>(Collections.singletonMap("message", "At most " + MAX_REQUEST_IDS + " requestIds."), HttpStatus.BAD_REQUEST);
+        }
+        long tenantId = ((Number) tenant).longValue();
+        List<Map<String, Object>> users = this.usage == null ? Collections.emptyList()
+            : RowSecurity.forTenant(tenantId, () -> this.usage.apiRequestUsers(tenantId, requestIds));
+        Map<String, Object> answer = new LinkedHashMap<>();
+        answer.put("tenantId", tenantId);
+        answer.put("users", users);
         return new ResponseEntity<>(answer, HttpStatus.OK);
     }
 

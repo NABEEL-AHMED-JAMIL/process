@@ -1,18 +1,25 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
+import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowCollector;
+import process.pipeline.data.RowSink;
 import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
-import java.util.Collections;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,10 +31,19 @@ import java.util.Optional;
  *
  * With no bucket and key it reads the file the run was started for -- an inbox arrival's (MIG-239,
  * job_queue.input_bucket/input_key) -- so an inbox-triggered pipeline starts with "Read CSV/JSON/Parquet" and nothing
- * else; a run no file started fails the step and says so.
+ * else; a run no file started fails the step and says so. MIG-360: a run that took a batch of waiting files reads every
+ * one of them, in the order they arrived, each row with its {@code _source_key}.
+ *
+ * MIG-344: when the engine streams it, a CSV or JSON Lines file is read as a stream, row by row, straight into the
+ * step's output file -- no file-size, row or cell limit beyond {@code Limits.MAX_STREAM_*}, and storage-service bills
+ * the bytes taken. JSON and Parquet are still read whole, within the in-memory bounds.
+ *
+ * MIG-365: {@code columns} reads only the named columns, in that order: a CSV's other cells never become values (a
+ * 31-column file read for 3 holds and writes 3), a Parquet file's are never decoded (DuckDB projects them), and a JSON
+ * row is cut to them. A column the file does not have fails the step and lists the ones it has.
  */
 @Component
-public class ReadFileStepTask extends RegisteredTask {
+public class ReadFileStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("read_file", "Read CSV/JSON/Parquet", TaskKind.READ)
         .description("Reads one file of a workspace bucket — CSV, JSON, JSON Lines or Parquet — as rows (storage-service).")
@@ -59,15 +75,16 @@ public class ReadFileStepTask extends RegisteredTask {
 
     @Override
     public List<DefinitionProblem> check(Map<String, Object> config) {
+        List<DefinitionProblem> problems = FileConfigs.checkColumns(config);
         if ((Configs.text(config, "bucket", null) == null) != (Configs.text(config, "key", null) == null)) {
-            return Collections.singletonList(new DefinitionProblem(Configs.text(config, "bucket", null) == null ? "bucket" : "key",
+            problems.add(new DefinitionProblem(Configs.text(config, "bucket", null) == null ? "bucket" : "key",
                 "name both the bucket and the file, or neither (the file the run was started for)"));
         }
-        return Collections.emptyList();
+        return problems;
     }
 
     @Override
-    public StepResult run(StepContext context) throws Exception {
+    public StepResult stream(StreamContext context) throws Exception {
         Map<String, Object> config = context.config();
         String bucket = Configs.text(config, "bucket", null);
         String key = Templates.fill(Configs.text(config, "key", null), Templates.ofRun(context, null));
@@ -77,13 +94,106 @@ public class ReadFileStepTask extends RegisteredTask {
             if (bucket == null || key == null) {
                 throw new IllegalStateException("This run was not started by a file; name the bucket and the file to read.");
             }
+            List<String> keys = context.inputKeys();
+            if (keys.size() > 1) {
+                return this.readAll(context, bucket, keys);
+            }
             context.log(String.format("Reading the file the run was started for: %s/%s.", bucket, key));
         }
         String format = FileConfigs.formatOf(Configs.text(config, "format", "auto"), key);
-        byte[] content = this.buckets.read(context.tenantId(), bucket, key, Limits.MAX_FILE_BYTES);
-        RowCollector rows = new RowCollector(key, Configs.integer(config, "maxRows", null));
-        FileFormats.read(content, format, FileConfigs.options(config), rows);
-        context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes).", rows.size(), bucket, key, format, content.length));
-        return StepResult.of(rows.toDataset());
+        Integer maxRows = Configs.integer(config, "maxRows", null);
+        if (context.inMemory() || !FileFormats.streams(format)) {
+            // Read whole, as before MIG-344: held to the in-memory bounds.
+            byte[] content = this.buckets.read(context.tenantId(), bucket, key, Limits.MAX_FILE_BYTES);
+            RowCollector rows = new RowCollector(key, maxRows);
+            FileFormats.read(content, format, FileConfigs.options(config), rows);
+            context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes).", rows.size(), bucket, key, format, content.length));
+            Dataset dataset = rows.toDataset();
+            context.output().declare(dataset.getColumns());
+            for (Map<String, Object> row : dataset.getRows()) {
+                context.output().add(row);
+            }
+            return StepResult.streamed(dataset.size());
+        }
+        long[] bytes = {0};
+        try (InputStream in = new FilterInputStream(this.buckets.open(context.tenantId(), bucket, key, context.maxFileBytes())) {
+            @Override
+            public int read() throws IOException {
+                int b = super.read();
+                bytes[0] += b < 0 ? 0 : 1;
+                return b;
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int n = super.read(b, off, len);
+                bytes[0] += Math.max(0, n);
+                return n;
+            }
+        }) {
+            FileFormats.readStream(in, format, FileConfigs.options(config), context.output(), maxRows, context.maxRows(), key);
+        }
+        context.log(String.format("%d row(s) from %s/%s (%s, %,d bytes, streamed).", context.output().size(), bucket, key, format, bytes[0]));
+        return StepResult.streamed(context.output().size());
+    }
+
+    /** MIG-360: a batch run's files, one after the other, into the step's output; each row says which file it came from. */
+    private StepResult readAll(StreamContext context, String bucket, List<String> keys) throws Exception {
+        Map<String, Object> config = context.config();
+        Integer maxRows = Configs.integer(config, "maxRows", null);
+        context.log(String.format("Reading the %d files the run was started for, in the order they arrived.", keys.size()));
+        for (String key : keys) {
+            String format = FileConfigs.formatOf(Configs.text(config, "format", "auto"), key);
+            RowSink tagged = new SourceKeyed(context.output(), key);
+            long before = context.output().size();
+            if (context.inMemory() || !FileFormats.streams(format)) {
+                byte[] content = this.buckets.read(context.tenantId(), bucket, key, Limits.MAX_FILE_BYTES);
+                RowCollector rows = new RowCollector(key, maxRows);
+                FileFormats.read(content, format, FileConfigs.options(config), rows);
+                for (Map<String, Object> row : rows.toDataset().getRows()) {
+                    if (maxRows != null && context.output().size() >= maxRows) {
+                        break;
+                    }
+                    tagged.add(row);
+                }
+            } else {
+                try (InputStream in = this.buckets.open(context.tenantId(), bucket, key, context.maxFileBytes())) {
+                    FileFormats.readStream(in, format, FileConfigs.options(config), tagged, maxRows, context.maxRows(), key);
+                }
+            }
+            context.log(String.format("%d row(s) from %s/%s (%s).", context.output().size() - before, bucket, key, format));
+            if (maxRows != null && context.output().size() >= maxRows) {
+                break;
+            }
+        }
+        return StepResult.streamed(context.output().size());
+    }
+
+    /** Each row with the key of the file it came from, as Read S3 tags its objects' rows. */
+    private static final class SourceKeyed implements RowSink {
+        private final RowSink sink;
+        private final String key;
+
+        SourceKeyed(RowSink sink, String key) {
+            this.sink = sink;
+            this.key = key;
+        }
+
+        @Override
+        public void declare(Collection<String> columns) {
+            // Several files' columns: every key their rows use, in the order first seen.
+        }
+
+        @Override
+        public void add(Map<String, Object> row) throws Exception {
+            Map<String, Object> tagged = row instanceof LinkedHashMap ? row : new LinkedHashMap<>(row);
+            tagged.put("_source_key", this.key);
+            this.sink.add(tagged);
+        }
+
+        @Override
+        public long size() {
+            return this.sink.size();
+        }
     }
 }

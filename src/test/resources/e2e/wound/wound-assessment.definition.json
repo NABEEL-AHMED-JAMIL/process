@@ -37,6 +37,7 @@
      "bucket": "${BUCKET}",
      "keyColumn": "image_key"
     },
+    "target": "red_region",
     "onError": "null",
     "maxRows": 50
    }
@@ -228,6 +229,17 @@
    "config": {
     "fileName": "wound-results.json",
     "format": "json"
+   }
+  },
+  {
+   "key": "keep",
+   "name": "Keep the results for the trend (one file per run, status DRAFT until reviewed)",
+   "task": "upload_bucket",
+   "input": "result",
+   "config": {
+    "bucket": "${BUCKET}",
+    "key": "${PREFIX}results/run-{{run}}.csv",
+    "format": "csv"
    }
   },
   {

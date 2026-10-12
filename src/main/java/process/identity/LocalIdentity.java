@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import process.model.enums.Status;
-import process.model.enums.TenantStatus;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
 import process.model.repository.AppUserRepository;
@@ -135,12 +134,6 @@ public class LocalIdentity implements IdentityPort {
             this.tenants.findAllById(tenantIds).forEach(tenant -> found.add(toWorkspace(tenant)));
         }
         return found;
-    }
-
-    @Override
-    public List<Workspace> liveWorkspaces() {
-        return this.tenants.findByStatusNotOrderByTenantIdDesc(TenantStatus.Delete).stream()
-            .map(LocalIdentity::toWorkspace).collect(Collectors.toList());
     }
 
     @Override

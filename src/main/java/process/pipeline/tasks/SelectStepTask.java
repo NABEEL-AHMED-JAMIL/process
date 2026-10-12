@@ -1,11 +1,12 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
-import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
-import process.pipeline.StepTask;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
@@ -21,10 +22,10 @@ import java.util.Map;
  * is missing from the input; otherwise a missing column is null and the step's log says so once.
  *
  * The smallest shaping step, so a multi-step pipeline can be built before the Task Registry's Transform (MIG-231)
- * exists; MIG-231 may absorb it.
+ * exists; MIG-231 may absorb it. MIG-344: streamed, a row at a time.
  */
 @Component
-public class SelectStepTask implements StepTask {
+public class SelectStepTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("select", "Select columns", TaskKind.PROCESS)
         .description("Keeps the columns it names, in that order, optionally renamed.")
@@ -89,30 +90,37 @@ public class SelectStepTask implements StepTask {
     }
 
     @Override
-    public StepResult run(StepContext context) {
+    public StepResult stream(StreamContext context) throws Exception {
         Map<String, String> picks = picks(context.config().get("columns"));
         boolean required = Boolean.TRUE.equals(context.config().get("required"));
-        Dataset input = context.input();
-        List<String> missing = new ArrayList<>();
-        for (String from : picks.keySet()) {
-            if (!input.getColumns().contains(from)) {
-                missing.add(from);
+        RowSink out = context.output();
+        try (RowSource input = context.openInput()) {
+            List<String> missing = new ArrayList<>();
+            for (String from : picks.keySet()) {
+                if (!input.columns().contains(from)) {
+                    missing.add(from);
+                }
+            }
+            if (!missing.isEmpty()) {
+                if (required) {
+                    throw new IllegalArgumentException("The input has no column " + String.join(", ", missing) + ".");
+                }
+                context.warn("The input has no column " + String.join(", ", missing) + "; left empty.");
+            }
+            out.declare(new ArrayList<>(picks.values()));
+            for (List<Map<String, Object>> batch = input.next(); batch != null; batch = input.next()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Select was stopped.");
+                }
+                for (Map<String, Object> row : batch) {
+                    Map<String, Object> picked = new LinkedHashMap<>();
+                    picks.forEach((from, to) -> picked.put(to, row.get(from)));
+                    out.add(picked);
+                }
             }
         }
-        if (!missing.isEmpty()) {
-            if (required) {
-                throw new IllegalArgumentException("The input has no column " + String.join(", ", missing) + ".");
-            }
-            context.warn("The input has no column " + String.join(", ", missing) + "; left empty.");
-        }
-        List<Map<String, Object>> rows = new ArrayList<>(input.size());
-        for (Map<String, Object> row : input.getRows()) {
-            Map<String, Object> out = new LinkedHashMap<>();
-            picks.forEach((from, to) -> out.put(to, row.get(from)));
-            rows.add(out);
-        }
-        context.log(String.format("%d row(s), %d column(s) kept.", rows.size(), picks.size()));
-        return StepResult.of(new Dataset(new ArrayList<>(picks.values()), rows));
+        context.log(String.format("%d row(s), %d column(s) kept.", out.size(), picks.size()));
+        return StepResult.streamed(out.size());
     }
 
     private static Map<String, String> picks(Object columns) {

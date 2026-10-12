@@ -8,8 +8,6 @@ import java.util.HashMap;
 import java.util.Comparator;
 import java.text.Collator;
 import process.identity.IdentityPort;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import process.model.dto.UserStatisticDto;
 import process.model.enums.JobStatus;
@@ -47,8 +45,6 @@ import static process.util.ProcessUtil.SUCCESS;
  * */
 @Service
 public class DashboardServiceImpl implements DashboardService {
-
-    private Logger logger = LoggerFactory.getLogger(DashboardServiceImpl.class);
 
     private final QueryService queryService;
     private final SourceJobRepository sourceJobRepository;
@@ -145,12 +141,7 @@ public class DashboardServiceImpl implements DashboardService {
         return new ResponseDto(SUCCESS, "Data found.", stats);
     }
 
-    /* Null-tolerant readers: avatar columns and any count can come back null, and
-     * String.valueOf(null) yields the four-character string "null" rather than nothing. */
-    private static String asText(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
+    /* Null-tolerant readers: any count can come back null. */
     private static Integer asInt(Object value) {
         return value == null ? 0 : Integer.parseInt(value.toString());
     }

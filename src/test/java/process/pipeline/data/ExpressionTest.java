@@ -1,5 +1,7 @@
 package process.pipeline.data;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -69,6 +71,14 @@ class ExpressionTest {
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", "2026-09-01", "visit_date", "2026-09-15")).isEqualTo(14L);
         assertThat(eval("days_between(prev_date, visit_date)", "prev_date", null, "visit_date", "2026-09-15")).isNull();
         assertThat(eval("`wound length` + 1", "wound length", 2)).isEqualTo(3.0);
+        String today = LocalDate.now(ZoneId.of("America/Chicago")).toString();
+        assertThat(eval("today()", "x", 1)).isEqualTo(today);
+        assertThat(eval("round(days_between(birth, today()) / 365.25, 0)", "birth", today)).isEqualTo(0L);
+        assertThat(eval("regex_extract(k, '-([a-z]+-[0-9]{3})[.]jpe?g$')", "k", "intake/2026-10-06/88-scan-007.jpeg")).isEqualTo("scan-007");
+        assertThat(eval("regex_extract(k, '[0-9]+')", "k", "abc 42 x")).isEqualTo("42");
+        assertThat(eval("regex_extract(k, 'z')", "k", "abc")).isNull();
+        assertThat(eval("regex_extract(k, 'z')", "k", null)).isNull();
+        assertThatThrownBy(() -> eval("regex_extract(k, '(')", "k", "a")).hasMessageContaining("is not a valid pattern");
     }
 
     @Test
@@ -79,8 +89,12 @@ class ExpressionTest {
     @Test
     void aTypoIsASyntaxErrorAtItsPlace() {
         assertThatThrownBy(() -> Expression.parse("a * (b + 1")).hasMessageContaining("expected ')'");
-        assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, coalesce, concat, days_between, "
-            + "if, is_null, max, min, number, round, text.");
+        assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, ceil, coalesce, concat, date_add, "
+            + "date_diff, date_trunc, days_between, floor, if, is_null, json_array_length, json_get, json_keys, max, min, mod, number, "
+            + "regex_extract, round, text, today.");
+        assertThatThrownBy(() -> Expression.parse("regex_extract(a)")).hasMessage("regex_extract takes 2 values: regex_extract(text, pattern).");
+        assertThatThrownBy(() -> Expression.parse("today(a)")).hasMessage("today takes no values: today().");
+        assertThatThrownBy(() -> Expression.parse("abs()")).hasMessage("abs takes at least 1 value.");
         assertThatThrownBy(() -> Expression.parse("if(a, b)")).hasMessage("if takes 3 values: if(condition, then, otherwise).");
         assertThatThrownBy(() -> Expression.parse("a +")).hasMessageContaining("at 4");
         assertThat(Expression.parse("round(a * b, 1)").columns()).containsExactly("a", "b");

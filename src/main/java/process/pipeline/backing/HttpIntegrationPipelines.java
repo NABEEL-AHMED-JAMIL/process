@@ -10,10 +10,13 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.barco.platform.api.Problem;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import process.correlation.CorrelationInterceptor;
+import process.customer.InputContracts;
+import process.pipeline.PipelineDefinition;
 import process.pipeline.data.Values;
 
 import java.io.IOException;
@@ -44,10 +47,14 @@ import java.util.concurrent.TimeUnit;
  *      -> ApiResponse{data: {columns, rows, truncated}}
  * POST /api/v1/internal/pipelines/database/write   {tenantId, jobQueueId, stepKey, connectionId, table, mode, keyColumns, columns, rows[]}
  *      -> ApiResponse{data: {written}}
+ * POST /api/v1/internal/pipelines/webhooks/send     {tenantId, jobQueueId, stepKey, attempt, webhookId, eventId, subject, data}
+ *      -> ApiResponse{data: {eventId, webhookId, deliveryId, status, replay}}           (MIG-346, its own switch)
+ * POST /api/v1/internal/pipelines/webhooks/delivery {tenantId, webhookId, deliveryId}
+ *      -> ApiResponse{data: {deliveryId, webhookId, status, attempts, responseStatus, lastError, deliveredAt}}
  * </pre>
  */
 @Component
-public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader {
+public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader, InputContracts {
 
     static final String BASE = "/api/v1/internal/pipelines";
     private static final MediaType JSON = MediaType.get("application/json");
@@ -56,6 +63,8 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
     private final String serviceToken;
     private final boolean endpoints;
     private final boolean databaseWrite;
+    /** MIG-346: integration-service's webhook endpoints for Send webhook; off until they are deployed. */
+    private boolean webhooks;
     private final ObjectMapper json = Values.JSON;
     private final OkHttpClient http = new OkHttpClient.Builder()
         .addInterceptor(new CorrelationInterceptor())
@@ -85,6 +94,57 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
             return Optional.of("Core has no service token for integration-service (internal.service-token)");
         }
         return Optional.empty();
+    }
+
+    /** MIG-346: Send webhook's switch (process.pipeline.integration.webhooks). */
+    @Autowired(required = false)
+    public void useWebhooks(@Value("${process.pipeline.integration.webhooks:false}") boolean webhooks) {
+        this.webhooks = webhooks;
+    }
+
+    /** Send webhook's own availability: the endpoints, and its own switch. */
+    public Optional<String> webhooksUnavailable() {
+        if (!this.webhooks) {
+            return Optional.of("integration-service does not take pipeline webhooks yet (process.pipeline.integration.webhooks is off)");
+        }
+        return this.unavailable();
+    }
+
+    /** MIG-346: queues one delivery to one subscription of the workspace. */
+    public WebhookSender.Sent sendWebhook(WebhookSender.Send send) throws IOException {
+        Optional<String> off = this.webhooksUnavailable();
+        if (off.isPresent()) {
+            throw new IllegalStateException("Send webhook is not available: " + off.get() + ".");
+        }
+        ObjectNode body = this.json.createObjectNode();
+        this.context(body, send.tenantId, send.jobQueueId, send.stepKey);
+        body.put("attempt", send.attempt);
+        body.put("webhookId", send.webhookId);
+        body.put("eventId", send.eventId);
+        body.put("subject", send.subject);
+        body.set("data", this.json.valueToTree(send.data));
+        JsonNode data = this.post("/webhooks/send", body);
+        WebhookSender.Sent sent = new WebhookSender.Sent();
+        sent.eventId = data.path("eventId").asText(send.eventId);
+        sent.deliveryId = data.path("deliveryId").asLong();
+        sent.status = data.path("status").asText(null);
+        sent.replay = data.path("replay").asBoolean(false);
+        return sent;
+    }
+
+    /** MIG-346: one delivery's state. */
+    public WebhookSender.Delivery webhookDelivery(long tenantId, long webhookId, long deliveryId) throws IOException {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        body.put("webhookId", webhookId);
+        body.put("deliveryId", deliveryId);
+        JsonNode data = this.post("/webhooks/delivery", body);
+        WebhookSender.Delivery delivery = new WebhookSender.Delivery();
+        delivery.status = data.path("status").asText(null);
+        delivery.attempts = data.path("attempts").asInt(0);
+        delivery.responseStatus = data.hasNonNull("responseStatus") ? data.get("responseStatus").asInt() : null;
+        delivery.lastError = data.path("lastError").asText(null);
+        return delivery;
     }
 
     /** Write Database's own availability: the endpoints, and its own switch. */
@@ -142,6 +202,42 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
             verdicts.rows.add(new RowVerdict(result.path("index").asInt(), result.path("valid").asBoolean(), errors));
         }
         return verdicts;
+    }
+
+    // ---- InputContracts (MIG-332) ----------------------------------------------------------------------------
+
+    /**
+     * POST /contract/check {tenantId, contractId, contractName, version, record?}: the contract's schema and, for a record,
+     * its verdict. Nothing is recorded on integration-service's side.
+     */
+    @Override
+    public InputContracts.Checked check(long tenantId, PipelineDefinition.ContractRef contract, JsonNode record, String pathPrefix) {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        body.putPOJO("contractId", contract.getContractId());
+        body.putPOJO("contractName", contract.getContractName());
+        body.putPOJO("version", contract.getVersion());
+        if (record != null) {
+            body.set("record", record);
+        }
+        JsonNode data;
+        try {
+            data = this.post("/contract/check", body);
+        } catch (IOException | RuntimeException failed) {
+            throw new InputContracts.Unavailable(failed.getMessage(), failed);
+        }
+        InputContracts.Checked checked = new InputContracts.Checked();
+        checked.contractId = data.hasNonNull("contractId") ? data.get("contractId").asLong() : null;
+        checked.name = data.path("name").asText(null);
+        checked.version = data.hasNonNull("version") ? data.get("version").asInt() : null;
+        checked.schema = data.get("schema");
+        checked.valid = data.hasNonNull("valid") ? data.get("valid").asBoolean() : null;
+        checked.errors = new ArrayList<>();
+        for (JsonNode error : data.path("errors")) {
+            checked.errors.add(new Problem.FieldError(InputContracts.pathOf(error.path("path").asText(""), pathPrefix),
+                error.path("message").asText("")));
+        }
+        return checked;
     }
 
     // ---- DatabaseReader ---------------------------------------------------------------------------------------

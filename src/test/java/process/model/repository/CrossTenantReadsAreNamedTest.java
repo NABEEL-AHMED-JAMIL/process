@@ -89,6 +89,7 @@ class CrossTenantReadsAreNamedTest {
             NOT_TENANT_ROWS.put(name, platformBranch);
         }
         NOT_TENANT_ROWS.put("PipelineRepository.countUsingPrompt", "ai-service's internal question about one prompt id, service token only");
+        NOT_TENANT_ROWS.put("PipelineRepository.pipelineKeysUsingPrompt", "the same question by pipeline key, for PipelineUsage (service token only)");
     }
 
     private static final Pattern TENANT_COLUMN = Pattern.compile("\\btenant_id\\b");

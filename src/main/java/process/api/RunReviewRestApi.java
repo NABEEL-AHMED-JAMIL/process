@@ -25,6 +25,7 @@ import process.util.ProcessUtil;
  * <ul>
  *   <li>GET sourceJob.json/review?jobQueueId=: the run's review status, required parties, decisions, and whether the
  *       caller may decide now -- any tenant user who can see the run;</li>
+ *   <li>GET sourceJob.json/review/waiting?limit=: the runs waiting for review, newest first (MIG-325);</li>
  *   <li>POST sourceJob.json/review/decide {jobQueueId, decision, comment, reason, rerun}: the internal review, by a
  *       tenant administrator. A request for the customer's review is refused here.</li>
  * </ul>
@@ -48,6 +49,12 @@ public class RunReviewRestApi {
     @RequestMapping(value = "/sourceJob.json/review", method = RequestMethod.GET)
     public ResponseEntity<?> review(@RequestParam Long jobQueueId) {
         return new ResponseEntity<>(this.service.review(jobQueueId), HttpStatus.OK);
+    }
+
+    /** MIG-325: the runs waiting for review, newest first, across the jobs the caller may see. */
+    @RequestMapping(value = "/sourceJob.json/review/waiting", method = RequestMethod.GET)
+    public ResponseEntity<?> waiting(@RequestParam(required = false) Integer limit) {
+        return new ResponseEntity<>(this.service.waiting(limit), HttpStatus.OK);
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")

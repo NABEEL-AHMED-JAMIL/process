@@ -42,6 +42,14 @@ public interface FormWorkflows {
     /** Starts a request of the workflow for a submission; the same submission twice starts one. */
     Started start(long tenantId, String key, long submissionId, String title, Map<String, Object> subject, Long requestedBy);
 
+    /**
+     * MIG-332: starts a request of the workflow for another subject -- an event the customer API received
+     * ("api-event:N") -- once per eventId. Only workflow-service's own client can.
+     */
+    default Started startFor(long tenantId, String key, String subjectId, String eventId, String title, Map<String, Object> subject) {
+        throw new IllegalStateException("Workflows cannot be started here.");
+    }
+
     /** The subject id a submission's request carries. */
     static String subjectOf(long submissionId) {
         return "form-submission:" + submissionId;

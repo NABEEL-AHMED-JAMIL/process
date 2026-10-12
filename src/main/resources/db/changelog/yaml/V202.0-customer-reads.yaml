@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202.0-customer-reads
+      author: nabeel.amd93
+      description: "MIG-334 (ADR-025): the customer API's read side -- run_output.file_id (ULID) and sha256; file_access_log records an API client's download (kind api_file, client_id, file_id); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V202.0-customer-reads/V202__customer_reads.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V202.0-customer-reads/V202__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+  - changeSet:
+      id: 202.1-run-list-index
+      author: nabeel.amd93
+      description: "MIG-334: job_queue (tenant_id, job_queue_id) for GET /v1/runs, a workspace's runs newest first by keyset; expand-only"
+      # A concurrent build that fails leaves an INVALID index behind, which IF NOT EXISTS would then mistake for
+      # done, so an invalid one is dropped first (as V200 does).
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_tenant_run' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_tenant_run;
+                END IF;
+              END $$;
+        - sqlFile:
+            path: ../changelog-sets/V202.0-customer-reads/V202_1__run_list_index.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V202.0-customer-reads/V202_1__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true

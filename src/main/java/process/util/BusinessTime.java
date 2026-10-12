@@ -1,5 +1,7 @@
 package process.util;
 
+import org.barco.platform.api.ApiTimes;
+
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -26,7 +28,7 @@ import java.time.ZonedDateTime;
 public final class BusinessTime {
 
     /** The zone the business runs on. */
-    public static final ZoneId ZONE = ZoneId.of("America/Chicago");
+    public static final ZoneId ZONE = ApiTimes.PLATFORM_ZONE;
 
     private static volatile Clock clock = Clock.system(ZONE);
 

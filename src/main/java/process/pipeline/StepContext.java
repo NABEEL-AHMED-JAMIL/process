@@ -1,5 +1,6 @@
 package process.pipeline;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,17 @@ public interface StepContext {
     /** The step's input: the output it names, else the latest output before it, else the source. Never null. */
     Dataset input();
 
+    /** MIG-344: how many rows the input has, without holding it (a streamed input may be bigger than a step can hold). */
+    default long inputSize() {
+        return this.input().size();
+    }
+
+    /** MIG-344: the input's first row, or null when it has none, without reading the rest of it. */
+    default Map<String, Object> firstInputRow() throws Exception {
+        Dataset input = this.input();
+        return input == null || input.size() == 0 ? null : input.getRows().get(0);
+    }
+
     /** The run's job (source_job.job_id); null outside a run. */
     default Long jobId() {
         return null;
@@ -30,6 +42,25 @@ public interface StepContext {
 
     /** The pipeline the run's job runs (its task's pipelineId); null outside a run. */
     default String pipelineId() {
+        return null;
+    }
+
+    /**
+     * The model this run asks this step to run on (MIG-242, for the engine since the console review of 2026-10-07): an
+     * ai-service model option id from the run's "Run with a different AI model...", else the schedule's setting; null for
+     * the step's default. Only an AI step reads it; ai-service decides whether the option may be used.
+     */
+    default String modelProfile() {
+        return null;
+    }
+
+    /** Where {@link #modelProfile()} came from: "run" or "schedule" (ModelProfiles' words); null for the step's default. */
+    default String modelProfileSource() {
+        return null;
+    }
+
+    /** The run's job's source task (source_task.task_detail_id), by which ai-service finds a step's own allowed models. */
+    default Long sourceTaskId() {
         return null;
     }
 
@@ -46,6 +77,15 @@ public interface StepContext {
     /** The key of the file this run was started for (an inbox arrival, MIG-239); null for any other run. */
     default String inputKey() {
         return null;
+    }
+
+    /**
+     * MIG-360: every file this run was started for, in the order they arrived -- a batch of inbox files that waited for
+     * the job, or just {@link #inputKey}; empty for a run no file started.
+     */
+    default List<String> inputKeys() {
+        String key = this.inputKey();
+        return key == null ? Collections.emptyList() : Collections.singletonList(key);
     }
 
     /**

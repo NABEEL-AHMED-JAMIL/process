@@ -1,5 +1,6 @@
 package process.pipeline.tasks;
 
+import java.util.LinkedHashMap;
 import org.springframework.stereotype.Component;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
@@ -18,7 +19,8 @@ import java.util.Map;
  * Send Notification (MIG-231): a notification-centre notice about the run, through Core's own path to
  * notifications-service (the outbox) -- to the job's owner (the default), the workspace's admins, everyone in it, or
  * people named by id (members only). {@code when}: always, only when the input has rows, or only when it has none.
- * Title and message take the run's placeholders and {{rows}}. The rows pass on unchanged.
+ * Title and message take the run's placeholders and {{rows}}, and the first row's columns as {{column}} (a one-row
+ * summary -- an aggregate, an AI-written digest -- is told in the notice itself). The rows pass on unchanged.
  */
 @Component
 public class SendNotificationStepTask extends RegisteredTask {
@@ -29,7 +31,8 @@ public class SendNotificationStepTask extends RegisteredTask {
         .output(TaskSpec.rows("The input, unchanged."))
         .config(JsonSchema.object()
             .required("title", JsonSchema.string().minLength(1).maxLength(200).title("Title").format("template")
-                .description("{{rows}}, {{pipeline}}, {{run}}, {{date}} and the other run placeholders are filled in."))
+                .description("{{rows}}, {{pipeline}}, {{run}}, {{date}} and the other run placeholders are filled in; so is"
+                    + " {{column}}, from the first row."))
             .property("message", JsonSchema.string().maxLength(2000).title("Message").format("multiline"))
             .property("severity", JsonSchema.string().enumOf("INFO", "SUCCESS", "WARNING", "ERROR").title("Severity").defaultValue("INFO"))
             .property("to", JsonSchema.string().enumOf("owner", "admins", "everyone", "users").title("To").defaultValue("owner"))
@@ -62,13 +65,20 @@ public class SendNotificationStepTask extends RegisteredTask {
     @Override
     public StepResult run(StepContext context) throws Exception {
         Map<String, Object> config = context.config();
-        int rows = context.input().size();
+        // MIG-344: the input's size and first row only -- it may be a streamed table far bigger than a step can hold.
+        int rows = (int) Math.min(Integer.MAX_VALUE, context.inputSize());
         String when = Configs.text(config, "when", "always");
         if (("has_rows".equals(when) && rows == 0) || ("no_rows".equals(when) && rows > 0)) {
             context.log(String.format("Not sent: %d row(s) and when is %s.", rows, when));
             return StepResult.nothing((long) rows);
         }
-        Map<String, Object> values = Templates.ofRun(context, rows);
+        // The first row's columns, under the run's own placeholders: {{run}} stays the run whatever a column is called.
+        Map<String, Object> values = new LinkedHashMap<>();
+        Map<String, Object> first = rows > 0 ? context.firstInputRow() : null;
+        if (first != null) {
+            values.putAll(first);
+        }
+        values.putAll(Templates.ofRun(context, rows));
         PipelineNotifier.Notice notice = new PipelineNotifier.Notice();
         notice.tenantId = context.tenantId();
         notice.to = Configs.text(config, "to", "owner");

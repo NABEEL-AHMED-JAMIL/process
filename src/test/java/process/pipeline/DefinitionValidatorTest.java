@@ -42,6 +42,25 @@ class DefinitionValidatorTest {
         assertThat(this.validator.require(this.valid())).isNotNull();
     }
 
+    /** MIG-332: the input contract the customer API checks a started run's record against names one contract, by id or name. */
+    @Test
+    void theInputContractNamesOneContract() throws Exception {
+        PipelineDefinition definition = this.valid();
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(null, "orders", 2));
+        assertThat(this.validator.problems(definition)).isEmpty();
+        PipelineDefinition read = DefinitionCodec.fromJson(DefinitionCodec.toJson(definition));
+        assertThat(read.getSettings().getInputContract().getContractName()).isEqualTo("orders");
+        assertThat(read.getSettings().getInputContract().getVersion()).isEqualTo(2);
+
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(4L, "orders", 0));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"),
+            new DefinitionProblem("settings.inputContract.version", "a version is at least 1"));
+        definition.getSettings().setInputContract(PipelineDefinition.ContractRef.of(null, " ", null));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"));
+    }
+
     /** MIG-243: a pipeline's sensitivity is one of the data policies' three levels, or not said (internal). */
     @Test
     void theSensitivityIsPublicInternalOrSensitive() {
@@ -119,16 +138,35 @@ class DefinitionValidatorTest {
     }
 
     @Test
-    void aPipelineHasOneToFiftySteps() {
+    void aPipelineHasOneStepAtLeastAndAtMostTheSettingsCap() {
         assertThat(this.validator.problems(Definitions.of())).containsExactly(
             new DefinitionProblem("steps", "a pipeline has at least one step"));
+        // MIG-365: the cap is a setting, 100 by default (it was a fixed 50).
+        assertThat(this.validator.maxSteps()).isEqualTo(DefinitionValidator.DEFAULT_MAX_STEPS).isEqualTo(100);
+        PipelineDefinition fifty = Definitions.of();
+        fifty.setSteps(samples(51));
+        assertThat(this.validator.problems(fifty)).isEmpty();
+        PipelineDefinition definition = Definitions.of();
+        definition.setSteps(samples(DefinitionValidator.DEFAULT_MAX_STEPS + 1));
+        assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("steps", "this pipeline has 101 steps; a "
+            + "pipeline has at most 100 here (process.pipeline.max-steps). Combine steps -- one append stacks several outputs, one "
+            + "compute holds up to 50 formulas -- or ask a platform administrator to raise the limit."));
+        this.validator.useMaxSteps(60);
+        assertThat(this.validator.problems(fifty)).isEmpty();
+        definition.setSteps(samples(61));
+        assertThat(this.validator.problems(definition)).extracting(DefinitionProblem::getMessage).singleElement().asString()
+            .startsWith("this pipeline has 61 steps; a pipeline has at most 60 here");
+        this.validator.useMaxSteps(100000);
+        assertThat(this.validator.maxSteps()).isEqualTo(DefinitionValidator.MAX_STEPS_CEILING);
+        this.validator.useMaxSteps(DefinitionValidator.DEFAULT_MAX_STEPS);
+    }
+
+    private static List<PipelineDefinition.Step> samples(int count) {
         List<PipelineDefinition.Step> many = new ArrayList<>();
-        for (int i = 0; i <= DefinitionValidator.MAX_STEPS; i++) {
+        for (int i = 0; i < count; i++) {
             many.add(sample("s" + i, row("x", i)));
         }
-        PipelineDefinition definition = Definitions.of();
-        definition.setSteps(many);
-        assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("steps", "at most 50 steps; found 51"));
+        return many;
     }
 
     @Test
@@ -193,6 +231,33 @@ class DefinitionValidatorTest {
             new DefinitionProblem("settings.review.required[2]", "one of [internal, customer]"),
             new DefinitionProblem("settings.review.required[3]", "one of [internal, customer]"),
             new DefinitionProblem("settings.review.required[4]", "'internal' is already required"));
+    }
+
+    /** MIG-361: settings.review.reviewers says whose Task inbox the internal review goes to: a role, or a group by its id. */
+    @Test
+    void reviewersAreARoleOrAGroupAndTheAdministratorsWhenNotSaid() {
+        for (PipelineDefinition.Reviewers ok : Arrays.asList(PipelineDefinition.Reviewers.of("role", "TENANT_ADMIN"),
+            PipelineDefinition.Reviewers.of("role", "TENANT_USER"), PipelineDefinition.Reviewers.of("group", "1063"))) {
+            PipelineDefinition definition = this.valid();
+            PipelineDefinition.Review review = PipelineDefinition.Review.of(Arrays.asList("internal"));
+            review.setReviewers(ok);
+            definition.getSettings().setReview(review);
+            assertThat(this.validator.problems(definition)).as("%s %s", ok.getKind(), ok.getValue()).isEmpty();
+        }
+        String[][] bad = {{"user", "4641", "settings.review.reviewers.kind"}, {"role", "TENANT_VIEWER", "settings.review.reviewers.value"},
+            {"role", "PLATFORM_ADMIN", "settings.review.reviewers.value"}, {"group", "Reviewers", "settings.review.reviewers.value"},
+            {"group", null, "settings.review.reviewers.value"}, {null, "1063", "settings.review.reviewers.kind"}};
+        for (String[] one : bad) {
+            PipelineDefinition definition = this.valid();
+            PipelineDefinition.Review review = PipelineDefinition.Review.of(Arrays.asList("internal"));
+            review.setReviewers(PipelineDefinition.Reviewers.of(one[0], one[1]));
+            definition.getSettings().setReview(review);
+            assertThat(this.validator.problems(definition)).as("%s %s", one[0], one[1]).extracting(DefinitionProblem::getPath)
+                .containsExactly(one[2]);
+        }
+        PipelineDefinition.Review none = PipelineDefinition.Review.of(Arrays.asList("internal"));
+        assertThat(none.effectiveReviewers().getKind()).isEqualTo("role");
+        assertThat(none.effectiveReviewers().getValue()).isEqualTo("TENANT_ADMIN");
     }
 
     @Test

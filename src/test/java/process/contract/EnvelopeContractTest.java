@@ -16,6 +16,8 @@ import process.model.dto.ResponseDto;
 import process.util.RequestRefused;
 
 import java.util.Collections;
+import process.customer.InputContracts;
+import process.customer.CustomerFileReads;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,10 @@ class EnvelopeContractTest extends EnvelopeContract {
         Map<Class<? extends Throwable>, String> internal = new LinkedHashMap<>();
         internal.put(AiPort.AiUnavailableException.class, "caught by AiStepService (a failed step, by the step's on-error rule) "
             + "and PipelineServiceImpl (a form save refused in words) -- ADR-020");
+        internal.put(InputContracts.Unavailable.class, "MIG-332: thrown by HttpIntegrationPipelines.check and caught in"
+            + " CustomerPipelines, CustomerEvents and EventRoutes -- a 503 problem or a refusal in words; never reaches the console's edge");
+        internal.put(CustomerFileReads.Unavailable.class, "MIG-334: thrown by CustomerFileReads.resolve when storage-service's"
+            + " directory cannot answer and caught in CustomerFileReads itself -- a 503 problem; never reaches the console's edge");
         internal.put(FileIndexLock.Busy.class, "caught in FileChatServiceImpl: 'still being prepared', no second extraction (MIG-111)");
         internal.put(FileIndexLock.Unavailable.class, "caught in FileChatServiceImpl: answered from the raw file, nothing indexed (MIG-111)");
         internal.put(UnreadableFileException.class, "caught in FileChatServiceImpl and answered in words");

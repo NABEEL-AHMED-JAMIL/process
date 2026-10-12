@@ -114,9 +114,31 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
             .contains(REFUSED).contains("A customer review is recorded by the customer through the API");
         assertThat(fx.probe("POST sourceJob.json/review/decide(tenant user)", USER_OF_A,
             () -> fx.runReview.decide(decision(A_RUN, "APPROVED", null))))
-            .contains(REFUSED).contains("Only a tenant administrator can approve or reject a run's results.");
+            .contains(REFUSED).contains("Only a tenant administrator can approve or reject a run's results here; the pipeline's reviewers decide it in the Task inbox.");
         assertThat(fx.db.jdbc().queryForObject("SELECT count(*) FROM run_review_decision WHERE job_queue_id = ?", Long.class,
             COLLEAGUE_RUN)).isZero();
+        assertThat(fx.leaks).isEmpty();
+    }
+
+    /**
+     * MIG-325's list, GET sourceJob.json/review/waiting: A's admin sees A's runs waiting (the colleague's included), A's
+     * tenant user not the colleague's, nobody any of B's, and a caller with no workspace is refused.
+     */
+    @Test
+    void theWaitingListHoldsOnlyRunsTheCallerMaySee() {
+        String b = "\"jobQueueId\":" + B_RUN + ",";
+        String bNamingA = "\"jobQueueId\":" + B_RUN_NAMING_USER_A + ",";
+        String colleague = "\"jobQueueId\":" + COLLEAGUE_RUN + ",";
+        assertThat(fx.probe("GET sourceJob.json/review/waiting", ADMIN_OF_A, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).contains(colleague).doesNotContain(b).doesNotContain(bNamingA);
+        assertThat(fx.probe("GET sourceJob.json/review/waiting", USER_OF_A, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).doesNotContain(colleague).doesNotContain(b).doesNotContain(bNamingA);
+        assertThat(fx.probe("GET sourceJob.json/review/waiting(as C)", ADMIN_OF_C, () -> fx.runReview.waiting(null)))
+            .contains(SUCCEEDED).contains("\"runs\":[]");
+        for (Long none : NO_WORKSPACE) {
+            assertThat(fx.probe("GET sourceJob.json/review/waiting", tenantlessUser(none), () -> fx.runReview.waiting(null)))
+                .contains(REFUSED);
+        }
         assertThat(fx.leaks).isEmpty();
     }
 

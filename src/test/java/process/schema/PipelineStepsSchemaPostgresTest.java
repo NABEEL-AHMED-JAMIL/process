@@ -178,6 +178,8 @@ class PipelineStepsSchemaPostgresTest {
     /** V183's rollback takes off exactly its own tables, sequences and columns; then V183 applies again. */
     @Test
     void theRollbackTakesItAllOffAndV183AppliesAgain() throws Exception {
+        // MIG-345: a later changeset may add to step_execution too (V205's reused_from): finishing applies it again.
+        List<String> latest = columns("step_execution");
         int after = sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE orderexecuted > "
             + "(SELECT orderexecuted FROM databasechangelog WHERE id = ?)", Integer.class, V183);
         if (after > 0) {
@@ -199,7 +201,7 @@ class PipelineStepsSchemaPostgresTest {
         } finally {
             db.finish();
         }
-        assertThat(columns("step_execution")).isEqualTo(withV183);
+        assertThat(columns("step_execution")).isEqualTo(latest);
         assertThat(sql.queryForObject("SELECT count(*) FROM databasechangelog WHERE id = ?", Long.class, V183)).isEqualTo(1);
         Map<String, Object> policy = sql.queryForMap("SELECT count(*) AS n FROM pg_policies WHERE tablename IN ('pipeline_definition', 'step_log')");
         assertThat(((Number) policy.get("n")).intValue()).isEqualTo(2);

@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 import process.pipeline.Dataset;
+import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.backing.ApiRunner;
@@ -14,6 +15,7 @@ import process.pipeline.registry.TaskSpec;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,7 +28,8 @@ import java.util.Set;
  * filled from the row ({{column}}, and the run's placeholders), and adds fields of the answer as columns. Rows that
  * would send the same variables share one call. At most {@code maxCalls} calls (default 100, at most
  * {@value Limits#MAX_CALLS}): an input that needs more fails before any call is made. A call that fails: {@code fail}
- * (the default) fails the step, {@code skip} drops the row, {@code null} keeps it with the fields empty.
+ * (the default) fails the step, {@code skip} drops the row, {@code null} keeps it with the fields empty. Paths that fan
+ * out over one list of the answer ({@code results[].term}, {@code results[].count}) make a row per item.
  */
 @Component
 public class EnrichStepTask extends RegisteredTask {
@@ -40,7 +43,7 @@ public class EnrichStepTask extends RegisteredTask {
                 .description("Request variables by name, filled from the row: {{customer_id}}."))
             .required("fields", JsonSchema.array(JsonSchema.object()
                 .required("path", JsonSchema.string().minLength(1).maxLength(255).title("From the answer at")
-                    .description("A dot path into the answer's body: data.score."))
+                    .description("A dot path into the answer's body: data.score; results[].term fans out, a row per item."))
                 .required("target", JsonSchema.string().minLength(1).maxLength(128).title("As column")))
                 .minItems(1).maxItems(50).title("Fields"))
             .property("onError", JsonSchema.string().enumOf("fail", "skip", "null").title("When a call fails").defaultValue("fail")
@@ -56,6 +59,16 @@ public class EnrichStepTask extends RegisteredTask {
     public EnrichStepTask(ApiRunner runner) {
         super(SPEC);
         this.runner = runner;
+    }
+
+    @Override
+    public List<DefinitionProblem> check(Map<String, Object> config) {
+        try {
+            FieldPaths.fanOut(Configs.objects(config, "fields"));
+            return Collections.emptyList();
+        } catch (IllegalArgumentException bad) {
+            return Collections.singletonList(new DefinitionProblem("fields", bad.getMessage()));
+        }
     }
 
     @Override
@@ -125,12 +138,19 @@ public class EnrichStepTask extends RegisteredTask {
                 skipped++;
                 continue;
             }
-            Map<String, Object> out = new LinkedHashMap<>(input.getRows().get(i));
-            for (Map<String, Object> field : fields) {
-                Object value = answer instanceof JsonNode ? Values.scalar(Values.at((JsonNode) answer, Configs.text(field, "path", ""))) : null;
-                out.put(Configs.text(field, "target", ""), value);
+            if (!(answer instanceof JsonNode)) {
+                Map<String, Object> out = new LinkedHashMap<>(input.getRows().get(i));
+                fields.forEach(field -> out.put(Configs.text(field, "target", ""), null));
+                rows.add(out);
+                continue;
             }
-            rows.add(out);
+            // Paths that fan out over one list of the answer (results[].term) make a row per item.
+            for (Map<String, JsonNode> picked : FieldPaths.rows((JsonNode) answer, fields)) {
+                Map<String, Object> out = new LinkedHashMap<>(input.getRows().get(i));
+                picked.forEach((target, value) -> out.put(target, Values.scalar(value)));
+                rows.add(out);
+            }
+            Limits.requireShape(rows.size(), columns.size(), "The enriched rows");
         }
         context.log(String.format("%d call(s) for %d row(s); %d row(s) out.", distinct.size(), input.size(), rows.size()));
         if (failedCalls > 0) {

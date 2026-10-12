@@ -1,11 +1,13 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
-import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
-import process.pipeline.StepContext;
 import process.pipeline.StepResult;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
 import process.pipeline.backing.ContractChecker;
+import process.pipeline.data.RowSink;
+import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
@@ -22,9 +24,11 @@ import java.util.Optional;
  * its). On invalid rows: {@code fail} (the default) fails the step and names the first; {@code drop} passes only the
  * valid rows on; {@code flag} passes every row with {@code _valid} and {@code _errors} beside it. Rows go in batches
  * of {@value ContractChecker#BATCH}; an error names a path and a rule, never a value.
+ *
+ * MIG-344: streamed -- a batch is checked and written out before the next is read, so it holds one batch.
  */
 @Component
-public class ValidateStepTask extends RegisteredTask {
+public class ValidateStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final String VALID = "_valid";
     static final String ERRORS = "_errors";
@@ -71,75 +75,108 @@ public class ValidateStepTask extends RegisteredTask {
     }
 
     @Override
-    public StepResult run(StepContext context) throws Exception {
+    public StepResult stream(StreamContext context) throws Exception {
         Map<String, Object> config = context.config();
         String onInvalid = Configs.text(config, "onInvalid", "fail");
-        Dataset input = context.input();
-        List<ContractChecker.RowVerdict> verdicts = new ArrayList<>(input.size());
-        String contract = null;
-        for (int from = 0; from < input.size(); from += ContractChecker.BATCH) {
+        Checked checked = new Checked(context, config, onInvalid);
+        try (RowSource input = context.openInput()) {
+            List<String> columns = new ArrayList<>(input.columns());
+            if ("flag".equals(onInvalid)) {
+                columns.remove(VALID);
+                columns.remove(ERRORS);
+                columns.add(VALID);
+                columns.add(ERRORS);
+            }
+            context.output().declare(columns);
+            List<Map<String, Object>> pending = new ArrayList<>(ContractChecker.BATCH);
+            for (List<Map<String, Object>> batch = input.next(); batch != null; batch = input.next()) {
+                for (Map<String, Object> row : batch) {
+                    pending.add(row);
+                    if (pending.size() == ContractChecker.BATCH) {
+                        checked.check(pending);
+                        pending = new ArrayList<>(ContractChecker.BATCH);
+                    }
+                }
+            }
+            if (!pending.isEmpty()) {
+                checked.check(pending);
+            }
+        }
+        long total = checked.rows;
+        String contract = checked.contract;
+        context.log(String.format("%d of %d row(s) hold to %s.", total - checked.invalid, total, contract == null ? "the contract" : contract));
+        if (checked.invalid > 0 && "fail".equals(onInvalid)) {
+            throw new IllegalStateException(String.format("%d of %d row(s) do not hold to %s; row %d: %s", checked.invalid, total, contract,
+                checked.first + 1, String.join("; ", firstErrors(checked.firstVerdict))));
+        }
+        if (checked.invalid > 0 && "drop".equals(onInvalid)) {
+            context.warn(String.format("%d row(s) dropped: they do not hold to %s.", checked.invalid, contract));
+        }
+        return StepResult.streamed(context.output().size());
+    }
+
+    /** The rows checked so far: a batch at a time to integration-service, each written out as its verdict says. */
+    private final class Checked {
+        private final StreamContext context;
+        private final Map<String, Object> config;
+        private final String onInvalid;
+        private final RowSink out;
+        long rows;
+        long invalid;
+        long first = -1;
+        ContractChecker.RowVerdict firstVerdict;
+        String contract;
+
+        Checked(StreamContext context, Map<String, Object> config, String onInvalid) {
+            this.context = context;
+            this.config = config;
+            this.onInvalid = onInvalid;
+            this.out = context.output();
+        }
+
+        void check(List<Map<String, Object>> batch) throws Exception {
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException("Validate was stopped.");
             }
-            List<Map<String, Object>> batch = input.getRows().subList(from, Math.min(input.size(), from + ContractChecker.BATCH));
             ContractChecker.ContractCall call = new ContractChecker.ContractCall();
-            call.tenantId = context.tenantId();
-            call.jobQueueId = context.jobQueueId();
-            call.stepKey = context.stepKey();
-            call.contractId = Configs.longValue(config, "contractId");
-            call.contractName = Configs.text(config, "contractName", null);
-            call.version = Configs.integer(config, "version", null);
+            call.tenantId = this.context.tenantId();
+            call.jobQueueId = this.context.jobQueueId();
+            call.stepKey = this.context.stepKey();
+            call.contractId = Configs.longValue(this.config, "contractId");
+            call.contractName = Configs.text(this.config, "contractName", null);
+            call.version = Configs.integer(this.config, "version", null);
             call.rows = batch;
-            ContractChecker.ContractVerdicts answer = this.contracts.validate(call);
-            contract = String.format("%s v%s", answer.name == null ? "the contract" : answer.name, answer.version == null ? "?" : answer.version);
+            ContractChecker.ContractVerdicts answer = contracts.validate(call);
+            this.contract = String.format("%s v%s", answer.name == null ? "the contract" : answer.name, answer.version == null ? "?" : answer.version);
             Map<Integer, ContractChecker.RowVerdict> byIndex = new LinkedHashMap<>();
             for (ContractChecker.RowVerdict verdict : answer.rows == null ? Collections.<ContractChecker.RowVerdict>emptyList() : answer.rows) {
                 byIndex.put(verdict.index, verdict);
             }
             for (int i = 0; i < batch.size(); i++) {
-                ContractChecker.RowVerdict verdict = byIndex.get(i);
-                if (verdict == null) {
-                    throw new IllegalStateException(String.format("integration-service gave no verdict for row %d.", from + i + 1));
+                if (byIndex.get(i) == null) {
+                    throw new IllegalStateException(String.format("integration-service gave no verdict for row %d.", this.rows + i + 1));
                 }
-                verdicts.add(verdict);
             }
-        }
-        int invalid = 0;
-        int first = -1;
-        for (int i = 0; i < verdicts.size(); i++) {
-            if (!verdicts.get(i).valid) {
-                invalid++;
-                first = first < 0 ? i : first;
+            for (int i = 0; i < batch.size(); i++) {
+                ContractChecker.RowVerdict verdict = byIndex.get(i);
+                if (!verdict.valid) {
+                    if (this.first < 0) {
+                        this.first = this.rows + i;
+                        this.firstVerdict = verdict;
+                    }
+                    this.invalid++;
+                }
+                if ("flag".equals(this.onInvalid)) {
+                    Map<String, Object> row = new LinkedHashMap<>(batch.get(i));
+                    row.put(VALID, verdict.valid);
+                    row.put(ERRORS, verdict.valid ? null : String.join("; ", verdict.errors == null ? Collections.<String>emptyList() : verdict.errors));
+                    this.out.add(row);
+                } else if (verdict.valid) {
+                    this.out.add(batch.get(i));
+                }
             }
+            this.rows += batch.size();
         }
-        context.log(String.format("%d of %d row(s) hold to %s.", input.size() - invalid, input.size(), contract == null ? "the contract" : contract));
-        if (invalid > 0 && "fail".equals(onInvalid)) {
-            throw new IllegalStateException(String.format("%d of %d row(s) do not hold to %s; row %d: %s", invalid, input.size(), contract,
-                first + 1, String.join("; ", firstErrors(verdicts.get(first)))));
-        }
-        List<String> columns = new ArrayList<>(input.getColumns());
-        List<Map<String, Object>> rows = new ArrayList<>();
-        if ("flag".equals(onInvalid)) {
-            columns.remove(VALID);
-            columns.remove(ERRORS);
-            columns.add(VALID);
-            columns.add(ERRORS);
-        }
-        for (int i = 0; i < input.size(); i++) {
-            ContractChecker.RowVerdict verdict = verdicts.get(i);
-            if ("flag".equals(onInvalid)) {
-                Map<String, Object> row = new LinkedHashMap<>(input.getRows().get(i));
-                row.put(VALID, verdict.valid);
-                row.put(ERRORS, verdict.valid ? null : String.join("; ", verdict.errors == null ? Collections.<String>emptyList() : verdict.errors));
-                rows.add(row);
-            } else if (verdict.valid) {
-                rows.add(input.getRows().get(i));
-            }
-        }
-        if (invalid > 0 && "drop".equals(onInvalid)) {
-            context.warn(String.format("%d row(s) dropped: they do not hold to %s.", invalid, contract));
-        }
-        return StepResult.of(new Dataset(columns, rows));
     }
 
     private static List<String> firstErrors(ContractChecker.RowVerdict verdict) {
