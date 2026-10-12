@@ -32,6 +32,12 @@ public class CustomerRunStore {
         public Instant endedAt;
         public int attempt;
         public String reference;
+        /** MIG-345: the latest attempt when someone asked for it (run_attempt): resume or restart; null otherwise. */
+        public String retryMode;
+        public String retryFromStep;
+        public Integer retryPreviousAttempt;
+        public Integer retryReusedSteps;
+        public String retryVia;
     }
 
     /** A run started through the API: the intake it was given (api_intake, V201). */
@@ -47,9 +53,11 @@ public class CustomerRunStore {
     }
 
     private static final String COLUMNS = "SELECT q.job_queue_id, q.job_id, q.tenant_id, q.job_status, q.job_status_message, q.date_created, "
-        + "q.start_time, COALESCE(q.end_time, q.skip_time) AS ended, q.attempt, i.reference "
+        + "q.start_time, COALESCE(q.end_time, q.skip_time) AS ended, q.attempt, i.reference, a.mode AS retry_mode, "
+        + "a.from_step_key AS retry_from, a.previous_attempt AS retry_previous, a.reused_steps AS retry_reused, a.requested_via AS retry_via "
         + "FROM job_queue q JOIN source_job j ON j.job_id = q.job_id AND j.tenant_id = q.tenant_id "
         + "LEFT JOIN api_intake i ON i.job_queue_id = q.job_queue_id "
+        + "LEFT JOIN run_attempt a ON a.job_queue_id = q.job_queue_id AND a.attempt = q.attempt "
         + "WHERE q.tenant_id = ? AND q.status <> 'Delete' AND j.job_status <> 'Delete' ";
 
     private static final RowMapper<Row> ROW = (rs, n) -> {
@@ -64,6 +72,11 @@ public class CustomerRunStore {
         row.endedAt = instant(rs.getObject("ended", OffsetDateTime.class));
         row.attempt = Math.max(1, rs.getInt("attempt"));
         row.reference = rs.getString("reference");
+        row.retryMode = rs.getString("retry_mode");
+        row.retryFromStep = rs.getString("retry_from");
+        row.retryPreviousAttempt = (Integer) rs.getObject("retry_previous");
+        row.retryReusedSteps = (Integer) rs.getObject("retry_reused");
+        row.retryVia = rs.getString("retry_via");
         return row;
     };
 

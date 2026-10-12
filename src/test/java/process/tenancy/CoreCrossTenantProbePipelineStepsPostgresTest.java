@@ -1,5 +1,6 @@
 package process.tenancy;
 
+import process.api.StepTimelineRestApi;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -157,6 +158,13 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
             for (long theirs : runs) {
                 assertThat(fx.probe("GET sourceJob.json/stepExecutions", caller, () -> fx.stepTimeline.stepExecutions(theirs, null)))
                     .contains(REFUSED).contains("Run not found with jobQueueId.");
+                // MIG-345: neither the retry's plan nor the retry itself, from the failed step or from the start.
+                assertThat(fx.probe("GET sourceJob.json/retryPlan", caller, () -> fx.stepTimeline.retryPlan(theirs)))
+                    .contains(REFUSED).contains("Run not found with jobQueueId.");
+                for (String from : new String[] {"failed_step", "start"}) {
+                    assertThat(fx.probe("POST sourceJob.json/retryRun", caller, () -> fx.stepTimeline.retryRun(retry(theirs, from))))
+                        .contains(REFUSED).contains("Run not found with jobQueueId.");
+                }
             }
             long[] steps = caller == USER_OF_A ? new long[] {bStep, colleagueStep} : new long[] {bStep};
             for (long theirs : steps) {
@@ -169,9 +177,20 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
             assertThat(fx.probe("GET sourceJob.json/stepExecutions", caller, () -> fx.stepTimeline.stepExecutions(A_RUN, null)))
                 .contains(REFUSED);
             assertThat(fx.probe("GET sourceJob.json/stepLogs", caller, () -> fx.stepTimeline.stepLogs(aStep))).contains(REFUSED);
+            assertThat(fx.probe("GET sourceJob.json/retryPlan", caller, () -> fx.stepTimeline.retryPlan(A_RUN))).contains(REFUSED);
+            assertThat(fx.probe("POST sourceJob.json/retryRun", caller, () -> fx.stepTimeline.retryRun(retry(A_RUN, "start"))))
+                .contains(REFUSED);
         }
+        assertThat(fx.db.jdbc().queryForObject("SELECT count(*) FROM run_attempt", Long.class)).as("no attempt was asked for").isZero();
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
+    private static StepTimelineRestApi.RetryRequest retry(long run, String from) {
+        StepTimelineRestApi.RetryRequest request = new StepTimelineRestApi.RetryRequest();
+        request.setJobQueueId(run);
+        request.setFrom(from);
+        return request;
     }
 
     private static PipelineDefinitionService.TaskSwitchRequest switchOf(String code, Boolean enabled) {

@@ -58,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.TreeSet;
 
 /**
  * Runs a pipeline as ordered steps (MIG-230), for a run whose pipeline has a stored definition that is not its legacy
@@ -119,13 +120,17 @@ public class StepEngine {
         /** Null when the stored version cannot be read any more: the run is declined with {@link #unreadable}. */
         public final PipelineDefinition definition;
         public final String unreadable;
+        /** MIG-345: the attempt someone asked for (a resume or a restart); null for a first attempt or the policy's retry. */
+        public final RunAttemptStore.Attempt asked;
 
-        StepPlan(SourceJob job, JobQueue run, PipelineDefinitionStore.Stored stored, PipelineDefinition definition, String unreadable) {
+        StepPlan(SourceJob job, JobQueue run, PipelineDefinitionStore.Stored stored, PipelineDefinition definition, String unreadable,
+                 RunAttemptStore.Attempt asked) {
             this.job = job;
             this.run = run;
             this.stored = stored;
             this.definition = definition;
             this.unreadable = unreadable;
+            this.asked = asked;
         }
     }
 
@@ -177,6 +182,13 @@ public class StepEngine {
 
     /** MIG-360: the files a run took when it took a batch (the inbox's store); without it, a run's own file alone. */
     private RunInputs runInputs;
+    /** MIG-345: the attempts someone asked for (a resume, a restart); without it, every attempt starts at the first step. */
+    private RunAttemptStore attempts;
+
+    @Autowired(required = false)
+    public void useAttempts(RunAttemptStore attempts) {
+        this.attempts = attempts;
+    }
 
     @Autowired(required = false)
     public void useRunInputs(RunInputs runInputs) {
@@ -241,7 +253,14 @@ public class StepEngine {
             || job.getJobStatus() != Status.Active) {
             return Optional.empty();
         }
-        Optional<PipelineDefinitionStore.Stored> stored = this.steps.pinnedDefinition(run.getJobQueueId()).flatMap(this.definitions::byId);
+        // MIG-345: an attempt someone asked for runs the version it was planned on (a resume may run a newer one).
+        RunAttemptStore.Attempt asked = this.attempts == null ? null
+            : this.attempts.find(run.getJobQueueId(), Math.max(1, run.getAttempt())).orElse(null);
+        Optional<PipelineDefinitionStore.Stored> stored = asked != null && asked.pipelineDefinitionId != null
+            ? this.definitions.byId(asked.pipelineDefinitionId) : Optional.empty();
+        if (!stored.isPresent()) {
+            stored = this.steps.pinnedDefinition(run.getJobQueueId()).flatMap(this.definitions::byId);
+        }
         if (!stored.isPresent()) {
             stored = this.definitions.latestFor(job.getTenantId(), job.getTaskDetail().getPipelineId());
         }
@@ -254,12 +273,12 @@ public class StepEngine {
         } catch (IllegalStateException unreadable) {
             // A stored version this build cannot read (the model changed under it): the engine's to decline, never
             // today's path -- the run must not be handed to a worker that has no such pipeline, nor left claimed.
-            return Optional.of(new StepPlan(job, run, stored.get(), null, reasonOf(unreadable)));
+            return Optional.of(new StepPlan(job, run, stored.get(), null, reasonOf(unreadable), asked));
         }
         if (definition.isLegacy()) {
             return Optional.empty();
         }
-        return Optional.of(new StepPlan(job, run, stored.get(), definition, null));
+        return Optional.of(new StepPlan(job, run, stored.get(), definition, null, asked));
     }
 
     /** Runs the plan on the engine's threads, in the run's workspace; {@code done} runs afterwards, whatever happened. */
@@ -416,15 +435,41 @@ public class StepEngine {
                 return;
             }
             List<Long> rows = steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned);
-            ResponseDto running = report(this.run, JobStatus.Running, String.format("Running %d step(s): %s.", this.stepList.size(),
-                this.stepList.stream().map(PipelineDefinition.Step::getKey).collect(Collectors.joining(", "))));
+            // MIG-345: a resume takes the earlier attempt's outputs of the steps before the one that failed -- read again at
+            // the start, so an output that expired since the retry was asked for declines the attempt rather than fail a step.
+            Resumed resumed = null;
+            if (this.plan.asked != null && this.plan.asked.isResume()) {
+                String cannot;
+                try {
+                    resumed = this.resumable();
+                    cannot = null;
+                } catch (IllegalStateException refusedResume) {
+                    cannot = refusedResume.getMessage();
+                }
+                if (cannot != null) {
+                    String declined = String.format("Declined by the step engine: attempt %d cannot resume from step %d: %s",
+                        this.attempt, this.plan.asked.fromStepIndex + 1, cannot);
+                    this.stopAll(rows, 0, JobStatus.Skip.name(), "Not run: " + declined);
+                    report(this.run, JobStatus.Failed, declined);
+                    return;
+                }
+            }
+            String runningLine = resumed == null
+                ? String.format("Running %d step(s): %s.", this.stepList.size(),
+                    this.stepList.stream().map(PipelineDefinition.Step::getKey).collect(Collectors.joining(", ")))
+                : String.format("Resuming from step %d <%s>: %d step(s) reused from %s (%s), running %s.", resumed.from + 1,
+                    this.stepList.get(resumed.from).getKey(), resumed.from, resumed.attempts(),
+                    this.stepList.subList(0, resumed.from).stream().map(PipelineDefinition.Step::getKey).collect(Collectors.joining(", ")),
+                    this.stepList.subList(resumed.from, this.stepList.size()).stream().map(PipelineDefinition.Step::getKey)
+                        .collect(Collectors.joining(", ")));
+            ResponseDto running = report(this.run, JobStatus.Running, runningLine);
             if (refused(running)) {
                 this.stopAll(rows, 0, "Interrupt", "Not run: the run was closed before its steps started.");
                 return;
             }
             Outcome outcome;
             try {
-                outcome = this.steps(rows);
+                outcome = this.steps(rows, resumed);
             } finally {
                 // MIG-344: whatever a try spilled and did not remove (one that timed out) goes with the run.
                 datasets.removeScratch(this.run.getJobQueueId(), this.attempt);
@@ -440,16 +485,100 @@ public class StepEngine {
             }
         }
 
-        private Outcome steps(List<Long> rows) {
+        /**
+         * MIG-345: what a resume reuses -- the earlier attempt's steps before the one it starts at, each Completed under the
+         * same key, each output still kept. Throws, saying why, when it cannot.
+         */
+        private Resumed resumable() {
+            RunAttemptStore.Attempt asked = this.plan.asked;
+            int from = asked.fromStepIndex == null ? 0 : asked.fromStepIndex;
+            if (from >= this.stepList.size()) {
+                throw new IllegalStateException(String.format("definition version %d has %d step(s), none at step %d",
+                    this.plan.stored.version, this.stepList.size(), from + 1));
+            }
+            Map<Integer, StepStore.StepRow> earlier = new HashMap<>();
+            Map<Long, StepStore.StepRow> byId = new HashMap<>();
+            for (StepStore.StepRow row : steps.stepsOfRun(this.run.getJobQueueId())) {
+                byId.put(row.stepExecutionId, row);
+                if (row.attempt == asked.previousAttempt) {
+                    earlier.put(row.stepIndex, row);
+                }
+            }
+            // Each reused step as the step that really ran it: an earlier resume's reused step names the one it reused.
+            List<StepStore.StepRow> reused = new ArrayList<>();
+            for (int i = 0; i < from; i++) {
+                StepStore.StepRow row = earlier.get(i);
+                String key = this.stepList.get(i).getKey();
+                if (row == null || !key.equals(row.stepKey) || !JobStatus.Completed.name().equals(row.status)) {
+                    throw new IllegalStateException(String.format("step %d <%s> did not complete in attempt %d", i + 1, key,
+                        asked.previousAttempt));
+                }
+                reused.add(RunRetries.origin(row, byId));
+            }
+            Map<Long, StepStore.KeptOutput> kept = steps.keptOutputsOf(reused.stream().map(row -> row.stepExecutionId)
+                .collect(Collectors.toList()));
+            Instant now = Instant.now();
+            for (StepStore.StepRow row : reused) {
+                StepStore.KeptOutput output = kept.get(row.stepExecutionId);
+                if (output != null && output.expiredAt(now)) {
+                    throw new IllegalStateException(String.format("the kept output of step <%s> expired%s", row.stepKey,
+                        output.expiresAt == null ? "" : " at " + output.expiresAt));
+                }
+            }
+            return new Resumed(from, reused, kept);
+        }
+
+        /**
+         * MIG-345: the reused steps, recorded as such (Completed, reused_from, no times, nothing run), and the references
+         * their outputs leave -- the same each would have passed on had it run: its kept output, else the input it read.
+         * Nothing is read: a later step reads a reused output a batch at a time, as it reads any.
+         */
+        private String reuse(List<Long> rows, Resumed resumed) {
+            String latest = null;
+            int total = this.stepList.size();
+            for (int i = 0; i < resumed.from; i++) {
+                PipelineDefinition.Step step = this.stepList.get(i);
+                StepStore.StepRow earlier = resumed.reused.get(i);
+                StepStore.KeptOutput output = resumed.kept.get(earlier.stepExecutionId);
+                String passed;
+                if (output != null) {
+                    passed = output.storageKey;
+                    if (output.rows != null) {
+                        this.sizes.put(passed, output.rows);
+                    }
+                } else {
+                    passed = step.getInput() != null ? this.outputs.get(step.getInput()) : latest;
+                }
+                this.outputs.put(step.getKey(), passed);
+                latest = passed;
+                String line = String.format("Reused from attempt %d: not run again (%s in, %s out).", earlier.attempt,
+                    earlier.recordsIn == null ? "no records" : earlier.recordsIn.toString(),
+                    earlier.recordsOut == null ? "no records" : earlier.recordsOut.toString());
+                steps.reused(rows.get(i), earlier.stepExecutionId, earlier.recordsIn, earlier.recordsOut, line);
+                new StepLog(rows.get(i)).line("INFO", line);
+                this.audit(String.format("Step %d/%d <%s> (%s) reused from attempt %d: not run again.", i + 1, total, step.getKey(),
+                    step.getTask(), earlier.attempt));
+            }
+            return latest;
+        }
+
+        private Outcome steps(List<Long> rows, Resumed resumed) {
             Outcome outcome = new Outcome();
             Dataset source = this.source();
             this.sourceRows = source;
             // What a step reads is a reference: the dataset key of the output it reads (run_dataset.storage_key), or
             // null for the source. A step that makes no dataset passes on the reference it read.
-            String latest = null;
             Map<String, String> outputs = this.outputs;
+            String latest = null;
+            int first = 0;
+            if (resumed != null) {
+                latest = this.reuse(rows, resumed);
+                first = resumed.from;
+                outcome.reused = resumed.from;
+                outcome.reusedFrom = resumed.attempts();
+            }
             int total = this.stepList.size();
-            for (int i = 0; i < total; i++) {
+            for (int i = first; i < total; i++) {
                 PipelineDefinition.Step step = this.stepList.get(i);
                 long row = rows.get(i);
                 if (outcome.stopReason != null) {
@@ -498,6 +627,7 @@ public class StepEngine {
                         : output != null ? this.keep(row, step, output) : inputKey;
                     outputs.put(step.getKey(), passed);
                     latest = passed;
+                    this.recordReads(row, step, tried.reads);
                     String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, input.size(),
                         out == null ? "no records" : out.toString(), tried.tries > 1 ? String.format(", on try %d", tried.tries) : "");
                     steps.ended(row, JobStatus.Completed.name(), out, null, done);
@@ -514,6 +644,22 @@ public class StepEngine {
                 }
             }
             return outcome;
+        }
+
+        /** MIG-345: what the step read of each bucket object, fingerprinted, for a later resume's input check. */
+        private void recordReads(long row, PipelineDefinition.Step step, List<InputDigests.Read> reads) {
+            if (reads == null) {
+                return;
+            }
+            for (InputDigests.Read read : reads) {
+                try {
+                    steps.inputRead(row, read);
+                } catch (RuntimeException unrecorded) {
+                    // A resume then cannot vouch for this file and says so; the run itself is not failed for it.
+                    logger.warn("Run {} step <{}>: the fingerprint of {} could not be recorded: {}", this.run.getJobQueueId(),
+                        step.getKey(), read, reasonOf(unrecorded));
+                }
+            }
         }
 
         /**
@@ -619,11 +765,14 @@ public class StepEngine {
                 boolean streams = task.isPresent() && task.get() instanceof StreamingStepTask;
                 Context context = streams ? new StreamTry(this, step, row, input, t, log) : new Context(this, step, row, input, t, log);
                 tried.streamed = streams;
+                // MIG-345: the bucket objects this try reads, fingerprinted on the way.
+                InputDigests.Recorder recorder = new InputDigests.Recorder();
                 Future<StepResult> future;
                 try {
                     future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
                         try {
-                            return streams ? ((StreamingStepTask) task.get()).stream((StreamTry) context) : task.get().run(context);
+                            return InputDigests.recording(recorder, () -> streams ? ((StreamingStepTask) task.get()).stream((StreamTry) context)
+                                : task.get().run(context));
                         } catch (RuntimeException ex) {
                             throw ex;
                         } catch (Exception ex) {
@@ -643,6 +792,7 @@ public class StepEngine {
                         tried.timedOut = false;
                         if (uncommitted == null) {
                             tried.error = null;
+                            tried.reads = recorder.reads();
                             return tried;
                         }
                         // The work succeeded but its output could not be kept: a failed try.
@@ -866,6 +1016,9 @@ public class StepEngine {
         int failedAndContinued;
         int skipped;
         String stoppedAt;
+        /** MIG-345: the steps a resume reused, and the attempt whose they are. */
+        int reused;
+        String reusedFrom;
 
         void failed(String runFailure, OnError onError, PipelineDefinition.Step step) {
             switch (onError) {
@@ -885,7 +1038,10 @@ public class StepEngine {
         }
 
         String summary(int total) {
-            StringBuilder line = new StringBuilder(String.format("%d of %d step(s) completed", this.completed, total));
+            StringBuilder line = new StringBuilder(String.format("%d of %d step(s) completed", this.completed + this.reused, total));
+            if (this.reused > 0) {
+                line.append(String.format(" (%d reused from %s)", this.reused, this.reusedFrom));
+            }
             if (this.failedAndContinued > 0) {
                 line.append(String.format(", %d failed and continued", this.failedAndContinued));
             }
@@ -907,6 +1063,28 @@ public class StepEngine {
         String outputKey;
         long outputRows;
         List<String> outputColumns;
+        /** MIG-345: the bucket objects the successful try read, fingerprinted. */
+        List<InputDigests.Read> reads;
+    }
+
+    /** MIG-345: what a resume reuses: the steps before {@code from} as the attempts that ran them, and their kept outputs. */
+    private static final class Resumed {
+        final int from;
+        final List<StepStore.StepRow> reused;
+        final Map<Long, StepStore.KeptOutput> kept;
+
+        Resumed(int from, List<StepStore.StepRow> reused, Map<Long, StepStore.KeptOutput> kept) {
+            this.from = from;
+            this.reused = reused;
+            this.kept = kept;
+        }
+
+        /** "attempt 1", or "attempts 1, 2" when the reused steps ran in more than one. */
+        String attempts() {
+            TreeSet<Integer> ran = new TreeSet<>();
+            this.reused.forEach(row -> ran.add(row.attempt));
+            return (ran.size() == 1 ? "attempt " : "attempts ") + ran.stream().map(String::valueOf).collect(Collectors.joining(", "));
+        }
     }
 
     /** A checked exception out of a task, carried through the try's thread. */

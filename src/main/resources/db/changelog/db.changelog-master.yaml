@@ -221,3 +221,6 @@ databaseChangeLog:
   # V204: MIG-360 -- an inbox arrival is never dropped: Waiting while its job is busy, started by the job's next run; job_inbox_trigger.batch_size.
   - include:
       file: db/changelog/yaml/V204.0-inbox-queue.yaml
+  # V205: MIG-345 -- retry a failed run from the step that failed: run_attempt, run_input_file, step_execution.reused_from.
+  - include:
+      file: db/changelog/yaml/V205.0-run-retry.yaml

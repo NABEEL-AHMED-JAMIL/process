@@ -39,7 +39,7 @@ Concurrency comes from Spring's own scheduling pool, sized by `spring.task.sched
 |---|---|
 | **Java 17 / Spring Boot 2.7.18** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204) |
 | **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
-| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V204.0 as of 2026-10-07 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
+| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V205.0 as of 2026-10-12 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
 | **Redis** | Caching, token revocations shared with Identity, locks and one-time secrets |
 | **storage-service** | Object storage (MinIO, S3, Azure Blob, per connection) is storage-service's; a pipeline's bucket steps go through its trusted contract (`TrustedBucketStore`). Document conversion left with media-service (MIG-48) |
 | **DuckDB 1.1.3** | Reads Parquet for the step engine (`ParquetRows`) |
@@ -100,7 +100,7 @@ POST /api/v1/sourceTask.json/uploadSourceTask
 
 | Suite | Command | Count |
 |---|---|---|
-| Unit and Postgres | `mvn -o test` | about 2,661 as of 2026-10-07 (the 91 `*PostgresTest` classes need NOTIFICATIONS_TEST_DB_*) |
+| Unit and Postgres | `mvn -o test` | about 2,702 as of 2026-10-12 (the 92 `*PostgresTest` classes need NOTIFICATIONS_TEST_DB_*) |
 | End-to-end, over real HTTP | `./run-e2e.sh` (`*E2EIT`, `HarnessSmokeIT`) | 13 |
 | Kafka security matrix, real broker | `./run-kafka-matrix.sh` | 17 |
 

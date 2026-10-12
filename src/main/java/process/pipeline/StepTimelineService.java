@@ -15,6 +15,9 @@ import process.pipeline.data.RowSource;
 import process.pipeline.data.RowCollector;
 import process.pipeline.review.RunReviews;
 import process.util.BusinessTime;
+import process.util.UserNameResolver;
+import process.security.TenantContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.time.Duration;
@@ -33,6 +36,10 @@ import java.io.InputStream;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * A run's steps for the console's timeline (MIG-230, for MIG-251's Executions detail): each step's status, times,
@@ -113,6 +120,22 @@ public class StepTimelineService {
         this.reviews = reviews;
     }
 
+    /** MIG-345: retrying a failed run (from its failed step, or from the start), and the attempts someone asked for. */
+    private RunRetries retries;
+    private RunAttemptStore attempts;
+    private UserNameResolver names;
+
+    @Autowired(required = false)
+    public void useRetries(RunRetries retries, RunAttemptStore attempts) {
+        this.retries = retries;
+        this.attempts = attempts;
+    }
+
+    @Autowired(required = false)
+    public void useNames(UserNameResolver names) {
+        this.names = names;
+    }
+
     /** The timeline of one attempt of a run: the latest when none is named. */
     @Transactional(readOnly = true)
     public ResponseDto timeline(Long jobQueueId, Integer attempt) {
@@ -146,10 +169,18 @@ public class StepTimelineService {
         } else {
             Map<Long, List<StepStore.DatasetRow>> datasets = this.steps.datasetsOfRun(run.get().getJobQueueId()).stream()
                 .collect(Collectors.groupingBy(dataset -> dataset.stepExecutionId));
+            // MIG-345: a reused step shows the attempt whose output it is, and that output's datasets.
+            Map<Long, Integer> attemptOf = new HashMap<>();
+            rows.forEach(row -> attemptOf.put(row.stepExecutionId, row.attempt));
             timeline.put("pipelineDefinitionId", ofAttempt.isEmpty() ? null : ofAttempt.get(0).pipelineDefinitionId);
-            timeline.put("steps", ofAttempt.stream().map(row -> step(row, datasets.getOrDefault(row.stepExecutionId,
-                Collections.emptyList()))).collect(Collectors.toList()));
+            timeline.put("steps", ofAttempt.stream().map(row -> {
+                long datasetsOf = row.reusedFrom != null ? row.reusedFrom : row.stepExecutionId;
+                Map<String, Object> step = step(row, datasets.getOrDefault(datasetsOf, Collections.emptyList()));
+                step.put("reusedFromAttempt", row.reusedFrom == null ? null : attemptOf.get(row.reusedFrom));
+                return step;
+            }).collect(Collectors.toList()));
         }
+        timeline.put("attemptDetails", this.attemptDetails(run.get().getJobQueueId()));
         timeline.put("aiSteps", ai.stream().filter(step -> (step.attempt == null ? 1 : step.attempt) == shown).collect(Collectors.toList()));
         this.putReview(timeline, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d step(s) in attempt %d.", ((List<?>) timeline.get("steps")).size(), shown),
@@ -240,8 +271,14 @@ public class StepTimelineService {
         }
         Optional<JobQueue> run = Optional.of(owned.get().run);
         Instant now = Instant.now();
+        // MIG-345: an attempt's files include those its reused steps made in the attempt whose outputs they are.
+        Set<Long> reusedSources = new HashSet<>();
+        if (attempt != null) {
+            this.steps.stepsOfRun(run.get().getJobQueueId()).stream().filter(row -> row.attempt == attempt && row.reusedFrom != null)
+                .forEach(row -> reusedSources.add(row.reusedFrom));
+        }
         List<Map<String, Object>> outputs = this.steps.outputsOfRun(run.get().getJobQueueId()).stream()
-            .filter(row -> attempt == null || row.attempt == attempt)
+            .filter(row -> attempt == null || row.attempt == attempt || reusedSources.contains(row.stepExecutionId))
             .map(row -> {
                 Map<String, Object> out = new LinkedHashMap<>();
                 out.put("runOutputId", row.runOutputId);
@@ -273,6 +310,125 @@ public class StepTimelineService {
         manifest.put("outputs", outputs);
         this.putReview(manifest, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d file(s).", outputs.size()), manifest);
+    }
+
+    /**
+     * MIG-345: the attempts of the run someone asked for -- resume or restart, from which step, how many steps reused, by
+     * whom (a person's name, or the API client) and when -- for the run's history.
+     */
+    private List<Map<String, Object>> attemptDetails(long jobQueueId) {
+        if (this.attempts == null) {
+            return Collections.emptyList();
+        }
+        List<RunAttemptStore.Attempt> asked = this.attempts.ofRun(jobQueueId);
+        Map<Long, String> who = Collections.emptyMap();
+        List<Long> users = asked.stream().map(a -> a.requestedByUserId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (this.names != null && !users.isEmpty()) {
+            try {
+                who = this.names.namesFor(users);
+            } catch (RuntimeException unnamed) {
+                who = Collections.emptyMap();
+            }
+        }
+        List<Map<String, Object>> details = new ArrayList<>();
+        for (RunAttemptStore.Attempt one : asked) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("attempt", one.attempt);
+            detail.put("previousAttempt", one.previousAttempt);
+            detail.put("mode", one.mode);
+            detail.put("fromStepIndex", one.fromStepIndex);
+            detail.put("fromStepKey", one.fromStepKey);
+            detail.put("reusedSteps", one.reusedSteps);
+            detail.put("requestedVia", one.requestedVia);
+            detail.put("requestedByUserId", one.requestedByUserId);
+            detail.put("requestedBy", one.requestedByClientId != null ? "API client " + one.requestedByClientId
+                : who.getOrDefault(one.requestedByUserId, one.requestedByUserId == null ? null : "user " + one.requestedByUserId));
+            detail.put("requestedAt", one.requestedAt == null ? null : BusinessTime.wallClockOf(one.requestedAt));
+            details.add(detail);
+        }
+        return details;
+    }
+
+    /**
+     * MIG-345: what retrying this failed run would do, for the console's dialog: the step it would resume from and the steps
+     * it would reuse (each with its rows and when its output expires), or why it cannot; and whether the caller may run it
+     * again from the start (a workspace administrator's), or why not. The input files are not read here: the retry checks
+     * them and says so when one changed.
+     */
+    @Transactional(readOnly = true)
+    public ResponseDto retryPlan(Long jobQueueId) {
+        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        if (!owned.isPresent()) {
+            return new ResponseDto(ERROR, RUN_NOT_FOUND);
+        }
+        if (this.retries == null) {
+            return new ResponseDto(ERROR, "Retrying a run is not available here.");
+        }
+        RunRetries.Plan plan = this.retries.plan(owned.get().run, owned.get().job, false);
+        return new ResponseDto(SUCCESS, plan.resumable() ? "Resumable." : plan.refusal, this.planView(plan));
+    }
+
+    /** MIG-345: retries the failed run -- {@code from} "start" runs it again from the start, else from its failed step. */
+    public ResponseDto retry(Long jobQueueId, String from) {
+        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        if (!owned.isPresent()) {
+            return new ResponseDto(ERROR, RUN_NOT_FOUND);
+        }
+        if (this.retries == null) {
+            return new ResponseDto(ERROR, "Retrying a run is not available here.");
+        }
+        boolean restart = "start".equals(from);
+        RunRetries.Outcome outcome = this.retries.retry(owned.get().run, owned.get().job, restart,
+            RunRetries.Actor.person(TenantContext.getAppUserId(), isAdmin()));
+        Map<String, Object> view = this.planView(outcome.plan);
+        view.put("mode", outcome.mode);
+        view.put("refusalKind", outcome.refusalKind);
+        if (!outcome.queued()) {
+            return new ResponseDto(ERROR, outcome.refusal, view);
+        }
+        return new ResponseDto(SUCCESS, restart
+            ? String.format("Run %d queued again from the start as attempt %d.", jobQueueId, outcome.plan.nextAttempt)
+            : String.format("Run %d queued to resume from step %d <%s> as attempt %d, reusing %d step(s).", jobQueueId,
+                outcome.plan.fromIndex + 1, outcome.plan.fromKey, outcome.plan.nextAttempt, outcome.plan.reused.size()), view);
+    }
+
+    /** A workspace administrator (or the platform's): who may run a failed run again from the start in the console. */
+    private static boolean isAdmin() {
+        return "TENANT_ADMIN".equals(TenantContext.getUserRole()) || TenantContext.isPlatformAdmin();
+    }
+
+    private Map<String, Object> planView(RunRetries.Plan plan) {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("jobQueueId", plan.jobQueueId);
+        view.put("jobId", plan.jobId);
+        view.put("attempt", plan.attempt);
+        view.put("nextAttempt", plan.nextAttempt);
+        view.put("resumable", plan.resumable());
+        view.put("refusalKind", plan.refusalKind);
+        view.put("refusal", plan.refusal);
+        view.put("fromIndex", plan.fromIndex);
+        view.put("fromKey", plan.fromKey);
+        view.put("fromName", plan.fromName);
+        view.put("definitionVersion", plan.definitionVersion);
+        view.put("ranVersion", plan.ranVersion);
+        view.put("reused", plan.reused.stream().map(reused -> {
+            Map<String, Object> step = new LinkedHashMap<>();
+            step.put("index", reused.index);
+            step.put("key", reused.key);
+            step.put("name", reused.name);
+            step.put("task", reused.task);
+            step.put("rowsOut", reused.rowsOut);
+            step.put("expiresAt", reused.expiresAt == null ? null : BusinessTime.wallClockOf(reused.expiresAt));
+            step.put("inputFiles", reused.inputFiles);
+            return step;
+        }).collect(Collectors.toList()));
+        view.put("inputFiles", plan.inputFiles);
+        view.put("inputsChecked", plan.inputsChecked);
+        boolean admin = isAdmin();
+        view.put("restartable", plan.restartable() && admin);
+        view.put("restartRefusal", plan.restartable() ? (admin ? null : "Running a failed run again from the start is a workspace "
+            + "administrator's.") : plan.restartRefusal);
+        return view;
     }
 
     /** A file Save File kept: its own bytes in its own format, or its rows in the one asked for. */

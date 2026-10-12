@@ -36,7 +36,26 @@ final class CustomerViews {
         run.put("message", cut(row.message));
         run.put("attempt", row.attempt);
         run.put("review", review);
+        run.put("retry", retryOf(row));
         return run;
+    }
+
+    /**
+     * MIG-345: how the run's latest attempt came about when someone asked for it -- a resume from the failed step (which,
+     * reusing how many steps of which attempt) or a restart, through the console or the API; null for a first attempt or
+     * one the pipeline's own retry policy made.
+     */
+    static Map<String, Object> retryOf(CustomerRunStore.Row row) {
+        if (row.retryMode == null) {
+            return null;
+        }
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("from", "resume".equals(row.retryMode) ? "failed_step" : "start");
+        retry.put("fromStep", row.retryFromStep);
+        retry.put("previousAttempt", row.retryPreviousAttempt);
+        retry.put("reusedSteps", row.retryReusedSteps == null ? 0 : row.retryReusedSteps);
+        retry.put("requestedThrough", row.retryVia);
+        return retry;
     }
 
     /** The API's word for a step's status (step_execution.status): pending, running, completed, failed, skipped, interrupted. */

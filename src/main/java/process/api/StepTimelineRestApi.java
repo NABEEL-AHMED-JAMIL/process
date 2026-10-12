@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -82,6 +83,40 @@ public class StepTimelineRestApi {
     @RequestMapping(value = "/sourceJob.json/runOutputs", method = RequestMethod.GET)
     public ResponseEntity<?> runOutputs(@RequestParam Long jobQueueId, @RequestParam(required = false) Integer attempt) {
         return new ResponseEntity<>(this.service.outputs(jobQueueId, attempt), HttpStatus.OK);
+    }
+
+    /**
+     * MIG-345: what retrying a failed run would do -- the step it resumes from, the steps it reuses, or why it cannot -- and
+     * whether the caller may run it again from the start.
+     */
+    @RequestMapping(value = "/sourceJob.json/retryPlan", method = RequestMethod.GET)
+    public ResponseEntity<?> retryPlan(@RequestParam Long jobQueueId) {
+        return new ResponseEntity<>(this.service.retryPlan(jobQueueId), HttpStatus.OK);
+    }
+
+    /**
+     * MIG-345: retries a failed run as its next attempt -- body {jobQueueId, from}: "failed_step" (the default) resumes from
+     * the step that failed, reusing the outputs before it; "start" runs every step again (a workspace administrator's).
+     * Not a builder action: a managed workspace's customers retry their runs, as they Run now.
+     */
+    @RequestMapping(value = "/sourceJob.json/retryRun", method = RequestMethod.POST)
+    public ResponseEntity<?> retryRun(@RequestBody RetryRequest request) {
+        return new ResponseEntity<>(this.service.retry(request == null ? null : request.getJobQueueId(),
+            request == null ? null : request.getFrom()), HttpStatus.OK);
+    }
+
+    /** The console's retry: the run and where to start ("failed_step" or "start"). */
+    public static class RetryRequest {
+        private Long jobQueueId;
+        private String from;
+
+        public Long getJobQueueId() { return jobQueueId; }
+
+        public void setJobQueueId(Long jobQueueId) { this.jobQueueId = jobQueueId; }
+
+        public String getFrom() { return from; }
+
+        public void setFrom(String from) { this.from = from; }
     }
 
     @RequestMapping(value = "/sourceJob.json/stepLogs", method = RequestMethod.GET)

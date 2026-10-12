@@ -97,6 +97,11 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.upload", "a file or signature for a form being filled in: data entry (MIG-277)");
         // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");
+        // MIG-345: retrying a failed run is running an existing schedule's run again, as Run now (owner 2026-09-29).
+        CUSTOMERS_IN_EITHER_MODE.put("StepTimelineRestApi.retryRun", "retrying a failed run, from its failed step or the start: Run "
+            + "now's rule (MIG-345)");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerRunRetryRestApi.retry", "MIG-345: the customer API retrying a failed run, as the console's "
+            + "retry and Run now");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.prepareContext", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.sendMessage", "asking about their own files");

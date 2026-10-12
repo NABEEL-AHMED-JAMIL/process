@@ -1,5 +1,12 @@
 package process.tenancy;
 
+import process.pipeline.StepTasks;
+import process.pipeline.Definitions;
+import process.pipeline.DefinitionValidator;
+import process.pipeline.JdbcRunAttemptStore;
+import process.pipeline.RunRetries;
+import process.customer.CustomerRetries;
+import process.api.CustomerRunRetryRestApi;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterAll;
@@ -82,6 +89,7 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
 
     private static CoreProbeFixture fx;
     private static CustomerRunsRestApi runs;
+    private static CustomerRunRetryRestApi retries;
     private static CustomerFilesRestApi files;
     private static CustomerFileLinkRestApi content;
     private static FileLinks links;
@@ -124,6 +132,11 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
             Collections.singletonList("https://portal.acme.example")));
         runs = new CustomerRunsRestApi(customerRuns, new CustomerReviews(customerRuns, reviews, reviewService,
             new Idempotency(new ApiReceipts(app))), views);
+        // MIG-345: the retry, with the console's rules.
+        StepTasks stepTasks = Definitions.builtInTasks();
+        RunRetries runRetries = new RunRetries(new JdbcStepStore(app), new JdbcRunAttemptStore(app), new PipelineDefinitionStore(app),
+            new DefinitionValidator(stepTasks), stepTasks, fx.bulkAction, app, fx.jpa.transactions());
+        retries = new CustomerRunRetryRestApi(new CustomerRetries(customerRuns, store, runRetries, new Idempotency(new ApiReceipts(app))));
         CustomerFileReads reads = new CustomerFileReads(new JdbcStepStore(app), store, runFiles, fx.runDatasets, fx.formBuckets, links,
             new FileAccessLog(app));
         files = new CustomerFilesRestApi(reads);
@@ -260,6 +273,36 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
             .startsWith("HTTP 404");
         assertThat(views.frame(own).ancestors).isEqualTo("https://portal.acme.example");
         assertThat(fx.leaks).isEmpty();
+    }
+
+    /**
+     * MIG-345: A's client retries B's failed run -- from the failed step and from the start -- and is answered 404, the
+     * same as a run that does not exist; B's run stays as it was and no attempt is recorded. A's own completed run is
+     * refused as not failed (409), so the probe's 404 is the workspace's, not the run state's.
+     */
+    @Test
+    void aClientOfARetriesNothingOfBs() {
+        JdbcTemplate sql = fx.db.jdbc();
+        sql.update("UPDATE job_queue SET job_status = 'Failed' WHERE job_queue_id = ?", B_RUN);
+        try {
+            String before = fx.foreignRows();
+            String b = String.valueOf(B_RUN);
+            String[] writer = {"runs:read", "runs:write"};
+            assertThat(asClient("POST customer/runs/{runId}/retry", () -> retries.retry(b, "probe-retry-b-0001", null), writer))
+                .contains("\"status\":404").doesNotContain("bravo");
+            assertThat(asClient("POST customer/runs/{runId}/retry(from start)", () -> retries.retry(b, "probe-retry-b-0002",
+                "{\"from\":\"start\"}".getBytes(StandardCharsets.UTF_8)), writer)).contains("\"status\":404");
+            assertThat(asClient("POST customer/runs/{runId}/retry(A's own, completed)", () -> retries.retry(String.valueOf(A_RUN),
+                "probe-retry-a-0001", null), writer)).contains("\"status\":409").contains("/problems/run-not-failed");
+            assertThat(asClient("POST customer/runs/{runId}/retry(no scope)", () -> retries.retry(b, "probe-retry-b-0003", null), READER))
+                .contains("\"status\":403");
+            assertThat(fx.foreignRows()).as("nothing of B's changed").isEqualTo(before);
+            assertThat(sql.queryForObject("SELECT attempt FROM job_queue WHERE job_queue_id = ?", Integer.class, B_RUN)).isEqualTo(1);
+            assertThat(sql.queryForObject("SELECT count(*) FROM run_attempt", Long.class)).isZero();
+            assertThat(fx.leaks).isEmpty();
+        } finally {
+            sql.update("UPDATE job_queue SET job_status = 'Completed' WHERE job_queue_id = ?", B_RUN);
+        }
     }
 
     private static String render(CustomerAnswer answer) {

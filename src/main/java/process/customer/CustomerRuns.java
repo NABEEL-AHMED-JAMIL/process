@@ -28,6 +28,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * The customer API's runs (MIG-334, ADR-025 decision 3; OpenAPI listRuns, getRun, listRunSteps, getRunOutputs). Scope
@@ -189,9 +191,14 @@ public class CustomerRuns {
             data.add(legacyStep(run));
         } else {
             Map<String, String> names = this.stepNames(run.runId);
+            // MIG-345: a reused step says which attempt's output it is.
+            Map<Long, Integer> attemptOf = new HashMap<>();
+            for (StepStore.StepRow row : rows) {
+                attemptOf.put(row.stepExecutionId, row.attempt);
+            }
             for (StepStore.StepRow row : rows) {
                 if (row.attempt == attempt) {
-                    data.add(step(row, names.get(row.stepKey)));
+                    data.add(step(row, names.get(row.stepKey), row.reusedFrom == null ? null : attemptOf.get(row.reusedFrom)));
                 }
             }
         }
@@ -205,8 +212,15 @@ public class CustomerRuns {
     List<Map<String, Object>> madeFiles(CustomerRunStore.Row run, int attempt) {
         List<Map<String, Object>> listed = new ArrayList<>();
         Instant now = Instant.now();
+        // MIG-345: a resumed attempt's files include those its reused steps made in the attempt whose outputs they are.
+        Set<Long> reusedSources = new HashSet<>();
+        for (StepStore.StepRow row : this.steps.stepsOfRun(run.runId)) {
+            if (row.attempt == attempt && row.reusedFrom != null) {
+                reusedSources.add(row.reusedFrom);
+            }
+        }
         for (StepStore.OutputRow output : this.steps.outputsOfRun(run.runId)) {
-            if (output.attempt != attempt) {
+            if (output.attempt != attempt && !reusedSources.contains(output.stepExecutionId)) {
                 continue;
             }
             String fileId = output.fileId != null ? output.fileId : this.steps.fileIdOf(output.runOutputId);
@@ -215,6 +229,11 @@ public class CustomerRuns {
             }
         }
         return listed;
+    }
+
+    /** MIG-345: the run's review summary, for the retry's answer. */
+    Map<String, Object> reviewSummary(Found found) {
+        return this.reviews.summary(found.run, found.job);
     }
 
     /** The run's review as the Review schema (MIG-335's view reads it too). */
@@ -346,7 +365,7 @@ public class CustomerRuns {
         return names;
     }
 
-    private static Map<String, Object> step(StepStore.StepRow row, String name) {
+    private static Map<String, Object> step(StepStore.StepRow row, String name, Integer reusedFromAttempt) {
         Map<String, Object> step = new LinkedHashMap<>();
         step.put("key", row.stepKey);
         step.put("name", name);
@@ -358,6 +377,7 @@ public class CustomerRuns {
         step.put("endedAt", ApiTimes.utc(row.endedAt));
         step.put("durationMs", row.durationMs);
         step.put("message", CustomerViews.cut(row.statusMessage));
+        step.put("reusedFromAttempt", reusedFromAttempt);
         return step;
     }
 
@@ -374,6 +394,7 @@ public class CustomerRuns {
         step.put("endedAt", ApiTimes.utc(run.endedAt));
         step.put("durationMs", run.startedAt == null || run.endedAt == null ? null : Duration.between(run.startedAt, run.endedAt).toMillis());
         step.put("message", CustomerViews.cut(run.message));
+        step.put("reusedFromAttempt", null);
         return step;
     }
 

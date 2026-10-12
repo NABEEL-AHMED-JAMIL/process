@@ -26,6 +26,7 @@ import process.api.CustomerEmbedRestApi;
 import process.api.CustomerFileLinkRestApi;
 import process.api.CustomerFilesRestApi;
 import process.api.CustomerRunsRestApi;
+import process.api.CustomerRunRetryRestApi;
 import process.api.CustomerPipelinesRestApi;
 import process.api.DashboardRestApi;
 import process.api.EventRouteRestApi;
@@ -115,6 +116,8 @@ class CoreProbeCoverageTest {
         RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
+        // MIG-345: the retry of a run, an API client's
+        CustomerRunRetryRestApi.class,
         // MIG-334: a file's signed link -- no principal; the link's signature names the one file and workspace it opens
         CustomerFileLinkRestApi.class,
         // MIG-335: a run's view link -- no principal; the link's signature names the one run and workspace it opens

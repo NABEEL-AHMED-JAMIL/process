@@ -338,6 +338,14 @@ public class CustomerEventRelay {
         then.startedAt = row.startedAt;
         then.endedAt = row.endedAt;
         then.attempt = row.attempt == null ? now.attempt : Math.max(1, row.attempt);
+        // MIG-345: how that attempt came about, when it is the run's attempt now (a journal row of an earlier one says none).
+        if (then.attempt == now.attempt) {
+            then.retryMode = now.retryMode;
+            then.retryFromStep = now.retryFromStep;
+            then.retryPreviousAttempt = now.retryPreviousAttempt;
+            then.retryReusedSteps = now.retryReusedSteps;
+            then.retryVia = now.retryVia;
+        }
         return then;
     }
 

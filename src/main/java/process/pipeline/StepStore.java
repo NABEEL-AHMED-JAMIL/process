@@ -22,7 +22,10 @@ public interface StepStore {
      */
     boolean claimForEngine(long jobQueueId, String correlationId);
 
-    /** The definition an earlier attempt of this run followed, if one did: a retry follows the same one. */
+    /**
+     * The definition the run's latest attempt with steps followed, if one did: a retry under the job's policy follows the
+     * same one. MIG-345: a resumed or restarted attempt may follow a newer one (run_attempt), and from then on its own.
+     */
     Optional<Long> pinnedDefinition(long jobQueueId);
 
     /**
@@ -93,6 +96,57 @@ public interface StepStore {
         return null;
     }
 
+    /**
+     * MIG-345: a step of a resumed attempt that is not run again -- Completed, its records the earlier step's, reused_from
+     * naming it, no times (it did not run now) -- with a status line saying whose output it is.
+     */
+    default void reused(long stepExecutionId, long fromStepExecutionId, Long recordsIn, Long recordsOut, String message) {
+        throw new UnsupportedOperationException("This step store does not record reused steps.");
+    }
+
+    /** MIG-345: what a step read of a bucket object, fingerprinted on the way (run_input_file). */
+    default void inputRead(long stepExecutionId, InputDigests.Read read) {
+    }
+
+    /** MIG-345: the objects these steps read, by step execution; a step that read none is left out. */
+    default Map<Long, List<InputDigests.Read>> inputsOf(Collection<Long> stepExecutionIds) {
+        return new HashMap<>();
+    }
+
+    /**
+     * MIG-345: each step's output dataset (run_dataset "output") by step execution -- its key, rows and expiry -- or, when the
+     * sweep removed it (retention_log), that it is gone. A step that wrote none (it passed its input on) is left out.
+     */
+    default Map<Long, KeptOutput> keptOutputsOf(Collection<Long> stepExecutionIds) {
+        return new HashMap<>();
+    }
+
+    /** A step's output dataset as a resume reads it: never handed to a caller as is (it names a storage key). */
+    final class KeptOutput {
+        public long stepExecutionId;
+        public String storageKey;
+        public Long rows;
+        public Instant expiresAt;
+        /** The sweep removed it: past its retention. */
+        public boolean removed;
+
+        public KeptOutput() {
+        }
+
+        public KeptOutput(long stepExecutionId, String storageKey, Long rows, Instant expiresAt, boolean removed) {
+            this.stepExecutionId = stepExecutionId;
+            this.storageKey = storageKey;
+            this.rows = rows;
+            this.expiresAt = expiresAt;
+            this.removed = removed;
+        }
+
+        /** Gone or past its expiry at {@code now}. */
+        public boolean expiredAt(Instant now) {
+            return this.removed || (this.expiresAt != null && !this.expiresAt.isAfter(now));
+        }
+    }
+
     /** A step as the plan names it. */
     final class Planned {
         public final int index;
@@ -127,6 +181,8 @@ public interface StepStore {
         public String statusMessage;
         public String error;
         public Long pipelineDefinitionId;
+        /** MIG-345: a step of a resumed attempt not run again: the earlier attempt's step whose output it is. */
+        public Long reusedFrom;
     }
 
     final class LogLine {

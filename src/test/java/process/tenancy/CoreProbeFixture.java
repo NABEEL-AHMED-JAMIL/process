@@ -48,6 +48,8 @@ import process.pipeline.JdbcStepStore;
 import process.pipeline.FileAccessLog;
 import process.pipeline.FileDatasetStore;
 import process.pipeline.StepTimelineService;
+import process.pipeline.RunRetries;
+import process.pipeline.JdbcRunAttemptStore;
 import process.pipeline.review.JdbcRunReviewStore;
 import process.pipeline.review.RunReviewService;
 import process.pipeline.review.RunReviews;
@@ -484,8 +486,13 @@ final class CoreProbeFixture implements AutoCloseable {
         JdbcRunReviewStore reviewRows = new JdbcRunReviewStore(this.db.appJdbc());
         RunReviews runReviews = new RunReviews(new JdbcStepStore(this.db.appJdbc()), new PipelineDefinitionStore(this.db.appJdbc()),
             reviewRows);
-        this.stepTimeline = new StepTimelineRestApi(new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
-            new JdbcModelChoiceStore(this.db.appJdbc()), this.runDatasets, runReviews), new FileAccessLog(this.db.appJdbc()));
+        StepTimelineService timelineService = new StepTimelineService(runRows, jobRows, new JdbcStepStore(this.db.appJdbc()),
+            new JdbcModelChoiceStore(this.db.appJdbc()), this.runDatasets, runReviews);
+        // MIG-345: retrying a failed run, from the console.
+        timelineService.useRetries(new RunRetries(new JdbcStepStore(this.db.appJdbc()), new JdbcRunAttemptStore(this.db.appJdbc()),
+            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(stepTasks), stepTasks, this.bulkAction, this.db.appJdbc(),
+            this.jpa.transactions()), new JdbcRunAttemptStore(this.db.appJdbc()));
+        this.stepTimeline = new StepTimelineRestApi(timelineService, new FileAccessLog(this.db.appJdbc()));
         this.runReview = new RunReviewRestApi(new RunReviewService(runRows, jobRows, runReviews, reviewRows, jobs, transactions));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);

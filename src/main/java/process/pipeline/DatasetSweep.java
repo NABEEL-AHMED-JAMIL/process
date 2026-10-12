@@ -63,6 +63,9 @@ public class DatasetSweep {
         List<Map<String, Object>> expired = this.jdbc.queryForList("SELECT d.run_dataset_id, d.tenant_id, d.step_execution_id, d.name, "
             + "d.storage_key, d.row_count, d.expires_at, s.job_queue_id, s.step_key FROM run_dataset d "
             + "JOIN step_execution s ON s.step_execution_id = d.step_execution_id "
+            // MIG-345: never under a run in flight -- a resumed attempt reads an earlier attempt's outputs, and a long run its
+            // own early ones; the sweep takes them once the run has ended.
+            + "JOIN job_queue q ON q.job_queue_id = s.job_queue_id AND UPPER(q.job_status) NOT IN ('QUEUE', 'START', 'RUNNING') "
             + "WHERE d.expires_at < ? AND d.storage_key LIKE 'datasets/' || s.job_queue_id || '/%' "
             + "ORDER BY d.run_dataset_id LIMIT " + BATCH, now);
         int removed = 0;
