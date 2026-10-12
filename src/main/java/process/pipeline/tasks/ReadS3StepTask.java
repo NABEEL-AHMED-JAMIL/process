@@ -14,6 +14,8 @@ import process.pipeline.registry.TaskSpec;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import process.pipeline.DefinitionProblem;
+import java.util.List;
 
 /**
  * Read S3 (MIG-231): the objects under a prefix of one of the workspace's buckets, through storage-service. As
@@ -49,6 +51,11 @@ public class ReadS3StepTask extends RegisteredTask {
     @Override
     public Optional<String> unavailable() {
         return this.buckets.unavailable();
+    }
+
+    @Override
+    public List<DefinitionProblem> check(Map<String, Object> config) {
+        return FileConfigs.checkColumns(config);
     }
 
     @Override

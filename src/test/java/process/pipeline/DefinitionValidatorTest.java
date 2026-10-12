@@ -138,16 +138,35 @@ class DefinitionValidatorTest {
     }
 
     @Test
-    void aPipelineHasOneToFiftySteps() {
+    void aPipelineHasOneStepAtLeastAndAtMostTheSettingsCap() {
         assertThat(this.validator.problems(Definitions.of())).containsExactly(
             new DefinitionProblem("steps", "a pipeline has at least one step"));
+        // MIG-365: the cap is a setting, 100 by default (it was a fixed 50).
+        assertThat(this.validator.maxSteps()).isEqualTo(DefinitionValidator.DEFAULT_MAX_STEPS).isEqualTo(100);
+        PipelineDefinition fifty = Definitions.of();
+        fifty.setSteps(samples(51));
+        assertThat(this.validator.problems(fifty)).isEmpty();
+        PipelineDefinition definition = Definitions.of();
+        definition.setSteps(samples(DefinitionValidator.DEFAULT_MAX_STEPS + 1));
+        assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("steps", "this pipeline has 101 steps; a "
+            + "pipeline has at most 100 here (process.pipeline.max-steps). Combine steps -- one append stacks several outputs, one "
+            + "compute holds up to 50 formulas -- or ask a platform administrator to raise the limit."));
+        this.validator.useMaxSteps(60);
+        assertThat(this.validator.problems(fifty)).isEmpty();
+        definition.setSteps(samples(61));
+        assertThat(this.validator.problems(definition)).extracting(DefinitionProblem::getMessage).singleElement().asString()
+            .startsWith("this pipeline has 61 steps; a pipeline has at most 60 here");
+        this.validator.useMaxSteps(100000);
+        assertThat(this.validator.maxSteps()).isEqualTo(DefinitionValidator.MAX_STEPS_CEILING);
+        this.validator.useMaxSteps(DefinitionValidator.DEFAULT_MAX_STEPS);
+    }
+
+    private static List<PipelineDefinition.Step> samples(int count) {
         List<PipelineDefinition.Step> many = new ArrayList<>();
-        for (int i = 0; i <= DefinitionValidator.MAX_STEPS; i++) {
+        for (int i = 0; i < count; i++) {
             many.add(sample("s" + i, row("x", i)));
         }
-        PipelineDefinition definition = Definitions.of();
-        definition.setSteps(many);
-        assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("steps", "at most 50 steps; found 51"));
+        return many;
     }
 
     @Test

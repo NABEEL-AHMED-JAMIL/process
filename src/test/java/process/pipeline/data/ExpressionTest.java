@@ -89,8 +89,9 @@ class ExpressionTest {
     @Test
     void aTypoIsASyntaxErrorAtItsPlace() {
         assertThatThrownBy(() -> Expression.parse("a * (b + 1")).hasMessageContaining("expected ')'");
-        assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, coalesce, concat, days_between, "
-            + "if, is_null, max, min, number, regex_extract, round, text, today.");
+        assertThatThrownBy(() -> Expression.parse("sqrt(a)")).hasMessage("Unknown function sqrt; use one of abs, ceil, coalesce, concat, date_add, "
+            + "date_diff, date_trunc, days_between, floor, if, is_null, json_array_length, json_get, json_keys, max, min, mod, number, "
+            + "regex_extract, round, text, today.");
         assertThatThrownBy(() -> Expression.parse("regex_extract(a)")).hasMessage("regex_extract takes 2 values: regex_extract(text, pattern).");
         assertThatThrownBy(() -> Expression.parse("today(a)")).hasMessage("today takes no values: today().");
         assertThatThrownBy(() -> Expression.parse("abs()")).hasMessage("abs takes at least 1 value.");

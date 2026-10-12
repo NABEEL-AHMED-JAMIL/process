@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Whether a pipeline definition can be saved and run (MIG-230), as every problem at its path -- never the first one
@@ -21,7 +22,8 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>{@code version} is 1.</li>
  *   <li>{@code source.type} is none or task.</li>
- *   <li>1 to {@value #MAX_STEPS} steps; each has a unique {@code key} of lower case letters, digits and '_' (it names
+ *   <li>1 to {@code process.pipeline.max-steps} steps (MIG-365: a setting, {@value #DEFAULT_MAX_STEPS} by default, at most
+ *       {@value #MAX_STEPS_CEILING}; it was a fixed 50); each has a unique {@code key} of lower case letters, digits and '_' (it names
  *       the step's rows and datasets), a {@code task} that is registered ({@link StepTasks}) and usable here (MIG-231:
  *       available, enabled in the workspace, and within the caller's role -- {@link TaskRegistry#refusal}), and a
  *       config that holds to its task's config schema ({@link ConfigSchemaValidator}) and then to the task's own
@@ -38,7 +40,10 @@ import java.util.regex.Pattern;
 @Component
 public class DefinitionValidator {
 
-    public static final int MAX_STEPS = 50;
+    /** MIG-365: how many steps a pipeline may have unless process.pipeline.max-steps says otherwise (it was a fixed 50). */
+    public static final int DEFAULT_MAX_STEPS = 100;
+    /** The most the setting may allow: each step keeps its own dataset, log and timeline row. */
+    public static final int MAX_STEPS_CEILING = 500;
     public static final int MAX_TRIES = 10;
     public static final int MAX_DELAY_SECONDS = 3600;
     public static final int MAX_TIMEOUT_SECONDS = 86400;
@@ -48,6 +53,7 @@ public class DefinitionValidator {
 
     private final StepTasks tasks;
     private final TaskRegistry registry;
+    private int maxSteps = DEFAULT_MAX_STEPS;
 
     /** Every task at its default: no workspace's switches (tests, and a definition read outside any workspace). */
     public DefinitionValidator(StepTasks tasks) {
@@ -58,6 +64,17 @@ public class DefinitionValidator {
     public DefinitionValidator(TaskRegistry registry) {
         this.registry = registry;
         this.tasks = registry.tasks();
+    }
+
+    /** MIG-365: the step cap (process.pipeline.max-steps), between 1 and {@value #MAX_STEPS_CEILING}. */
+    @Autowired(required = false)
+    public void useMaxSteps(@Value("${process.pipeline.max-steps:" + DEFAULT_MAX_STEPS + "}") int maxSteps) {
+        this.maxSteps = Math.max(1, Math.min(MAX_STEPS_CEILING, maxSteps));
+    }
+
+    /** How many steps a pipeline may have here. */
+    public int maxSteps() {
+        return this.maxSteps;
     }
 
     /** The definition's problems with every task at its default and no role to check. */
@@ -86,8 +103,10 @@ public class DefinitionValidator {
             problems.add(new DefinitionProblem("steps", "a pipeline has at least one step"));
             return problems;
         }
-        if (steps.size() > MAX_STEPS) {
-            problems.add(new DefinitionProblem("steps", String.format("at most %d steps; found %d", MAX_STEPS, steps.size())));
+        if (steps.size() > this.maxSteps) {
+            problems.add(new DefinitionProblem("steps", String.format("this pipeline has %d steps; a pipeline has at most %d here "
+                + "(process.pipeline.max-steps). Combine steps -- one append stacks several outputs, one compute holds up to 50 "
+                + "formulas -- or ask a platform administrator to raise the limit.", steps.size(), this.maxSteps)));
         }
         Set<String> earlier = new HashSet<>();
         for (int i = 0; i < steps.size(); i++) {

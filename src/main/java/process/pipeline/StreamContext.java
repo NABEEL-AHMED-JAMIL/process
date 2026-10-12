@@ -16,6 +16,14 @@ public interface StreamContext extends StepContext {
     /** The step's input from its first row: a batch at a time. Each call opens it again (an aggregate that spills reads it twice). */
     RowSource openInput() throws Exception;
 
+    /**
+     * MIG-346: an earlier step's output from its first row, a batch at a time (Append reads several); an exception when
+     * that step made none or is not earlier. Each call opens it again. The in-memory path reads {@link #dataset} whole.
+     */
+    default RowSource openOutputOf(String stepKey) throws Exception {
+        return RowSource.of(this.dataset(stepKey));
+    }
+
     /** The step's output: rows added here are the step's output dataset when it returns {@link StepResult#streamed}. */
     RowSink output();
 

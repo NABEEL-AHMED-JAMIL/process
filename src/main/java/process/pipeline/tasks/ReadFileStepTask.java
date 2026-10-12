@@ -19,7 +19,6 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +37,10 @@ import java.util.Optional;
  * MIG-344: when the engine streams it, a CSV or JSON Lines file is read as a stream, row by row, straight into the
  * step's output file -- no file-size, row or cell limit beyond {@code Limits.MAX_STREAM_*}, and storage-service bills
  * the bytes taken. JSON and Parquet are still read whole, within the in-memory bounds.
+ *
+ * MIG-365: {@code columns} reads only the named columns, in that order: a CSV's other cells never become values (a
+ * 31-column file read for 3 holds and writes 3), a Parquet file's are never decoded (DuckDB projects them), and a JSON
+ * row is cut to them. A column the file does not have fails the step and lists the ones it has.
  */
 @Component
 public class ReadFileStepTask extends RegisteredTask implements StreamingStepTask {
@@ -72,11 +75,12 @@ public class ReadFileStepTask extends RegisteredTask implements StreamingStepTas
 
     @Override
     public List<DefinitionProblem> check(Map<String, Object> config) {
+        List<DefinitionProblem> problems = FileConfigs.checkColumns(config);
         if ((Configs.text(config, "bucket", null) == null) != (Configs.text(config, "key", null) == null)) {
-            return Collections.singletonList(new DefinitionProblem(Configs.text(config, "bucket", null) == null ? "bucket" : "key",
+            problems.add(new DefinitionProblem(Configs.text(config, "bucket", null) == null ? "bucket" : "key",
                 "name both the bucket and the file, or neither (the file the run was started for)"));
         }
-        return Collections.emptyList();
+        return problems;
     }
 
     @Override

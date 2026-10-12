@@ -33,14 +33,21 @@ import java.util.Set;
 public class ComputeStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("compute", "Compute", TaskKind.PROCESS)
-        .description("Adds columns worked out from each row by formula: arithmetic, comparisons, if, round, coalesce, dates.")
+        .description("Adds columns worked out from each row by formula: arithmetic, comparisons, if, round, floor, ceil, mod, coalesce, "
+            + "text, dates (date_add, date_diff, date_trunc) and JSON (json_get, json_array_length, json_keys).")
         .input(TaskSpec.rows("The rows to compute on."))
         .output(TaskSpec.rows("The input's columns, then each formula's column (a formula may replace a column)."))
         .config(JsonSchema.object()
             .required("formulas", JsonSchema.array(JsonSchema.object()
                 .required("target", JsonSchema.string().minLength(1).maxLength(128).title("Column"))
                 .required("expression", JsonSchema.string().minLength(1).maxLength(1000).format("expression").title("Formula")
-                    .description("e.g. round(length_cm * width_cm, 1), or if(change_pct <= -10, 'improving', 'stable')."))
+                    .description("e.g. round(length_cm * width_cm, 1), or if(change_pct <= -10, 'improving', 'stable'). Functions: abs, "
+                        + "ceil(x), coalesce(a, b, ...), concat(a, b, ...), date_add(date, amount, unit), date_diff(from, to, unit), "
+                        + "date_trunc(date, unit), days_between(from, to), floor(x), if(condition, then, otherwise), is_null(x), "
+                        + "json_get(json, path), json_array_length(json, path), json_keys(json, path), max(...), min(...), mod(a, b), "
+                        + "number(x), regex_extract(text, pattern), round(x, places), text(x), today(). A unit is second, minute, hour, "
+                        + "day (the default), week, month, quarter or year; a date is YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS. A JSON path "
+                        + "is like items[0].name; json_get gives a nested object or list as JSON text."))
                 .property("nullOnError", JsonSchema.bool().title("Empty when it cannot be worked out").defaultValue(false)))
                 .minItems(1).maxItems(50).title("Formulas")))
         .backing(TaskSpec.CORE)

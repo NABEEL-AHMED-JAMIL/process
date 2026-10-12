@@ -4,7 +4,13 @@ import org.barco.platform.api.ApiTimes;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.Temporal;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -19,6 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.HashMap;
+import java.io.IOException;
 
 /**
  * A Compute formula (MIG-255): a small, closed language over one row's columns -- nothing in it can reach outside the row.
@@ -29,7 +37,18 @@ import java.util.regex.PatternSyntaxException;
  *   <li>arithmetic + - * / and a leading minus; comparisons == != &gt; &gt;= &lt; &lt;=; and, or, not; parentheses;</li>
  *   <li>functions: abs, coalesce, concat, days_between (ISO dates), if(condition, then, otherwise), is_null, max, min,
  *       number, regex_extract(text, pattern) (the first group of the first match, or the whole match; null when
- *       none), round(value[, places]), text, today() (the business date, YYYY-MM-DD, America/Chicago).</li>
+ *       none), round(value[, places]), text, today() (the business date, YYYY-MM-DD, America/Chicago);</li>
+ *   <li>MIG-365 numbers: floor(x) and ceil(x) (a whole number), mod(a, b) (the remainder with b's sign, as a
+ *       spreadsheet's MOD; null when b is 0);</li>
+ *   <li>MIG-365 dates: date_add(date, amount[, unit]), date_diff(from, to[, unit]) (whole units from one to the other)
+ *       and date_trunc(date, unit) (the start of its year, quarter, month, week (Monday), day, hour or minute). unit is
+ *       day (the default), week, month, quarter, year, hour, minute or second, singular or plural. A date is
+ *       YYYY-MM-DD, a date and time YYYY-MM-DDTHH:MM[:SS] (or with a space), with Z or an offset when it has one; the
+ *       answer has the same form as the date given (a date plus hours becomes a date and time);</li>
+ *   <li>MIG-346 JSON: json_get(json, path) (the value at a path such as items[0].name or $.items[0].name: a number,
+ *       text or true/false as itself, an object or array as its JSON text; null when absent), json_array_length(json[,
+ *       path]) and json_keys(json[, path]) (an object's keys as a JSON array of text). json is a column holding JSON
+ *       text (an API's nested value is kept that way); text that is not JSON fails the row and names its column.</li>
  * </ul>
  *
  * A column read as CSV text is a number where it reads as one. An empty or null operand makes arithmetic null (never an
@@ -39,8 +58,9 @@ import java.util.regex.PatternSyntaxException;
  */
 public final class Expression {
 
-    static final List<String> FUNCTIONS = Collections.unmodifiableList(Arrays.asList("abs", "coalesce", "concat", "days_between", "if",
-        "is_null", "max", "min", "number", "regex_extract", "round", "text", "today"));
+    static final List<String> FUNCTIONS = Collections.unmodifiableList(Arrays.asList("abs", "ceil", "coalesce", "concat", "date_add",
+        "date_diff", "date_trunc", "days_between", "floor", "if", "is_null", "json_array_length", "json_get", "json_keys", "max", "min", "mod",
+        "number", "regex_extract", "round", "text", "today"));
 
     private static final Map<String, Pattern> PATTERNS = new ConcurrentHashMap<>();
 
@@ -195,6 +215,85 @@ public final class Expression {
                     LocalDate from = date(this.args.get(0), row);
                     LocalDate to = date(this.args.get(1), row);
                     return from == null || to == null ? null : ChronoUnit.DAYS.between(from, to);
+                }
+                case "floor":
+                case "ceil": {
+                    Double value = number(this.args.get(0), row);
+                    if (value == null || value.isNaN() || value.isInfinite()) {
+                        return null;
+                    }
+                    return whole("floor".equals(this.name) ? Math.floor(value) : Math.ceil(value));
+                }
+                case "mod": {
+                    Double a = number(this.args.get(0), row);
+                    Double b = number(this.args.get(1), row);
+                    if (a == null || b == null || b == 0 || a.isNaN() || b.isNaN() || a.isInfinite() || b.isInfinite()) {
+                        return null;
+                    }
+                    if (a == Math.rint(a) && b == Math.rint(b) && Math.abs(a) < 9e15 && Math.abs(b) < 9e15) {
+                        return Math.floorMod(a.longValue(), b.longValue());
+                    }
+                    double r = a - b * Math.floor(a / b);
+                    return r;
+                }
+                case "date_add": {
+                    Moment at = Moment.of(this.args.get(0), row);
+                    Double amount = number(this.args.get(1), row);
+                    if (at == null || amount == null) {
+                        return null;
+                    }
+                    if (amount != Math.rint(amount)) {
+                        throw new IllegalArgumentException(String.format("date_add adds whole units; %s is not one.", textOf(amount)));
+                    }
+                    return at.plus(amount.longValue(), unit(this.args.size() > 2 ? this.args.get(2).eval(row) : null, "date_add")).text();
+                }
+                case "date_diff": {
+                    Moment from = Moment.of(this.args.get(0), row);
+                    Moment to = Moment.of(this.args.get(1), row);
+                    if (from == null || to == null) {
+                        return null;
+                    }
+                    return Moment.between(from, to, unit(this.args.size() > 2 ? this.args.get(2).eval(row) : null, "date_diff"));
+                }
+                case "date_trunc": {
+                    // date_trunc(date, unit); date_trunc('month', date) -- SQL's order -- is read the same way.
+                    Node dateArg = this.args.get(0);
+                    Node unitArg = this.args.get(1);
+                    Object first = dateArg.eval(row);
+                    if (first instanceof String && UNITS.containsKey(((String) first).trim().toLowerCase())
+                        && !(unitArg.eval(row) instanceof String && UNITS.containsKey(((String) unitArg.eval(row)).trim().toLowerCase()))) {
+                        Node swap = dateArg;
+                        dateArg = unitArg;
+                        unitArg = swap;
+                    }
+                    Moment at = Moment.of(dateArg, row);
+                    return at == null ? null : at.truncated(unit(unitArg.eval(row), "date_trunc")).text();
+                }
+                case "json_get": {
+                    JsonNode at = json(this.args.get(0), this.args.size() > 1 ? this.args.get(1).eval(row) : null, row);
+                    return at == null ? null : Values.scalar(at);
+                }
+                case "json_array_length": {
+                    JsonNode at = json(this.args.get(0), this.args.size() > 1 ? this.args.get(1).eval(row) : null, row);
+                    if (at == null) {
+                        return null;
+                    }
+                    if (!at.isArray()) {
+                        throw new IllegalArgumentException(String.format("The value in %s is not a JSON array.", this.args.get(0).label()));
+                    }
+                    return (long) at.size();
+                }
+                case "json_keys": {
+                    JsonNode at = json(this.args.get(0), this.args.size() > 1 ? this.args.get(1).eval(row) : null, row);
+                    if (at == null) {
+                        return null;
+                    }
+                    if (!at.isObject()) {
+                        throw new IllegalArgumentException(String.format("The value in %s is not a JSON object.", this.args.get(0).label()));
+                    }
+                    ArrayNode keys = Values.JSON.createArrayNode();
+                    at.fieldNames().forEachRemaining(keys::add);
+                    return keys.toString();
                 }
                 default:
                     throw new IllegalStateException("Unknown function " + this.name);
@@ -360,6 +459,224 @@ public final class Expression {
         } catch (DateTimeParseException notADate) {
             throw new IllegalArgumentException(String.format("'%s' in %s is not a date (YYYY-MM-DD).", value, node.label()));
         }
+    }
+
+    /** A whole double as a long when it fits (floor, ceil): 3.0 is 3, as round(x) gives. */
+    private static Object whole(double value) {
+        return Math.abs(value) < 9e15 ? (Object) (long) value : (Object) value;
+    }
+
+    /** The units date_add, date_diff and date_trunc take, by every word they accept. */
+    static final Map<String, String> UNITS;
+
+    static {
+        Map<String, String> units = new HashMap<>();
+        for (String unit : new String[] {"second", "minute", "hour", "day", "week", "month", "quarter", "year"}) {
+            units.put(unit, unit);
+            units.put(unit + "s", unit);
+        }
+        UNITS = Collections.unmodifiableMap(units);
+    }
+
+    private static String unit(Object word, String function) {
+        if (isNull(word)) {
+            if ("date_trunc".equals(function)) {
+                throw new IllegalArgumentException("date_trunc needs a unit: year, quarter, month, week, day, hour or minute.");
+            }
+            return "day";
+        }
+        String unit = UNITS.get(word.toString().trim().toLowerCase());
+        if (unit == null) {
+            throw new IllegalArgumentException(String.format("'%s' is not a unit; use second, minute, hour, day, week, month, quarter or "
+                + "year.", word));
+        }
+        return unit;
+    }
+
+    /**
+     * A date, a date and time, or a date and time with its offset (MIG-365), kept in the form it came in, so what
+     * date_add and date_trunc answer reads like what they were given.
+     */
+    static final class Moment {
+        private final LocalDate date;
+        private final LocalDateTime local;
+        private final OffsetDateTime offset;
+        private final boolean seconds;
+
+        private Moment(LocalDate date, LocalDateTime local, OffsetDateTime offset, boolean seconds) {
+            this.date = date;
+            this.local = local;
+            this.offset = offset;
+            this.seconds = seconds;
+        }
+
+        static Moment of(Node node, Map<String, Object> row) {
+            Object value = node.eval(row);
+            if (isNull(value)) {
+                return null;
+            }
+            String text = value.toString().trim();
+            try {
+                if (text.length() <= 10) {
+                    return new Moment(LocalDate.parse(text), null, null, false);
+                }
+                String iso = text.charAt(10) == ' ' ? text.substring(0, 10) + 'T' + text.substring(11) : text;
+                boolean seconds = iso.length() > 16 && iso.charAt(16) == ':';
+                char last = iso.charAt(iso.length() - 1);
+                int sign = Math.max(iso.lastIndexOf('+'), iso.lastIndexOf('-'));
+                if (last == 'Z' || last == 'z' || sign > 10) {
+                    return new Moment(null, null, OffsetDateTime.parse(iso.replace('z', 'Z')), seconds);
+                }
+                return new Moment(null, LocalDateTime.parse(iso), null, seconds);
+            } catch (DateTimeParseException | StringIndexOutOfBoundsException notADate) {
+                throw new IllegalArgumentException(String.format("'%s' in %s is not a date (YYYY-MM-DD, or YYYY-MM-DDTHH:MM:SS).", value,
+                    node.label()));
+            }
+        }
+
+        private static boolean timeUnit(String unit) {
+            return "hour".equals(unit) || "minute".equals(unit) || "second".equals(unit);
+        }
+
+        private static Temporal add(Temporal at, long amount, String unit) {
+            switch (unit) {
+                case "quarter":
+                    return at.plus(3 * amount, ChronoUnit.MONTHS);
+                case "week":
+                    return at.plus(amount, ChronoUnit.WEEKS);
+                default:
+                    return at.plus(amount, chrono(unit));
+            }
+        }
+
+        private static ChronoUnit chrono(String unit) {
+            switch (unit) {
+                case "second": return ChronoUnit.SECONDS;
+                case "minute": return ChronoUnit.MINUTES;
+                case "hour": return ChronoUnit.HOURS;
+                case "week": return ChronoUnit.WEEKS;
+                case "month": return ChronoUnit.MONTHS;
+                case "year": return ChronoUnit.YEARS;
+                default: return ChronoUnit.DAYS;
+            }
+        }
+
+        Moment plus(long amount, String unit) {
+            if (this.date != null) {
+                if (timeUnit(unit)) {
+                    return new Moment(null, (LocalDateTime) add(this.date.atStartOfDay(), amount, unit), null, "second".equals(unit));
+                }
+                return new Moment((LocalDate) add(this.date, amount, unit), null, null, false);
+            }
+            boolean seconds = this.seconds || "second".equals(unit);
+            return this.local != null ? new Moment(null, (LocalDateTime) add(this.local, amount, unit), null, seconds)
+                : new Moment(null, null, (OffsetDateTime) add(this.offset, amount, unit), seconds);
+        }
+
+        Moment truncated(String unit) {
+            if (this.date != null) {
+                return timeUnit(unit) ? this : new Moment(startOf(this.date, unit), null, null, false);
+            }
+            LocalDateTime local = this.local != null ? this.local : wallClock(this.offset);
+            LocalDateTime cut;
+            if ("second".equals(unit) || "minute".equals(unit) || "hour".equals(unit)) {
+                cut = local.truncatedTo(chrono(unit));
+            } else {
+                cut = startOf(local.toLocalDate(), unit).atStartOfDay();
+            }
+            return this.local != null ? new Moment(null, cut, null, this.seconds)
+                : new Moment(null, null, cut.atOffset(this.offset.getOffset()), this.seconds);
+        }
+
+        private static LocalDate startOf(LocalDate date, String unit) {
+            switch (unit) {
+                case "year": return date.withDayOfYear(1);
+                case "quarter": return date.withMonth(((date.getMonthValue() - 1) / 3) * 3 + 1).withDayOfMonth(1);
+                case "month": return date.withDayOfMonth(1);
+                case "week": return date.minusDays(date.getDayOfWeek().getValue() - 1L);
+                default: return date;
+            }
+        }
+
+        /** Whole units from one to the other; a date is its day's start, and two offsets compare as instants. */
+        static long between(Moment from, Moment to, String unit) {
+            Temporal a;
+            Temporal b;
+            if (from.offset != null && to.offset != null) {
+                a = from.offset;
+                b = to.offset;
+            } else {
+                a = from.localTime();
+                b = to.localTime();
+            }
+            if ("quarter".equals(unit)) {
+                return ChronoUnit.MONTHS.between(a, b) / 3;
+            }
+            return chrono(unit).between(a, b);
+        }
+
+        private LocalDateTime localTime() {
+            return this.date != null ? this.date.atStartOfDay() : this.local != null ? this.local : wallClock(this.offset);
+        }
+
+        /** An offset date and time's own wall clock, as written (no zone of this machine's is read). */
+        private static LocalDateTime wallClock(OffsetDateTime at) {
+            return LocalDateTime.of(at.toLocalDate(), at.toLocalTime());
+        }
+
+        String text() {
+            if (this.date != null) {
+                return this.date.toString();
+            }
+            DateTimeFormatter format = this.seconds ? LOCAL_SECONDS : LOCAL_MINUTES;
+            return this.local != null ? this.local.format(format)
+                : wallClock(this.offset).format(format) + (this.offset.getOffset().getTotalSeconds() == 0 ? "Z"
+                    : this.offset.getOffset().getId());
+        }
+    }
+
+    private static final DateTimeFormatter LOCAL_SECONDS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter LOCAL_MINUTES = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
+    /** The last JSON text this thread parsed, so several json_ functions over one column in a row parse it once. */
+    private static final ThreadLocal<Object[]> LAST_JSON = new ThreadLocal<>();
+
+    /** The JSON value at {@code path} (Values.at's syntax, an optional leading $.) of the JSON text a node gives; null when absent. */
+    private static JsonNode json(Node node, Object path, Map<String, Object> row) {
+        Object value = node.eval(row);
+        if (isNull(value)) {
+            return null;
+        }
+        JsonNode parsed;
+        if (value instanceof Number || value instanceof Boolean) {
+            parsed = Values.JSON.valueToTree(value);
+        } else {
+            String text = value.toString();
+            Object[] last = LAST_JSON.get();
+            if (last != null && last[0].equals(text)) {
+                parsed = (JsonNode) last[1];
+            } else {
+                try {
+                    parsed = Values.JSON.readTree(text);
+                } catch (IOException notJson) {
+                    throw new IllegalArgumentException(String.format("The value in %s is not JSON.", node.label()));
+                }
+                if (parsed == null) {
+                    throw new IllegalArgumentException(String.format("The value in %s is not JSON.", node.label()));
+                }
+                LAST_JSON.set(new Object[] {text, parsed});
+            }
+        }
+        String where = isNull(path) ? "" : path.toString().trim();
+        if (where.equals("$")) {
+            where = "";
+        } else if (where.startsWith("$.")) {
+            where = where.substring(2);
+        } else if (where.startsWith("$[")) {
+            where = where.substring(1);
+        }
+        JsonNode at = Values.at(parsed, where);
+        return at == null || at.isMissingNode() || at.isNull() ? null : at;
     }
 
     private static boolean compare(String op, Object left, Object right) {
@@ -592,7 +909,37 @@ public final class Expression {
                         throw new IllegalArgumentException("today takes no values: today().");
                     }
                     return;
-                case "abs": case "is_null": case "number": case "text":
+                case "mod":
+                    if (count != 2) {
+                        throw new IllegalArgumentException("mod takes 2 values: mod(value, divisor).");
+                    }
+                    return;
+                case "date_add":
+                    if (count < 2 || count > 3) {
+                        throw new IllegalArgumentException("date_add takes 2 or 3 values: date_add(date, amount, unit).");
+                    }
+                    return;
+                case "date_diff":
+                    if (count < 2 || count > 3) {
+                        throw new IllegalArgumentException("date_diff takes 2 or 3 values: date_diff(from, to, unit).");
+                    }
+                    return;
+                case "date_trunc":
+                    if (count != 2) {
+                        throw new IllegalArgumentException("date_trunc takes 2 values: date_trunc(date, unit).");
+                    }
+                    return;
+                case "json_get":
+                    if (count != 2) {
+                        throw new IllegalArgumentException("json_get takes 2 values: json_get(json, path).");
+                    }
+                    return;
+                case "json_array_length": case "json_keys":
+                    if (count < 1 || count > 2) {
+                        throw new IllegalArgumentException(name + " takes 1 or 2 values: " + name + "(json, path).");
+                    }
+                    return;
+                case "abs": case "is_null": case "number": case "text": case "floor": case "ceil":
                     if (count != 1) {
                         throw new IllegalArgumentException(name + " takes 1 value.");
                     }
