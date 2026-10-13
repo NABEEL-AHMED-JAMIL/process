@@ -268,25 +268,25 @@ public class JdbcStepStore implements StepStore {
     public void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt) {
         // MIG-334: a new file id each time -- a later try's file is another file than the earlier try's.
         this.jdbc.update("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, run_dataset_id, "
-            + "bucket_alias, object_key, expires_at, file_id, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            + "ON CONFLICT (step_execution_id) DO UPDATE SET "
+            + "bucket_alias, object_key, expires_at, file_id, sha256, page_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            + "ON CONFLICT (step_execution_id, name) DO UPDATE SET "
             + "kind = EXCLUDED.kind, name = EXCLUDED.name, format = EXCLUDED.format, row_count = EXCLUDED.row_count, "
             + "byte_count = EXCLUDED.byte_count, run_dataset_id = EXCLUDED.run_dataset_id, bucket_alias = EXCLUDED.bucket_alias, "
             + "object_key = EXCLUDED.object_key, expires_at = EXCLUDED.expires_at, file_id = EXCLUDED.file_id, sha256 = EXCLUDED.sha256, "
-            + "date_updated = now()", stepExecutionId,
+            + "page_count = EXCLUDED.page_count, date_updated = now()", stepExecutionId,
             output.getKind(), output.getName(), output.getFormat(), output.getRows(), output.getBytes(), runDatasetId,
             output.getBucket(), output.getKey(), expiresAt == null ? null : Timestamp.from(expiresAt), CorrelationId.generate(),
-            output.getSha256());
+            output.getSha256(), output.getPages());
     }
 
     private static final String OUTPUT_COLUMNS = "o.run_output_id, o.step_execution_id, s.job_queue_id, s.attempt, s.step_index, "
         + "s.step_key, s.task_code, o.kind, o.name, o.format, o.row_count, o.byte_count, o.run_dataset_id, o.bucket_alias, "
-        + "o.object_key, o.expires_at, COALESCE(o.date_updated, o.date_created) AS recorded_at, o.file_id, o.sha256 "
+        + "o.object_key, o.expires_at, COALESCE(o.date_updated, o.date_created) AS recorded_at, o.file_id, o.sha256, o.page_count "
         + "FROM run_output o JOIN step_execution s ON s.step_execution_id = o.step_execution_id ";
 
     @Override
     public List<OutputRow> outputsOfRun(long jobQueueId) {
-        return this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE s.job_queue_id = ? ORDER BY s.attempt, s.step_index",
+        return this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE s.job_queue_id = ? ORDER BY s.attempt, s.step_index, o.run_output_id",
             JdbcStepStore::output, jobQueueId);
     }
 
@@ -328,6 +328,7 @@ public class JdbcStepStore implements StepStore {
         row.bucketAlias = rs.getString("bucket_alias");
         row.objectKey = rs.getString("object_key");
         row.expiresAt = instant(rs, "expires_at");
+        row.pageCount = (Integer) rs.getObject("page_count");
         row.recordedAt = wallClock(rs, "recorded_at");
         row.fileId = rs.getString("file_id");
         row.sha256 = rs.getString("sha256");

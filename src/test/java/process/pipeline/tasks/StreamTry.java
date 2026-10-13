@@ -4,11 +4,16 @@ import process.pipeline.Dataset;
 import process.pipeline.RunDocuments;
 import process.pipeline.RunOutput;
 import process.pipeline.StreamContext;
+import process.pipeline.Streams;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.data.RunMemory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -138,7 +143,20 @@ final class StreamTry implements StreamContext {
 
     @Override public long maxRows() { return Long.MAX_VALUE; }
 
-    @Override public KeptFile keepFile(String fileName, List<String> columns, long rows, FileWriter writer) { throw new UnsupportedOperationException(); }
+    /** ADR-027: what the try kept (streamed to memory here) and recorded in the run's manifest. */
+    final Map<String, byte[]> files = new LinkedHashMap<>();
+    final List<RunOutput> recorded = new ArrayList<>();
+
+    @Override
+    public KeptFile keepFile(String fileName, List<String> columns, long rows, FileWriter writer) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        MessageDigest digest = Streams.sha256();
+        try (OutputStream out = new DigestOutputStream(bytes, digest)) {
+            writer.write(out);
+        }
+        this.files.put(fileName, bytes.toByteArray());
+        return new KeptFile(bytes.size(), Streams.hex(digest.digest()));
+    }
 
     /** MIG-364: the run's job, and the approved documents it was started for. */
     Long jobId;
@@ -168,7 +186,7 @@ final class StreamTry implements StreamContext {
 
     @Override public void keepFile(String fileName, byte[] content, long rows, List<String> columns) { throw new UnsupportedOperationException(); }
 
-    @Override public void recordOutput(RunOutput output) { }
+    @Override public void recordOutput(RunOutput output) { this.recorded.add(output); }
 
     @Override public void log(String message) { this.lines.add("INFO " + message); }
 

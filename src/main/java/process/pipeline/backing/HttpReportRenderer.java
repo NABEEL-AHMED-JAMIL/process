@@ -2,36 +2,37 @@ package process.pipeline.backing;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okio.BufferedSink;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import process.correlation.CorrelationInterceptor;
 
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * {@link ReportRenderer} as media-service's service render (MIG-255): POST /internal/media/render?tenantId=&usageKey= with
- * the internal token alone -- a step runs on the engine's thread, with no one signed in. The rows go as a dataset
- * ({title, fields, columns, rows}); the PDF comes back base64 in the answer. Nothing is read from or saved into storage.
+ * {@link ReportRenderer} as media-service's streamed render (ADR-027): POST /internal/media/render/table?tenantId=&usageKey=
+ * with the internal token alone -- a step runs on the engine's thread, with no one signed in. The body is the report's
+ * lines (ReportLines, application/x-ndjson) streamed from the step's scratch file; the answer is the PDF itself, streamed
+ * into the run's file area, with its pages in X-Report-Pages. A refusal is media's usual JSON answer, whose message the
+ * step reports.
  *
- * media-service must have the endpoint first; until it does, process.pipeline.media.internal-render is false and the
- * render_pdf task is listed as unavailable.
+ * Until media-service has the endpoint, process.pipeline.media.internal-render is false and render_pdf is listed as
+ * unavailable.
  */
 @Component
 public class HttpReportRenderer implements ReportRenderer {
 
-    private static final MediaType JSON = MediaType.get("application/json");
+    private static final MediaType NDJSON = MediaType.get("application/x-ndjson; charset=utf-8");
 
     private final String renderUrl;
     private final String serviceToken;
@@ -42,12 +43,12 @@ public class HttpReportRenderer implements ReportRenderer {
         .addInterceptor(new CorrelationInterceptor())
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
+        .writeTimeout(5, TimeUnit.MINUTES)
         .build();
 
     public HttpReportRenderer(@Value("${media.url:http://media:9110}") String mediaUrl, @Value("${internal.service-token:}") String serviceToken,
         @Value("${process.pipeline.media.internal-render:false}") boolean enabled) {
-        this.renderUrl = mediaUrl.replaceAll("/+$", "") + "/api/v1/internal/media/render";
+        this.renderUrl = mediaUrl.replaceAll("/+$", "") + "/api/v1/internal/media/render/table";
         this.serviceToken = serviceToken == null ? "" : serviceToken.trim();
         this.enabled = enabled;
     }
@@ -58,93 +59,60 @@ public class HttpReportRenderer implements ReportRenderer {
             : Optional.of("media-service does not render reports for pipelines yet (process.pipeline.media.internal-render is off)");
     }
 
-    /**
-     * Core's own layout when no template is named: the title, every header field on its own line -- so a label such as
-     * DRAFT is always printed, never left to a template remembering it -- the row count, the table, the page turned as
-     * asked and the watermark. Labels are plain text (RenderPdfStepTask checks them); they are escaped all the same.
-     */
-    private ObjectNode ownTemplate(ReportRenderer.Report request) {
-        StringBuilder html = new StringBuilder("<h1>{{title}}</h1>");
-        for (String label : request.fields.keySet()) {
-            html.append("<p class=\"report-meta\"><strong>").append(escape(label)).append("</strong>: {{field:").append(label).append("}}</p>");
-        }
-        if (request.sections.isEmpty()) {
-            html.append("<p class=\"report-meta\">{{rowCount}} rows | generated {{generatedAt}}</p>{{table}}");
-        } else {
-            // MIG-346: several tables, each under its own title (media-service's {{sections}}).
-            html.append("<p class=\"report-meta\">generated {{generatedAt}}</p>{{sections}}");
-        }
-        ObjectNode template = this.json.createObjectNode();
-        template.put("name", "Pipeline report");
-        template.put("bodyHtml", html.toString());
-        template.put("pageSize", "A4");
-        template.put("orientation", request.orientation == null ? "portrait" : request.orientation);
-        if (request.watermark != null && !request.watermark.trim().isEmpty()) {
-            template.put("watermarkText", request.watermark.trim());
-        }
-        return template;
-    }
-
-    private static String escape(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
-    }
-
     @Override
-    public byte[] renderPdf(ReportRenderer.Report request) throws Exception {
+    public Rendered render(long tenantId, String usageKey, ReportLines lines, OutputStream pdf) throws Exception {
         Optional<String> off = this.unavailable();
         if (off.isPresent()) {
             throw new IllegalStateException(off.get() + ".");
         }
-        ObjectNode body = this.json.createObjectNode();
-        body.put("outputFormat", "pdf");
-        body.put("fileName", request.fileName);
-        body.put("save", false);
-        if (request.templateId != null) {
-            body.put("templateId", request.templateId);
-        } else {
-            body.set("template", this.ownTemplate(request));
-        }
-        ObjectNode dataset = body.putObject("dataset");
-        dataset.put("title", request.title);
-        ObjectNode fields = dataset.putObject("fields");
-        for (Map.Entry<String, String> field : request.fields.entrySet()) {
-            fields.put(field.getKey(), field.getValue());
-        }
-        ArrayNode columns = dataset.putArray("columns");
-        request.columns.forEach(columns::add);
-        ArrayNode rows = dataset.putArray("rows");
-        for (List<Object> row : request.rows) {
-            rows.add(this.json.valueToTree(row));
-        }
-        if (!request.sections.isEmpty()) {
-            ArrayNode sections = dataset.putArray("sections");
-            for (ReportRenderer.Section section : request.sections) {
-                ObjectNode one = sections.addObject();
-                one.put("title", section.title);
-                if (section.note != null && !section.note.trim().isEmpty()) {
-                    one.put("note", section.note);
-                }
-                ArrayNode sectionColumns = one.putArray("columns");
-                section.columns.forEach(sectionColumns::add);
-                ArrayNode sectionRows = one.putArray("rows");
-                for (List<Object> row : section.rows) {
-                    sectionRows.add(this.json.valueToTree(row));
-                }
+        long length = lines.size();
+        RequestBody body = new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return NDJSON;
             }
-        }
-        HttpUrl url = HttpUrl.get(this.renderUrl).newBuilder().addQueryParameter("tenantId", String.valueOf(request.tenantId))
-            .addQueryParameter("usageKey", request.usageKey).build();
-        Request call = new Request.Builder().url(url).header("X-Internal-Token", this.serviceToken)
-            .post(RequestBody.create(this.json.writeValueAsBytes(body), JSON)).build();
+
+            @Override
+            public long contentLength() {
+                return length;
+            }
+
+            @Override
+            public void writeTo(BufferedSink sink) throws IOException {
+                lines.writeTo(sink.outputStream());
+            }
+        };
+        HttpUrl url = HttpUrl.get(this.renderUrl).newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId))
+            .addQueryParameter("usageKey", usageKey).build();
+        Request call = new Request.Builder().url(url).header("X-Internal-Token", this.serviceToken).post(body).build();
         try (Response response = this.http.newCall(call).execute()) {
-            String text = response.body() == null ? "" : response.body().string();
-            JsonNode answer = text.isEmpty() ? null : this.json.readTree(text);
-            if (response.code() != 200 || answer == null || !"SUCCESS".equals(answer.path("status").asText())) {
-                String message = answer == null ? "" : answer.path("message").asText("");
+            if (response.code() != 200 || response.body() == null) {
+                String text = response.body() == null ? "" : response.body().string();
+                String message = "";
+                try {
+                    JsonNode answer = text.isEmpty() ? null : this.json.readTree(text);
+                    message = answer == null ? "" : answer.path("message").asText("");
+                } catch (IOException notJson) {
+                    message = text.length() > 300 ? text.substring(0, 300) : text;
+                }
                 throw new IllegalStateException("media-service did not render the report (HTTP " + response.code() + ")"
                     + (message.isEmpty() ? "." : ": " + message));
             }
-            return Base64.getDecoder().decode(answer.path("data").path("outputBase64").asText(""));
+            try (InputStream in = response.body().byteStream()) {
+                byte[] buffer = new byte[1 << 16];
+                for (int n = in.read(buffer); n >= 0; n = in.read(buffer)) {
+                    pdf.write(buffer, 0, n);
+                }
+            }
+            return new Rendered(header(response, "X-Report-Pages"), header(response, "X-Report-Rows"));
+        }
+    }
+
+    private static int header(Response response, String name) {
+        try {
+            return Integer.parseInt(response.header(name, "0").trim());
+        } catch (NumberFormatException notANumber) {
+            return 0;
         }
     }
 }

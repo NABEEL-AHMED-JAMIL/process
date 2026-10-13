@@ -5,32 +5,38 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * MIG-255: the render_pdf step's call to media-service -- the service token alone, the run's workspace and usage key on
- * the query, the rows as a dataset, and (with no template named) a template of Core's own that prints every header field
- * -- the DRAFT label must never depend on a template remembering it -- turns the page for a wide table, and prints the
- * watermark. A label is plain text (RenderPdfStepTask checks it when the definition is saved).
+ * MIG-255 / ADR-027: the render_pdf step's call to media-service -- the service token alone, the run's workspace and usage
+ * key on the query, the report as lines (its settings first, then each table and its rows), and the PDF streamed back
+ * with its pages; a refusal carries media's own words. The lines are written to a scratch file and removed with it.
  */
 class HttpReportRendererTest {
 
     private HttpServer server;
     private final BlockingQueue<String[]> seen = new ArrayBlockingQueue<>(2);
     private final ObjectMapper json = new ObjectMapper();
+
+    @TempDir
+    Path scratch;
 
     @AfterEach
     void stop() {
@@ -39,64 +45,109 @@ class HttpReportRendererTest {
         }
     }
 
-    private int serve(int status, String answer) throws Exception {
+    private int serve(int status, String contentType, byte[] answer, String pages) throws Exception {
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/", exchange -> {
             this.seen.offer(new String[] {exchange.getRequestURI().toString(), exchange.getRequestHeaders().getFirst("X-Internal-Token"),
-                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)});
-            byte[] bytes = answer.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, bytes.length);
+                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8),
+                exchange.getRequestHeaders().getFirst("Content-Type")});
+            exchange.getResponseHeaders().add("Content-Type", contentType);
+            if (pages != null) {
+                exchange.getResponseHeaders().add("X-Report-Pages", pages);
+                exchange.getResponseHeaders().add("X-Report-Rows", "2");
+            }
+            exchange.sendResponseHeaders(status, answer.length);
             try (OutputStream out = exchange.getResponseBody()) {
-                out.write(bytes);
+                out.write(answer);
             }
         });
         this.server.start();
         return this.server.getAddress().getPort();
     }
 
-    private static ReportRenderer.Report report(Long templateId) {
-        Map<String, String> fields = new LinkedHashMap<>();
+    private ReportLines lines(Long templateId) throws Exception {
+        ReportLines lines = new ReportLines(this.scratch);
+        lines.section(null, null, Arrays.asList("case_id", "trend"), 2, "2 rows.");
+        lines.row(Arrays.<Object>asList("C1", "improving"));
+        lines.row(Arrays.<Object>asList("C2", 12.5));
+        Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("Status", "DRAFT for clinician review");
-        fields.put("Measurement (sizes)", "Sizes are estimates");
-        return new ReportRenderer.Report(2901L, "pipeline#7430#report#a1", "wound.pdf", "Wound assessment", fields,
-            Arrays.asList("case_id", "trend"), Collections.singletonList(Arrays.<Object>asList("C1", "improving")), templateId, "landscape", "DRAFT");
+        Map<String, Object> head = new LinkedHashMap<>();
+        head.put("title", "Wound assessment");
+        head.put("fields", fields);
+        head.put("orientation", "landscape");
+        head.put("watermark", "DRAFT");
+        head.put("templateId", templateId);
+        lines.head(head);
+        return lines;
     }
 
     @Test
-    void theReportGoesWithTheServiceTokenAndCoresOwnTemplate() throws Exception {
-        int port = this.serve(200, "{\"status\":\"SUCCESS\",\"data\":{\"outputBase64\":\"JVBERi0xLjc=\"}}");
-        byte[] pdf = new HttpReportRenderer("http://127.0.0.1:" + port, "core-to-media", true).renderPdf(report(null));
+    void theReportGoesAsLinesWithTheServiceTokenAndThePdfComesBackAsAStream() throws Exception {
+        byte[] pdf = "%PDF-1.7 two pages".getBytes(StandardCharsets.US_ASCII);
+        int port = this.serve(200, "application/pdf", pdf, "2");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ReportRenderer.Rendered rendered;
+        try (ReportLines lines = this.lines(null)) {
+            rendered = new HttpReportRenderer("http://127.0.0.1:" + port, "core-to-media", true)
+                .render(2901L, "pipeline#7430#report#a1", lines, out);
+        }
 
-        assertThat(new String(pdf, StandardCharsets.US_ASCII)).isEqualTo("%PDF-1.7");
+        assertThat(out.toByteArray()).isEqualTo(pdf);
+        assertThat(rendered.pages).isEqualTo(2);
+        assertThat(rendered.rows).isEqualTo(2);
         String[] call = this.seen.poll(5, TimeUnit.SECONDS);
-        assertThat(call[0]).isEqualTo("/api/v1/internal/media/render?tenantId=2901&usageKey=pipeline%237430%23report%23a1");
+        assertThat(call[0]).isEqualTo("/api/v1/internal/media/render/table?tenantId=2901&usageKey=pipeline%237430%23report%23a1");
         assertThat(call[1]).isEqualTo("core-to-media");
-        JsonNode body = this.json.readTree(call[2]);
-        assertThat(body.path("save").asBoolean()).isFalse();
-        assertThat(body.path("dataset").path("fields").path("Status").asText()).isEqualTo("DRAFT for clinician review");
-        assertThat(body.path("dataset").path("rows").get(0).get(1).asText()).isEqualTo("improving");
-        JsonNode template = body.path("template");
-        assertThat(template.path("orientation").asText()).isEqualTo("landscape");
-        assertThat(template.path("watermarkText").asText()).isEqualTo("DRAFT");
-        assertThat(template.path("bodyHtml").asText()).contains("{{title}}").contains("{{table}}")
-            .contains("<strong>Status</strong>: {{field:Status}}")
-            .contains("<strong>Measurement (sizes)</strong>: {{field:Measurement (sizes)}}");
+        assertThat(call[3]).startsWith("application/x-ndjson");
+        String[] body = call[2].split("\n");
+        assertThat(body).hasSize(4);
+        JsonNode head = this.json.readTree(body[0]);
+        assertThat(head.path("title").asText()).isEqualTo("Wound assessment");
+        assertThat(head.path("fields").path("Status").asText()).isEqualTo("DRAFT for clinician review");
+        assertThat(head.path("watermark").asText()).isEqualTo("DRAFT");
+        assertThat(head.has("templateId")).as("no template: media's own layout").isFalse();
+        JsonNode section = this.json.readTree(body[1]).path("section");
+        assertThat(section.path("rows").asInt()).isEqualTo(2);
+        assertThat(section.path("trailer").asText()).isEqualTo("2 rows.");
+        assertThat(section.has("title")).isFalse();
+        assertThat(this.json.readTree(body[3]).get(1).decimalValue()).isEqualByComparingTo("12.5");
+        try (Stream<Path> left = Files.list(this.scratch)) {
+            assertThat(left).as("the lines' file goes with the report").isEmpty();
+        }
     }
 
     @Test
-    void aNamedTemplateIsUsedAsItIs() throws Exception {
-        int port = this.serve(200, "{\"status\":\"SUCCESS\",\"data\":{\"outputBase64\":\"JVBERi0=\"}}");
-        new HttpReportRenderer("http://127.0.0.1:" + port, "t", true).renderPdf(report(12L));
-        JsonNode body = this.json.readTree(this.seen.poll(5, TimeUnit.SECONDS)[2]);
-        assertThat(body.path("templateId").asLong()).isEqualTo(12L);
-        assertThat(body.has("template")).isFalse();
+    void aNamedTemplateIsSentByItsId() throws Exception {
+        int port = this.serve(200, "application/pdf", new byte[] {'%'}, "1");
+        try (ReportLines lines = this.lines(12L)) {
+            new HttpReportRenderer("http://127.0.0.1:" + port, "t", true).render(1L, "k", lines, new ByteArrayOutputStream());
+        }
+        JsonNode head = this.json.readTree(this.seen.poll(5, TimeUnit.SECONDS)[2].split("\n")[0]);
+        assertThat(head.path("templateId").asLong()).isEqualTo(12L);
     }
 
     @Test
     void aRefusalCarriesMediasWords() throws Exception {
-        int port = this.serve(413, "{\"status\":\"ERROR\",\"message\":\"The rendered file is too large.\"}");
-        assertThatThrownBy(() -> new HttpReportRenderer("http://127.0.0.1:" + port, "t", true).renderPdf(report(null)))
-            .hasMessage("media-service did not render the report (HTTP 413): The rendered file is too large.");
+        int port = this.serve(413, "application/json",
+            "{\"status\":\"ERROR\",\"message\":\"Table 1 sends 60,000 rows; a PDF prints at most 50,000 a table.\"}".getBytes(StandardCharsets.UTF_8), null);
+        try (ReportLines lines = this.lines(null)) {
+            assertThatThrownBy(() -> new HttpReportRenderer("http://127.0.0.1:" + port, "t", true).render(1L, "k", lines,
+                new ByteArrayOutputStream()))
+                .hasMessage("media-service did not render the report (HTTP 413): Table 1 sends 60,000 rows; a PDF prints at most 50,000 a table.");
+        }
         assertThat(new HttpReportRenderer("http://x", "t", false).unavailable()).isPresent();
+    }
+
+    @Test
+    void linesThatDoNotMatchTheirTableAreRefusedBeforeAnythingIsSent() throws Exception {
+        try (ReportLines lines = new ReportLines(this.scratch)) {
+            lines.section("A", null, Arrays.asList("x"), 2, null);
+            lines.row(Arrays.<Object>asList(1));
+            assertThatThrownBy(() -> lines.section("B", null, Arrays.asList("x"), 0, null)).hasMessage("A table declared 2 rows and has 1.");
+            lines.row(Arrays.<Object>asList(2));
+            assertThatThrownBy(() -> lines.row(Arrays.<Object>asList(3))).hasMessage("The table already has the rows it declared.");
+            assertThatThrownBy(lines::size).hasMessage("The report has no settings line.");
+        }
     }
 }

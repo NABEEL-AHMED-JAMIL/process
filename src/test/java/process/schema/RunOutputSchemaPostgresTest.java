@@ -59,16 +59,23 @@ class RunOutputSchemaPostgresTest {
     }
 
     @Test
-    void oneRowPerStepExecutionWithItsStepsTenantGoneWithTheStep() {
+    void oneRowPerStepExecutionAndFileWithItsStepsTenantGoneWithTheStep() {
         long id = sql.queryForObject("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, run_dataset_id) "
             + "VALUES (?, 'file', 'claims.csv', 'csv', 2, 40, 1234) RETURNING run_output_id", Long.class, stepOfA);
         assertThat(id).isGreaterThanOrEqualTo(1000L);
         assertThat(sql.queryForObject("SELECT tenant_id FROM run_output WHERE run_output_id = ?", Long.class, id)).isEqualTo(A);
         assertThatThrownBy(() -> sql.update("INSERT INTO run_output (step_execution_id, kind, name, format, bucket_alias, object_key) "
-            + "VALUES (?, 'bucket', 'x.csv', 'csv', 'exports', 'x.csv')", stepOfA))
-            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ux_run_output_step");
+            + "VALUES (?, 'bucket', 'claims.csv', 'csv', 'exports', 'claims.csv')", stepOfA))
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ux_run_output_step_name");
+        // ADR-027 (V208): another file of the same step is a row of its own -- render_pdf's report beside its full data -- with
+        // a PDF's pages.
+        long pdf = sql.queryForObject("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, run_dataset_id, "
+            + "page_count) VALUES (?, 'file', 'claims.pdf', 'pdf', 2, 900, 1235, 3) RETURNING run_output_id", Long.class, stepOfA);
+        assertThat(sql.queryForObject("SELECT page_count FROM run_output WHERE run_output_id = ?", Integer.class, pdf)).isEqualTo(3);
+        assertThatThrownBy(() -> sql.update("UPDATE run_output SET page_count = -1 WHERE run_output_id = ?", pdf))
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_run_output_pages");
         sql.update("DELETE FROM step_execution WHERE step_execution_id = ?", stepOfA);
-        assertThat(sql.queryForObject("SELECT count(*) FROM run_output WHERE run_output_id = ?", Long.class, id)).isZero();
+        assertThat(sql.queryForObject("SELECT count(*) FROM run_output WHERE step_execution_id = ?", Long.class, stepOfA)).isZero();
         stepOfA = sql.queryForObject("INSERT INTO step_execution (job_queue_id, step_index, task_code, step_key, status) "
             + "VALUES (88410001, 0, 'save_file', 'keep', 'Completed') RETURNING step_execution_id", Long.class);
     }

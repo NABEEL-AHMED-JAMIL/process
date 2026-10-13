@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 208.0-run-output-per-file
+      author: nabeel.amd93
+      description: "ADR-027: run_output is one row per step execution and file name (render_pdf keeps its report and the full data beside it), and page_count holds a PDF's pages; expand-only for the data"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V208.0-run-output-per-file/V208__run_output_per_file.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V208.0-run-output-per-file/V208__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

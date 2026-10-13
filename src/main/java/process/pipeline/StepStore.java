@@ -76,7 +76,7 @@ public interface StepStore {
      */
     Optional<DatasetFile> datasetById(long runDatasetId);
 
-    /** Records a file a step wrote in the run's manifest (run_output): once per step execution, a later record replacing it. */
+    /** Records a file a step wrote in the run's manifest (run_output): once per step execution and file name, a later record replacing it. */
     void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt);
 
     /** The run's manifest, every attempt, in step order. */
@@ -233,6 +233,8 @@ public interface StepStore {
         public String fileId;
         /** MIG-334: hex sha256 of what the step wrote; null for a row recorded before. */
         public String sha256;
+        /** ADR-027: a PDF's pages; null for any other file and for a row recorded before. */
+        public Integer pageCount;
     }
 
     /** A dataset a step wrote -- never its storage key, which is the platform's. */

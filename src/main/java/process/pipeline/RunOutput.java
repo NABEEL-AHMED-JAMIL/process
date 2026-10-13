@@ -5,8 +5,8 @@ import java.security.NoSuchAlgorithmException;
 
 /**
  * One file a step wrote, for the run's result manifest (run_output, V188; Wave 4): Save File's kept file, or Upload to
- * bucket's object. A step reports it through {@link StepContext#recordOutput}; the engine records it once per step per
- * attempt (a later try replaces an earlier one's).
+ * bucket's object. A step reports it through {@link StepContext#recordOutput}; the engine records it once per step, attempt
+ * and file name (a later try replaces an earlier one's; ADR-027: render_pdf records its report and the full data beside it).
  */
 public final class RunOutput {
 
@@ -21,8 +21,15 @@ public final class RunOutput {
     private final String bucket;
     private final String key;
     private final String sha256;
+    /** A PDF's pages (ADR-027); null for any other file. */
+    private final Integer pages;
 
     private RunOutput(String kind, String name, String format, long rows, long bytes, String bucket, String key, String sha256) {
+        this(kind, name, format, rows, bytes, bucket, key, sha256, null);
+    }
+
+    private RunOutput(String kind, String name, String format, long rows, long bytes, String bucket, String key, String sha256,
+                      Integer pages) {
         this.kind = kind;
         this.name = name;
         this.format = format;
@@ -31,6 +38,7 @@ public final class RunOutput {
         this.bucket = bucket;
         this.key = key;
         this.sha256 = sha256;
+        this.pages = pages;
     }
 
     /** A file kept with the run (StepContext.keepFile) under this name. */
@@ -48,12 +56,21 @@ public final class RunOutput {
 
     /** The same output with the sha256 of its content (MIG-334: the customer API's File names it). */
     public RunOutput of(byte[] content) {
-        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256Of(content));
+        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256Of(content), this.pages);
+    }
+
+    /** ADR-027: the same output with a PDF's page count. */
+    public RunOutput withPages(int pages) {
+        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, this.sha256, pages);
+    }
+
+    public Integer getPages() {
+        return this.pages;
     }
 
     /** MIG-344: the same output with a sha256 worked out as its bytes were streamed (never held whole). */
     public RunOutput withSha256(String sha256) {
-        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256);
+        return new RunOutput(this.kind, this.name, this.format, this.rows, this.bytes, this.bucket, this.key, sha256, this.pages);
     }
 
     /** Lower-case hex sha256; null for no content. */

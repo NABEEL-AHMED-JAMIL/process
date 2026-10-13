@@ -186,7 +186,7 @@ public class InMemoryStepStore implements StepStore {
     }
 
     /** run_output in memory: one per step execution, a later record replacing it. */
-    public final Map<Long, OutputRow> outputs = new LinkedHashMap<>();
+    public final Map<String, OutputRow> outputs = new LinkedHashMap<>();
     public final Map<Long, Instant> datasetExpiry = new LinkedHashMap<>();
 
     @Override
@@ -211,7 +211,8 @@ public class InMemoryStepStore implements StepStore {
     public synchronized void output(long stepExecutionId, RunOutput output, Long runDatasetId, Instant expiresAt) {
         StepRow step = this.rows.get(stepExecutionId);
         OutputRow row = new OutputRow();
-        OutputRow before = this.outputs.get(stepExecutionId);
+        String key = stepExecutionId + "/" + output.getName();
+        OutputRow before = this.outputs.get(key);
         row.runOutputId = before != null ? before.runOutputId : this.ids.incrementAndGet();
         row.stepExecutionId = stepExecutionId;
         row.jobQueueId = step.jobQueueId;
@@ -230,7 +231,8 @@ public class InMemoryStepStore implements StepStore {
         row.expiresAt = expiresAt;
         row.recordedAt = LocalDateTime.now();
         row.sha256 = output.getSha256();
-        this.outputs.put(stepExecutionId, row);
+        row.pageCount = output.getPages();
+        this.outputs.put(key, row);
     }
 
     @Override

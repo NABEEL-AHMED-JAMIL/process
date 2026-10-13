@@ -3,7 +3,6 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.StepResult;
-import process.pipeline.backing.ReportRenderer;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,29 +46,36 @@ class RenderPdfSectionsTest {
                 section("title", "By ward", "input", "by_ward")));
         StepResult result = this.task.run(context);
 
-        ReportRenderer.Report report = this.renderer.asked.get(0);
-        assertThat(report.title).isEqualTo("Readmission, run " + TaskContext.RUN);
-        assertThat(report.fields).containsEntry("Patients", "1204").containsEntry("30-day rate", "11.2%");
-        assertThat(report.columns).isEmpty();
-        assertThat(report.rows).isEmpty();
-        assertThat(report.sections).extracting(s -> s.title).containsExactly("Summary", "By age band", "By ward");
-        assertThat(report.sections.get(0).columns).containsExactly("patients", "readmitted", "rate_pct");
-        assertThat(report.sections.get(1).columns).containsExactly("age_band", "rate_pct");
-        assertThat(report.sections.get(1).rows).containsExactly(Arrays.asList("<40", 8.1), Arrays.asList("40-64", 10.9), Arrays.asList("65+", 12.6));
-        assertThat(report.sections.get(1).note).isEqualTo("1204 patients");
-        assertThat(report.sections.get(2).rows).hasSize(2);
-        assertThat(report.orientation).isEqualTo("portrait");
-        assertThat(context.files).containsKey("readmission.pdf");
+        RenderPdfStepTaskTest.Asked report = this.renderer.asked.get(0);
+        assertThat(report.head.path("title").asText()).isEqualTo("Readmission, run " + TaskContext.RUN);
+        assertThat(report.head.path("fields").path("Patients").asText()).isEqualTo("1204");
+        assertThat(report.head.path("fields").path("30-day rate").asText()).isEqualTo("11.2%");
+        assertThat(report.tables).extracting(t -> t.title).containsExactly("Summary", "By age band", "By ward");
+        assertThat(report.table(0).columns).containsExactly("patients", "readmitted", "rate_pct");
+        assertThat(report.table(1).columns).containsExactly("age_band", "rate_pct");
+        assertThat(report.table(1).rows).containsExactly(Arrays.<Object>asList("<40", 8.1), Arrays.<Object>asList("40-64", 10.9),
+            Arrays.<Object>asList("65+", 12.6));
+        assertThat(report.table(1).note).isEqualTo("1204 patients");
+        assertThat(report.table(2).rows).hasSize(2);
+        assertThat(report.head.path("orientation").asText()).isEqualTo("portrait");
+        assertThat(context.files).containsOnlyKeys("readmission.pdf");
         assertThat(result.getOutput()).as("the rows pass on").isNull();
-        assertThat(context.lines.get(0)).startsWith("INFO Rendered 3 section(s), 6 row(s) in all, as readmission.pdf")
-            .contains("Summary: 1 row(s); By age band: 3 row(s); By ward: 2 row(s)");
+        assertThat(context.lines.get(0)).startsWith("INFO Rendered 3 sections as readmission.pdf: 2 page(s)")
+            .contains("Summary: 1 of 1 row(s); By age band: 3 of 3 row(s); By ward: 2 of 2 row(s)");
     }
 
     @Test
-    void aSectionHeldToItsOwnMaxRowsAndColumns() {
-        assertThatThrownBy(() -> this.task.run(this.context("fileName", "r", "sections",
-            Collections.singletonList(section("title", "Ages", "input", "by_age", "maxRows", 2)))))
-            .hasMessage("Section 1 (<by_age>) would have 3 rows; this step renders at most 2 (maxRows).");
+    void aSectionPrintsItsOwnMaxRowsAndKeepsTheFullDataBesideTheReport() throws Exception {
+        TaskContext context = this.context("fileName", "r", "sections",
+            Collections.singletonList(section("title", "Ages", "input", "by_age", "maxRows", 2)));
+        this.task.run(context);
+
+        RenderPdfStepTaskTest.Table ages = this.renderer.asked.get(0).table(0);
+        assertThat(ages.rows).hasSize(2);
+        assertThat(ages.trailer).isEqualTo("Showing the first 2 of 3 rows. 1 more row: the full data is in r-by_age-data.csv, kept with this report.");
+        assertThat(context.files).containsOnlyKeys("r.pdf", "r-by_age-data.csv");
+        assertThat(new String(context.files.get("r-by_age-data.csv"))).isEqualTo("age_band,rate_pct,n\r\n<40,8.1,210\r\n40-64,10.9,512\r\n65+,12.6,482\r\n");
+
         assertThatThrownBy(() -> this.task.run(this.context("fileName", "r", "sections",
             Collections.singletonList(section("title", "Wards", "input", "by_ward", "columns", Collections.singletonList("beds"))))))
             .hasMessage("Section 1 (<by_ward>): the rows have no column 'beds'.");
@@ -78,9 +84,10 @@ class RenderPdfSectionsTest {
     @Test
     void withoutSectionsTheReportIsTheOneTableItWas() throws Exception {
         this.task.run(this.context("fileName", "r", "title", "{{patients}} patients"));
-        ReportRenderer.Report report = this.renderer.asked.get(0);
-        assertThat(report.sections).isEmpty();
-        assertThat(report.columns).containsExactly("patients", "readmitted", "rate_pct");
-        assertThat(report.title).isEqualTo("1204 patients");
+        RenderPdfStepTaskTest.Asked report = this.renderer.asked.get(0);
+        assertThat(report.tables).hasSize(1);
+        assertThat(report.table(0).title).isNull();
+        assertThat(report.table(0).columns).containsExactly("patients", "readmitted", "rate_pct");
+        assertThat(report.head.path("title").asText()).isEqualTo("1204 patients");
     }
 }

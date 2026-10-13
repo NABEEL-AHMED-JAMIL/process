@@ -321,6 +321,7 @@ public class StepTimelineService {
                 out.put("format", row.format);
                 out.put("rowCount", row.rowCount);
                 out.put("byteCount", row.byteCount);
+                out.put("pageCount", row.pageCount);
                 out.put("recordedAt", row.recordedAt);
                 if (RunOutput.FILE.equals(row.kind)) {
                     out.put("runDatasetId", row.runDatasetId);
