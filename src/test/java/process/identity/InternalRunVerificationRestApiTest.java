@@ -15,7 +15,11 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineUsage;
+import process.pipeline.RunOwnership;
+import process.pipeline.review.RunReaders;
 import process.security.RunCallbackTokens;
+import process.security.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -90,6 +94,11 @@ class InternalRunVerificationRestApiTest {
         pipeline.setFields(Arrays.asList(step("summary", "server", 5, 1), step("caption", "worker", 6, 2), step("tags", "worker", 7, 3)));
         when(this.pipelines.findAllByPipelineIdAndTenantIdAndStatusNot("F100001", 2901L, Status.Delete))
             .thenReturn(Collections.singletonList(pipeline));
+    }
+
+    @AfterEach
+    void clearCaller() {
+        TenantContext.clear();
     }
 
     @Test
@@ -322,5 +331,51 @@ class InternalRunVerificationRestApiTest {
         Map<String, Object> verdict = (Map<String, Object>) this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "callback")).getBody();
 
         assertThat((List<Map<String, Object>>) verdict.get("workerSteps")).allSatisfy(step -> assertThat(step).doesNotContainKey("modelProfile"));
+    }
+
+    /**
+     * UX review 2026-10-12, step 3: AI asks whether the caller may read a run before it hands over the run's AI answers. The
+     * answer is RunReaders' for the caller the JWT filter set from the forwarded bearer token -- and false with no caller.
+     */
+    @Test
+    void readableAnswersRunReadersForTheForwardedCaller() {
+        RunReaders readers = mock(RunReaders.class);
+        this.api.setReaders(readers);
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(900L);
+        run.setJobId(77L);
+        run.setTenantId(2960L);
+        SourceJob job = new SourceJob();
+        job.setJobId(77L);
+        job.setTenantId(2960L);
+        job.setJobStatus(Status.Active);
+        when(this.runs.findById(900L)).thenReturn(Optional.of(run));
+        when(this.jobs.findById(77L)).thenReturn(Optional.of(job));
+        RunOwnership.Owned owned = RunOwnership.ofWorkspace(this.runs, this.jobs, 900L, 2960L).get();
+        when(readers.readable(900L)).thenReturn(Optional.of(owned));
+        when(readers.readable(901L)).thenReturn(Optional.empty());
+
+        TenantContext.set(2960L, "TENANT_USER", 4641L, "reviewer");
+        assertThat(this.api.readable(SERVICE, 900L).getBody()).isEqualTo(Collections.singletonMap("readable", true));
+        assertThat(this.api.readable(SERVICE, 901L).getBody()).isEqualTo(Collections.singletonMap("readable", false));
+    }
+
+    @Test
+    void readableWithoutTheServiceTokenOrACallerSaysNothingOrNo() {
+        RunReaders readers = mock(RunReaders.class);
+        this.api.setReaders(readers);
+        TenantContext.set(2960L, "TENANT_USER", 4641L, "reviewer");
+        assertThat(this.api.readable(null, 900L).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.readable("wrong", 900L).getStatusCodeValue()).isEqualTo(401);
+        TenantContext.clear();
+        // A bearer token the filter refused leaves no caller: nobody reads the run, and RunReaders is not asked.
+        assertThat(this.api.readable(SERVICE, 900L).getBody()).isEqualTo(Collections.singletonMap("readable", false));
+        verifyNoInteractions(readers);
+    }
+
+    @Test
+    void readableWithoutRunReadersWiredReadsNothing() {
+        TenantContext.set(2960L, "TENANT_ADMIN", 4640L, "admin");
+        assertThat(this.api.readable(SERVICE, 900L).getBody()).isEqualTo(Collections.singletonMap("readable", false));
     }
 }

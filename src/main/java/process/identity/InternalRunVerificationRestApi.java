@@ -30,6 +30,8 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.PipelineRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineUsage;
+import process.pipeline.review.RunReaders;
+import process.security.TenantContext;
 import process.security.RunCallbackTokens;
 
 import java.nio.charset.StandardCharsets;
@@ -58,6 +60,10 @@ import java.util.Optional;
  *
  * /internal/pipelines/apiRequestUsers: which of a workspace's step-engine pipelines run its API requests, which
  * integration-service asks for an API collection's "Used by" and before a request's delete.
+ *
+ * /internal/runs/{jobQueueId}/readable: whether the CALLER -- the person whose bearer token AI forwards beside the
+ * service token, verified by the JWT filter like any request's -- may read this run (RunReaders: its owner, or a reviewer
+ * the run's pipeline names), so AI scopes a run's AI answers exactly as Core scopes the run's other reads.
  */
 @RestController
 @RequestMapping("/internal")
@@ -89,6 +95,14 @@ public class InternalRunVerificationRestApi {
     @Autowired(required = false)
     public void setUsage(PipelineUsage usage) {
         this.usage = usage;
+    }
+
+    /** Who may read a run (UX review 2026-10-12); absent in a test that does not ask, when no run reads as readable. */
+    private RunReaders readers;
+
+    @Autowired(required = false)
+    public void setReaders(RunReaders readers) {
+        this.readers = readers;
     }
 
     /**
@@ -152,6 +166,23 @@ public class InternalRunVerificationRestApi {
                 ? this.workerSteps(pipelineId, tenantId, run, job.orElse(null)) : Collections.emptyList());
             return new ResponseEntity<>(verdict, HttpStatus.OK);
         });
+    }
+
+    /**
+     * UX review 2026-10-12, step 3: may the caller read this run -- its AI answers, for AI's aiPrompt.json/runsForJob? The
+     * caller is the bearer token sent with the service token (the JWT filter has verified it and set TenantContext, so row
+     * security reads as that person's workspace); the decision is RunReaders', the one every run read of Core's makes. No
+     * caller (no bearer, or one the filter refused) reads nothing. Answers {readable}, and nothing about the run.
+     */
+    @PostMapping(value = "/runs/{jobQueueId}/readable", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> readable(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
+        @PathVariable("jobQueueId") Long jobQueueId) {
+        if (!this.admits(presented)) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        boolean readable = this.readers != null && TenantContext.getAppUserId() != null && TenantContext.getUserRole() != null
+            && this.readers.readable(jobQueueId).isPresent();
+        return new ResponseEntity<>(Collections.singletonMap("readable", readable), HttpStatus.OK);
     }
 
     /** Body {promptId}. */

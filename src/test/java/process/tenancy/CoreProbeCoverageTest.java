@@ -189,6 +189,9 @@ class CoreProbeCoverageTest {
             + " (InternalPageAccessRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
         NOTHING_TO_AIM.put("POST internal/runs/{jobQueueId}/verify-callback", service
             + " (InternalRunVerificationRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
+        NOTHING_TO_AIM.put("POST internal/runs/{jobQueueId}/readable", service + ", and the caller's own bearer token beside it, "
+            + "which the JWT filter verifies: answers only {readable} for that caller, by RunReaders under their own workspace "
+            + "(InternalRunVerificationRestApiTest.readableWithoutTheServiceTokenOrACallerSaysNothingOrNo)");
         NOTHING_TO_AIM.put("POST internal/pipelines/countUsingPrompt", service
             + " (InternalRunVerificationRestApiTest.thePromptDeleteGuardCountsThePipelinesUsingAPrompt)");
         NOTHING_TO_AIM.put("POST internal/pipelines/apiRequestUsers", service
