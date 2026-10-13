@@ -381,6 +381,8 @@ class MonitoringPostgresTest {
             + "VALUES (?, ?, 1, 2, 'render_pdf', 'Failed', '{\"message\": \"The step''s input has 1,000,000 rows x 8 columns; a step that holds its whole input in memory "
             + "takes at most 50,000 rows.\", \"timedOut\": false}', "
             + "'report')", A, a1);
+        // UX review 2026-10-13: a2 is one of backfill 77's runs -- listed, but retried by the backfill, not from here.
+        login.update("UPDATE job_queue SET run_lane = 1, backfill_id = 77 WHERE job_queue_id = ?", a2);
         FailedRuns failed = new FailedRuns(app, this.identity);
 
         TenantContext.set(A, "TENANT_USER", REVIEWER_A, "r");
@@ -396,6 +398,8 @@ class MonitoringPostgresTest {
         List<Map<String, Object>> items = (List<Map<String, Object>>) mine.get("items");
         assertThat(items).extracting(i -> i.get("runId")).containsExactly(a2, a1);
         assertThat(items.get(1)).containsEntry("task", "render_pdf").containsEntry("stepKey", "report").containsEntry("kind", "too_large");
+        assertThat(items.get(0)).containsEntry("backfillId", 77L).containsEntry("retryable", false);
+        assertThat(items.get(1)).containsEntry("backfillId", null).containsEntry("retryable", true);
 
         TenantContext.set(null, "PLATFORM_ADMIN", PLATFORM, "p");
         Map<String, Object> all = failed.search(new FailedRuns.Query(), true);

@@ -41,7 +41,8 @@ import static process.util.ProcessUtil.SUCCESS;
  *   instance's memory (RunReviewBulk's note on more than one Core instance applies).</li>
  * </ul>
  * The answer is per run: done (queued again), skipped with the retry's own reason (run-not-failed, run-in-flight,
- * pipeline-changed, input-changed, outputs-expired, not-resumable, not-found, ...), or failed.
+ * pipeline-changed, input-changed, outputs-expired, not-resumable, not-found, ...; part-of-backfill for a backfill's run, which its
+ * backfill retries), or failed.
  */
 @Service
 public class BulkRetry {
@@ -51,6 +52,12 @@ public class BulkRetry {
     static final long RATE_WINDOW_MILLIS = 60_000L;
     static final Pattern BULK_ID = Pattern.compile("^[A-Za-z0-9-]{8,64}$");
     static final String TOO_MANY = "Too many bulk retries in a minute; wait a moment and try again.";
+    /** A skipped run's reason when it is one of a backfill's: the backfill's own Retry failed retries it, with its date. */
+    static final String PART_OF_BACKFILL = "part-of-backfill";
+
+    static String backfillSentence(Object backfillId) {
+        return String.format("Part of backfill #%s: retry failed days from the backfill.", backfillId);
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(BulkRetry.class);
 
@@ -125,6 +132,12 @@ public class BulkRetry {
                     item.put("message", dryRun ? ("start".equals(from) ? "Would run again from the start."
                         : "Would resume from step " + view.get("fromKey") + ".") : answer.getMessage());
                     done.add(item);
+                } else if (view.get("backfillId") != null) {
+                    // UX review 2026-10-13: a backfill's run is retried by its backfill (Runs › Backfills, Retry failed).
+                    item.put("reason", PART_OF_BACKFILL);
+                    item.put("message", backfillSentence(view.get("backfillId")));
+                    item.put("backfillId", view.get("backfillId"));
+                    skipped.add(item);
                 } else {
                     Object kind = dryRun && "start".equals(from) ? null : view.get("refusalKind");
                     item.put("reason", kind == null ? (view.isEmpty() ? "not-found" : "not-resumable") : kind);

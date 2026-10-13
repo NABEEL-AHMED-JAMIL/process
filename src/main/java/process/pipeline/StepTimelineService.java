@@ -470,6 +470,8 @@ public class StepTimelineService {
         }).collect(Collectors.toList()));
         view.put("inputFiles", plan.inputFiles);
         view.put("inputsChecked", plan.inputsChecked);
+        // UX review 2026-10-13: the console says where such a run is retried (the backfill's Retry failed) instead of offering it.
+        view.put("backfillId", plan.backfillId);
         boolean admin = isAdmin();
         view.put("restartable", plan.restartable() && admin);
         view.put("restartRefusal", plan.restartable() ? (admin ? null : "Running a failed run again from the start is a workspace "

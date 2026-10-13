@@ -370,6 +370,35 @@ class DocumentTriggerPostgresTest {
         assertThat(this.service.trigger(9661L).getData()).hasFieldOrPropertyWithValue("configured", false);
     }
 
+    /** UX review 2026-10-13 (DI1): what an approved document starts -- the workspace's triggers on schedules the caller sees. */
+    @Test
+    void theWorkspacesTriggersAreListedByTypeForWhoeverMaySeeTheirSchedules() {
+        job(9671, A, "Active");
+        job(9672, A, "Inactive");
+        job(9673, A, "Delete");
+        job(9674, B, "Active");
+        trigger(9671, TYPE, true);
+        trigger(9672, 1003L, false);
+        trigger(9673, TYPE, true);
+        trigger(9674, TYPE, true);
+
+        TenantContext.set(A, "TENANT_ADMIN", 60L, "admin@acme.example");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) this.service.triggers().getData();
+        assertThat(rows).extracting(r -> r.get("jobId")).as("by type, a deleted schedule and another workspace's left out")
+            .containsExactly(9672L, 9671L);
+        assertThat(rows.get(0)).containsEntry("jobName", "docs-9672").containsEntry("jobStatus", "Inactive")
+            .containsEntry("documentTypeId", 1003L).containsEntry("enabled", false);
+
+        // A tenant user who neither made nor is assigned those schedules sees none of them.
+        TenantContext.set(A, "TENANT_USER", 77L, "other@acme.example");
+        assertThat((List<?>) this.service.triggers().getData()).isEmpty();
+        TenantContext.set(B, "TENANT_ADMIN", 70L, "admin@beta.example");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> others = (List<Map<String, Object>>) this.service.triggers().getData();
+        assertThat(others).extracting(r -> r.get("jobId")).containsExactly(9674L);
+    }
+
     // ---- the read_documents watermark (run_document_read) ---------------------------------------------------------------
 
     /** Only a completed run moves the mark; a failed one's documents are read again; another workspace sees none of it. */

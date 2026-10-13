@@ -147,6 +147,8 @@ public class RunRetries {
         /** Null when a restart may be asked for; else why not. */
         public String restartRefusalKind;
         public String restartRefusal;
+        /** UX review 2026-10-13: the backfill this run is part of (its own Retry failed retries it), else null. */
+        public Long backfillId;
         /** The input files the resume will check, and whether they were checked for this plan. */
         public int inputFiles;
         public boolean inputsChecked;
@@ -250,6 +252,7 @@ public class RunRetries {
             why = String.format("Run %d is %s, not failed: only a failed run is retried.", run.getJobQueueId(), words(run.getJobStatus()));
         } else if (run.isBackfillRun()) {
             // MIG-347: a backfill's run is retried with its date by the backfill ("Retry failed"), in a free lane of its own.
+            plan.backfillId = run.getBackfillId();
             kind = NOT_RESUMABLE;
             why = String.format("Run %d is part of backfill #%d: retry its failed dates from the backfill (Runs › Backfills).",
                 run.getJobQueueId(), run.getBackfillId());

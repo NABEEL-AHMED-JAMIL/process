@@ -94,6 +94,8 @@ public class FailedRuns {
         String pattern;
         String signature;
         String day;
+        /** UX review 2026-10-13: the backfill this run is part of (its Retry failed retries it), else null. */
+        Long backfillId;
 
         String error() {
             return this.stepError != null && !this.stepError.trim().isEmpty() ? this.stepError : this.runMessage;
@@ -116,7 +118,7 @@ public class FailedRuns {
             throw new AlertRules.Refused(HttpStatus.BAD_REQUEST, "Ask for at most " + LONGEST.toDays() + " days at a time.");
         }
         List<Row> rows = this.jdbc.query("SELECT q.job_queue_id, q.tenant_id, q.job_id, j.job_name, j.task_detail_id, t.task_name, q.job_status, "
-            + "q.end_reason, q.attempt, q.start_time, COALESCE(q.end_time, q.skip_time) AS ended_at, q.job_status_message, s.step_index, "
+            + "q.end_reason, q.attempt, q.backfill_id, q.start_time, COALESCE(q.end_time, q.skip_time) AS ended_at, q.job_status_message, s.step_index, "
             + "s.step_key, s.task_code, s.error ->> 'message' AS step_error, (s.error ->> 'timedOut')::boolean AS timed_out, "
             + "to_char(COALESCE(q.end_time, q.skip_time) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD') AS day "
             + "FROM job_queue q JOIN source_job j ON j.job_id = q.job_id LEFT JOIN source_task t ON t.task_detail_id = j.task_detail_id "
@@ -136,6 +138,8 @@ public class FailedRuns {
                 r.status = rs.getString("job_status");
                 r.endReason = rs.getString("end_reason");
                 r.attempt = rs.getInt("attempt");
+                long backfill = rs.getLong("backfill_id");
+                r.backfillId = rs.wasNull() ? null : backfill;
                 Timestamp started = rs.getTimestamp("start_time");
                 r.started = started == null ? null : started.toInstant();
                 Timestamp ended = rs.getTimestamp("ended_at");
@@ -283,7 +287,9 @@ public class FailedRuns {
         item.put("signature", r.signature);
         item.put("pattern", r.pattern);
         item.put("link", "/pipelines/schedules/" + r.jobId + "/runs/" + r.runId);
-        item.put("retryable", "Failed".equals(r.status));
+        // A backfill's run is retried by its backfill (Runs › Backfills, Retry failed), never here (RunRetries refuses it).
+        item.put("backfillId", r.backfillId);
+        item.put("retryable", "Failed".equals(r.status) && r.backfillId == null);
         return item;
     }
 

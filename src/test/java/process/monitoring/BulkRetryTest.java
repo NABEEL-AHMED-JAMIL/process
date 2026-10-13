@@ -106,6 +106,23 @@ class BulkRetryTest {
     }
 
     @Test
+    void aBackfillsRunIsSkippedForItsBackfillsRetryFailed() {
+        Map<String, Object> backfill = plan(10, false, "not-resumable", "Run 2 is part of backfill #7: retry its failed dates from the backfill.");
+        backfill.put("backfillId", 7L);
+        when(this.runs.retryPlan(1L)).thenReturn(new ResponseDto("SUCCESS", "Resumable.", plan(10, true, null, null)));
+        when(this.runs.retryPlan(2L)).thenReturn(new ResponseDto("SUCCESS", "Part of a backfill.", backfill));
+        ResponseDto answer = this.bulk.retry(body(Arrays.asList(1, 2), "dryRun", true));
+        assertThat(answer.getMessage()).isEqualTo("1 would be retried, 1 skipped.");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> skipped = ((List<Map<String, Object>>) ((Map<String, Object>) answer.getData()).get("skipped")).get(0);
+        assertThat(skipped.get("id")).isEqualTo(2L);
+        assertThat(skipped.get("reason")).isEqualTo("part-of-backfill");
+        assertThat(skipped.get("message")).isEqualTo("Part of backfill #7: retry failed days from the backfill.");
+        assertThat(skipped.get("backfillId")).isEqualTo(7L);
+        assertThat(skipped.get("link")).as("the run, as for any skipped run").isEqualTo("/pipelines/schedules/10/runs/2");
+    }
+
+    @Test
     void tenBulkRetriesAMinuteThenA429() {
         when(this.runs.retryPlan(1L)).thenReturn(new ResponseDto("SUCCESS", "Resumable.", plan(10, true, null, null)));
         for (int i = 0; i < BulkRetry.RATE_CAP; i++) {

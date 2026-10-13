@@ -55,6 +55,12 @@ public interface DocumentTriggerStore {
 
     Optional<Trigger> find(long jobId);
 
+    /**
+     * UX review 2026-10-13 (DI1): the workspace's document triggers with their schedule's name and state, by document type
+     * then schedule name -- what an approved document starts. {@code ownership} is JobOwnership's predicate on alias "j".
+     */
+    List<Map<String, Object>> listed(long tenantId, String ownership);
+
     /** Creates or replaces a job's trigger (its workspace is the job's), stamped with who did it. */
     void save(long jobId, long documentTypeId, boolean enabled, int batchSize, Long actor);
 

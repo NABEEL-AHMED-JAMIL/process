@@ -18,7 +18,9 @@ import process.documents.DocumentTriggerService;
  * new route or page key, as the inbox trigger (MIG-239):
  *
  * <ul>
- *   <li>GET sourceJob.json/documentTrigger?jobId= -- the job's trigger (configured, enabled, documentTypeId, batchSize, waiting);</li>
+ *   <li>GET sourceJob.json/documentTrigger?jobId= -- the job's trigger (configured, enabled, documentTypeId, batchSize, waiting);
+ *       without jobId, every trigger of the workspace on a job the caller may see ({jobId, jobName, jobStatus, documentTypeId,
+ *       enabled}, by type): what an approved document starts (UX review 2026-10-13, DI1);</li>
  *   <li>POST sourceJob.json/documentTrigger/save {jobId, documentTypeId, enabled, batchSize} -- set it;</li>
  *   <li>DELETE sourceJob.json/documentTrigger?jobId= -- remove it;</li>
  *   <li>GET sourceJob.json/documentApprovals?jobId=&amp;limit= -- what approved documents did to the job: Started (its
@@ -38,8 +40,8 @@ public class DocumentTriggerRestApi {
     }
 
     @RequestMapping(value = "/sourceJob.json/documentTrigger", method = RequestMethod.GET)
-    public ResponseEntity<?> trigger(@RequestParam Long jobId) {
-        return new ResponseEntity<>(this.service.trigger(jobId), HttpStatus.OK);
+    public ResponseEntity<?> trigger(@RequestParam(required = false) Long jobId) {
+        return new ResponseEntity<>(jobId == null ? this.service.triggers() : this.service.trigger(jobId), HttpStatus.OK);
     }
 
     @BuilderAction

@@ -527,6 +527,23 @@ class RunRetriesTest {
     }
 
     @Test
+    void aBackfillsRunIsRetriedByItsBackfillAndThePlanSaysWhich() {
+        this.failsAtStepThree();
+        this.run.setRunLane((short) 1);
+        this.run.setBackfillId(7L);
+
+        RunRetries.Plan plan = this.retries.plan(this.run, this.job, false);
+
+        assertThat(plan.resumable()).isFalse();
+        assertThat(plan.restartable()).isFalse();
+        assertThat(plan.backfillId).isEqualTo(7L);
+        assertThat(plan.refusal).isEqualTo("Run 9345 is part of backfill #7: retry its failed dates from the backfill (Runs › Backfills).");
+        this.run.setRunLane((short) 0);
+        this.run.setBackfillId(null);
+        assertThat(this.retries.plan(this.run, this.job, false).backfillId).isNull();
+    }
+
+    @Test
     void anotherRunInFlightAnInactiveScheduleAndTooManyAttemptsRefuse() {
         this.failsAtStepThree();
         this.job.setJobRunningStatus(JobStatus.Running);

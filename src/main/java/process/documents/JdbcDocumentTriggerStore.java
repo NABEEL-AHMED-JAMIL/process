@@ -45,6 +45,21 @@ public class JdbcDocumentTriggerStore implements DocumentTriggerStore, RunDocume
     }
 
     @Override
+    public List<Map<String, Object>> listed(long tenantId, String ownership) {
+        return this.jdbc.query("SELECT t.job_id, j.job_name, j.job_status, t.document_type_id, t.enabled FROM job_document_trigger t "
+            + "JOIN source_job j ON j.job_id = t.job_id WHERE t.tenant_id = ? AND j.job_status <> 'Delete'" + (ownership == null ? "" : ownership)
+            + " ORDER BY t.document_type_id, lower(j.job_name), t.job_id", (rs, i) -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("jobId", rs.getLong("job_id"));
+                row.put("jobName", rs.getString("job_name"));
+                row.put("jobStatus", rs.getString("job_status"));
+                row.put("documentTypeId", rs.getLong("document_type_id"));
+                row.put("enabled", rs.getBoolean("enabled"));
+                return row;
+            }, tenantId);
+    }
+
+    @Override
     public void save(long jobId, long documentTypeId, boolean enabled, int batchSize, Long actor) {
         this.jdbc.update("INSERT INTO job_document_trigger (job_id, document_type_id, enabled, batch_size, created_by, updated_by) "
             + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (job_id) DO UPDATE SET document_type_id = EXCLUDED.document_type_id, "

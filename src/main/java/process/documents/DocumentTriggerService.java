@@ -225,6 +225,19 @@ public class DocumentTriggerService {
     }
 
     /**
+     * UX review 2026-10-13 (DI1): every document trigger of the caller's workspace on a schedule the caller may see -- which
+     * schedules an approved document of each type starts -- for Document Intelligence's Overview.
+     */
+    public ResponseDto triggers() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            return new ResponseDto(SUCCESS, "Document triggers belong to a workspace.", new ArrayList<>());
+        }
+        List<Map<String, Object>> rows = this.store.listed(tenantId, JobOwnership.sqlPredicate("j"));
+        return new ResponseDto(SUCCESS, String.format("%d document trigger(s).", rows.size()), rows);
+    }
+
+    /**
      * Sets a job's trigger: the document type (one the workspace may read), on or off, and how many waiting documents one
      * run takes (1..{@value DocumentTriggerStore#MAX_BATCH}; absent keeps the trigger's, 1 for a new one).
      */
