@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.http.HttpStatus;
 import process.ScratchPostgres;
+import process.monitoring.WorkspaceSignals;
 import process.pipeline.Dataset;
 import process.pipeline.DatasetStore;
 import process.pipeline.FileDatasetStore;
@@ -420,6 +421,14 @@ class RetentionPostgresTest {
         body.put("expectedCount", 3);
         Map<String, Object> confirmed = RowSecurity.forTenant(A, () -> this.service.confirm(A, body, ADMIN));
         assertThat(confirmed.get("confirmedCount")).isEqualTo(3L);
+
+        // The workspace's RETENTION alert reads the paused class while it matters, and not once retention is off.
+        WorkspaceSignals signals = new WorkspaceSignals(db.appJdbc());
+        assertThat(signals.retention(Collections.singletonList(A))).extracting(t -> t.dataClass + " " + t.state)
+            .containsExactly("RUN_LOGS PAUSED");
+        login.update("UPDATE retention_policy SET enabled = false WHERE tenant_id = ?", A);
+        assertThat(signals.retention(Collections.singletonList(A))).isEmpty();
+        login.update("UPDATE retention_policy SET enabled = true WHERE tenant_id = ?", A);
 
         RetentionPass.Outcome done = this.runPass(A);
         assertThat(of(done, DataClass.RUN_LOGS).state).isEqualTo("DONE");

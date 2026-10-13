@@ -271,15 +271,22 @@ public class WorkspaceSignals {
         public Instant at;
     }
 
-    /** MIG-354: each workspace's latest retention result per class, and its latest pass, where they need attention. */
+    /**
+     * MIG-354: each workspace's latest retention result per class, and its latest pass, where they need attention -- while
+     * retention is on and the class still has days (turned off, or kept forever since, the alert resolves).
+     */
     public List<RetentionTrouble> retention(Collection<Long> tenants) {
         return this.across(tenants, (array) -> this.jdbc.query("SELECT c.tenant_id, c.data_class, c.state, c.note, c.retention_pass_id, "
             + "c.started_at FROM (SELECT DISTINCT ON (tenant_id, data_class) tenant_id, data_class, state, note, retention_pass_id, started_at "
             + "FROM retention_pass_class WHERE tenant_id = ANY (?) ORDER BY tenant_id, data_class, started_at DESC) c "
+            // Only while it still matters: retention on, and the class not kept forever since. Turning either off clears it.
+            + "JOIN retention_policy rp ON rp.tenant_id = c.tenant_id AND rp.enabled "
+            + "JOIN retention_rule rr ON rr.tenant_id = c.tenant_id AND rr.data_class = c.data_class AND rr.keep_days IS NOT NULL "
             + "WHERE c.state IN ('PAUSED', 'FAILED') "
             + "UNION ALL SELECT p.tenant_id, NULL, p.state, p.note, p.retention_pass_id, p.started_at FROM (SELECT DISTINCT ON (tenant_id) "
             + "tenant_id, state, note, retention_pass_id, started_at FROM retention_pass WHERE tenant_id = ANY (?) AND state <> 'RUNNING' "
-            + "ORDER BY tenant_id, started_at DESC) p WHERE p.state = 'FAILED' LIMIT " + MAX_ROWS, (rs, i) -> {
+            + "ORDER BY tenant_id, started_at DESC) p JOIN retention_policy rp ON rp.tenant_id = p.tenant_id AND rp.enabled "
+            + "WHERE p.state = 'FAILED' LIMIT " + MAX_ROWS, (rs, i) -> {
                 RetentionTrouble t = new RetentionTrouble();
                 t.tenantId = rs.getLong(1);
                 t.dataClass = rs.getString(2);
