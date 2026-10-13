@@ -8,7 +8,6 @@ import process.settings.EngineSettingsService;
 
 import java.util.Map;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.PutMapping;
  * No delete and no rename exist: the engine reads each setting by name.
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/setting.json")
 @PreAuthorize("hasRole('PLATFORM_ADMIN')")
 public class EngineSettingsRestApi {

@@ -7,7 +7,6 @@ import org.barco.platform.security.BuilderAction;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -43,7 +42,6 @@ import java.io.IOException;
  * </ul>
  */
 @RestController
-@CrossOrigin(origins = "*")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class FormRestApi {
 

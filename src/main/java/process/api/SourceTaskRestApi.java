@@ -18,7 +18,6 @@ import process.util.PagingUtil;
 import process.util.ProcessUtil;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -28,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Nabeel Ahmed
  * */
 @RestController
-@CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/sourceTask.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class SourceTaskRestApi {

@@ -1,7 +1,6 @@
 package process.api;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,7 +26,6 @@ import static process.util.ProcessUtil.SUCCESS;
  * address the gateway saw, and a sign-in when the link requires one) and turns a refusal into its HTTP status.
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping("/publicForm.json/{token}")
 public class PublicFormRestApi {
 

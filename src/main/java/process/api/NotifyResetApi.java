@@ -22,7 +22,6 @@ import process.model.enums.JobStatus;
 import process.model.service.NotifyService;
 import process.security.RunCallbackTokens;
 import process.util.ProcessUtil;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -44,7 +43,6 @@ import org.springframework.web.bind.annotation.RequestMethod;
  * @author Nabeel Ahmed
  */
 @RestController
-@CrossOrigin(origins = "*")
 public class NotifyResetApi {
 
     private static final String WORKER_TOKEN_HEADER = "X-Worker-Token";

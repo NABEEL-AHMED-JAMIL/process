@@ -2,7 +2,6 @@ package process.api;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +21,6 @@ import java.util.Map;
  * is the only key, nothing rides on a cookie, and what is answered is what the page shows. Never cached.
  */
 @RestController
-@CrossOrigin(origins = "*", allowCredentials = "false")
 @RequestMapping("/customer/embed/runs")
 public class CustomerEmbedRestApi {
 

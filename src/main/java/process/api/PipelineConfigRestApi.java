@@ -8,7 +8,6 @@ import process.model.dto.ResponseDto;
 import process.settings.PipelineConfigDto;
 import process.settings.PipelineConfigService;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +21,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
  * A refusal is a 200 with status ERROR and a sentence, as everywhere on /setting.json.
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/setting.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class PipelineConfigRestApi {

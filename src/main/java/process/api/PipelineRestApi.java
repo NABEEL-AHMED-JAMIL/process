@@ -11,7 +11,6 @@ import process.model.pojo.Pipeline;
 import process.model.service.impl.PipelineServiceImpl;
 import process.util.ProcessUtil;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -33,7 +32,6 @@ import org.springframework.web.bind.annotation.RequestBody;
  * @author Nabeel Ahmed
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/pipeline.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class PipelineRestApi {

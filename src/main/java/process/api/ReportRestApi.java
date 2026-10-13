@@ -10,7 +10,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.impl.ReportExportServiceImpl;
 import process.util.ProcessUtil;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -27,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
  * @author Nabeel Ahmed
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/report.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class ReportRestApi {

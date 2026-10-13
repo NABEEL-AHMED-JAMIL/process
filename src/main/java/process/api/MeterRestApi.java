@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import process.model.dto.ResponseDto;
 import process.model.pojo.JobQueue;
@@ -32,7 +31,6 @@ import java.util.Optional;
  * the answer names the workspace and nothing else.
  */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/meter.json")
 public class MeterRestApi {
 

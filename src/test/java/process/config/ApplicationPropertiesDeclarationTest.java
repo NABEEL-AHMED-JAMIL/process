@@ -45,7 +45,9 @@ public class ApplicationPropertiesDeclarationTest {
         "meter.url",
         "meter.service-key",
         // Whether the API documentation is generated at all (SwaggerConfig; owner, 2026-09-24).
-        "process.api-docs.enabled");
+        "process.api-docs.enabled",
+        // The browser origins CORS answers (CorsConfig, risk #6); empty lets none in.
+        "process.cors.allowed-origins");
 
     /** Nothing in this list may ever be committed with a value beside it. */
     private static final List<String> SECRETS = Arrays.asList(

@@ -12,7 +12,6 @@ import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -22,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Nabeel Ahmed
  * */
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping(value = "/message.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class MessageQRestApi {

@@ -26,7 +26,6 @@ import process.model.service.SourceJobBulkService;
 import process.util.ProcessUtil;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,7 +36,6 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Nabeel Ahmed
  * */
 @RestController
-@CrossOrigin(origins = "*", exposedHeaders = {HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.CONTENT_LENGTH})
 @RequestMapping(value = "/sourceJob.json")
 @PreAuthorize("hasRole('TENANT_USER')")
 public class SourceJobRestApi {
