@@ -80,7 +80,7 @@ final class CustomerViews {
         }
     }
 
-    /** The ReviewStatus word for RunReviewStatus's name: not_required, pending, approved, rejected. */
+    /** The ReviewStatus word for RunReviewStatus's name: not_required, pending, approved, rejected, not_applicable. */
     static String reviewWordOf(Object status) {
         return status == null ? "not_required" : status.toString().toLowerCase(Locale.ROOT);
     }

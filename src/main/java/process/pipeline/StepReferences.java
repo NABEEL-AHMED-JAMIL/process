@@ -37,6 +37,9 @@ public class StepReferences {
     /** The schema format of a config property naming a saved integration-service API request. */
     public static final String API_REQUEST = "api-request";
 
+    /** The schema format of a config property naming a media-service report template (AI hard-workflow test, 2026-10-13). */
+    public static final String REPORT_TEMPLATE = "report-template";
+
     private final Logger logger = LoggerFactory.getLogger(StepReferences.class);
 
     private final StepTasks tasks;

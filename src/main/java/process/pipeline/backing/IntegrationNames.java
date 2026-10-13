@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * UX review 2026-10-13 (I1): the names of what a workspace's pipelines read in integration-service -- an API request with
@@ -18,6 +20,8 @@ public interface IntegrationNames {
         public String name;
         public Long collectionId;
         public String collectionName;
+        /** AI hard-workflow test: the {{variables}} a run must give the request (its default environment does not define them). */
+        public List<String> needsVariables = new ArrayList<>();
     }
 
     /** What integration-service named, by id. */

@@ -18,6 +18,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 
 /**
  * {@link ReportRenderer} as media-service's streamed render (ADR-027): POST /internal/media/render/table?tenantId=&usageKey=
@@ -30,11 +33,12 @@ import java.util.concurrent.TimeUnit;
  * unavailable.
  */
 @Component
-public class HttpReportRenderer implements ReportRenderer {
+public class HttpReportRenderer implements ReportRenderer, ReportTemplates {
 
     private static final MediaType NDJSON = MediaType.get("application/x-ndjson; charset=utf-8");
 
     private final String renderUrl;
+    private final String templatesUrl;
     private final String serviceToken;
     private final boolean enabled;
     private final ObjectMapper json = new ObjectMapper();
@@ -49,6 +53,7 @@ public class HttpReportRenderer implements ReportRenderer {
     public HttpReportRenderer(@Value("${media.url:http://media:9110}") String mediaUrl, @Value("${internal.service-token:}") String serviceToken,
         @Value("${process.pipeline.media.internal-render:false}") boolean enabled) {
         this.renderUrl = mediaUrl.replaceAll("/+$", "") + "/api/v1/internal/media/render/table";
+        this.templatesUrl = mediaUrl.replaceAll("/+$", "") + "/api/v1/internal/media/render/templates";
         this.serviceToken = serviceToken == null ? "" : serviceToken.trim();
         this.enabled = enabled;
     }
@@ -106,6 +111,30 @@ public class HttpReportRenderer implements ReportRenderer {
             }
             return new Rendered(header(response, "X-Report-Pages"), header(response, "X-Report-Rows"));
         }
+    }
+
+    /** GET /internal/media/render/templates?tenantId=&ids=: the workspace's live templates among the ids (the save's check). */
+    @Override
+    public Map<Long, String> templatesOf(long tenantId, Collection<Long> ids) throws IOException {
+        Map<Long, String> found = new LinkedHashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return found;
+        }
+        HttpUrl.Builder url = HttpUrl.get(this.templatesUrl).newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId));
+        ids.forEach(id -> url.addQueryParameter("ids", String.valueOf(id)));
+        Request request = new Request.Builder().url(url.build()).header("X-Internal-Token", this.serviceToken).get().build();
+        OkHttpClient quick = this.http.newBuilder().readTimeout(10, TimeUnit.SECONDS).build();
+        try (Response response = quick.newCall(request).execute()) {
+            if (response.code() != 200 || response.body() == null) {
+                throw new IOException("media-service could not say which report templates these are (HTTP " + response.code() + ").");
+            }
+            for (JsonNode row : this.json.readTree(response.body().string()).path("data")) {
+                if (row.hasNonNull("reportTemplateId")) {
+                    found.put(row.get("reportTemplateId").asLong(), row.path("name").asText(""));
+                }
+            }
+        }
+        return found;
     }
 
     private static int header(Response response, String name) {

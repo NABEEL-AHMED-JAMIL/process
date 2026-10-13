@@ -100,7 +100,8 @@ class RunReviewSchemaPostgresTest {
     void theColumnsTakeTheirEnumsSpellings() {
         assertThat(checkValues("ck_run_review_decision_party_enum")).isEqualTo(names(ReviewParty.values()));
         assertThat(checkValues("ck_run_review_decision_decision_enum")).isEqualTo(names(ReviewDecision.values()));
-        assertThat(checkValues("ck_run_review_status_enum")).isEqualTo(names(RunReviewStatus.values()));
+        assertThat(checkValues("ck_run_review_status_enum")).isEqualTo(names(Arrays.stream(RunReviewStatus.values())
+            .filter(RunReviewStatus::isStored).toArray(RunReviewStatus[]::new)));
     }
 
     @Test

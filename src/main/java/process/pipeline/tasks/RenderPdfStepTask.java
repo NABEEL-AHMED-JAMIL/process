@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import org.springframework.stereotype.Component;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.RunOutput;
+import process.pipeline.StepReferences;
 import process.pipeline.StepResult;
 import process.pipeline.StreamContext;
 import process.pipeline.StreamingStepTask;
@@ -75,7 +76,7 @@ public class RenderPdfStepTask extends RegisteredTask implements StreamingStepTa
                     + "printed in page sets, each repeating the first column."))
             .property("watermark", JsonSchema.string().maxLength(40).format("template").title("Watermark")
                 .description("Printed across every page, e.g. DRAFT."))
-            .property("templateId", JsonSchema.integer().minimum(1).title("Report template")
+            .property("templateId", JsonSchema.integer().minimum(1).title("Report template").format(StepReferences.REPORT_TEMPLATE)
                 .description("A report template of this workspace (Documents > Converter); the default layout when empty."))
             .property("maxRows", JsonSchema.integer().minimum(1).maximum(MAX_ROWS).title("Rows in the PDF").defaultValue(DEFAULT_MAX_ROWS)
                 .description("A table prints at most this many rows; past it the report says how many more there are."))

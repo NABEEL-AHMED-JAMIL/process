@@ -127,6 +127,9 @@ public class PipelineDefinitionService {
             return invalid(ex.getProblems(), null);
         }
         List<DefinitionProblem> problems = this.validator.problems(definition, TenantContext.getTenantId(), TenantContext.getUserRole());
+        if (problems.isEmpty()) {
+            problems = this.resourceProblems(definition, TenantContext.getTenantId());
+        }
         if (!problems.isEmpty()) {
             return invalid(problems, definition);
         }
@@ -158,6 +161,10 @@ public class PipelineDefinitionService {
                 TenantContext.getUserRole());
         } catch (DefinitionException ex) {
             return invalid(ex.getProblems(), null);
+        }
+        List<DefinitionProblem> missing = this.resourceProblems(definition, pipeline.get().getTenantId());
+        if (!missing.isEmpty()) {
+            return invalid(missing, definition);
         }
         Optional<PipelineDefinitionStore.Stored> latest = this.store.latest(pipeline.get().getPipelineKey());
         // A measure step's target is written into every save; one the previous version had without it keeps red_region.
@@ -211,6 +218,18 @@ public class PipelineDefinitionService {
         public Boolean getEnabled() { return enabled; }
 
         public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+    }
+
+    /** AI hard-workflow test: what a definition names in other services is there and of its kind; absent in hand-built tests. */
+    private StepResourceCheck resources;
+
+    @Autowired(required = false)
+    public void useResourceCheck(StepResourceCheck resources) {
+        this.resources = resources;
+    }
+
+    private List<DefinitionProblem> resourceProblems(PipelineDefinition definition, Long tenantId) {
+        return this.resources == null ? Collections.<DefinitionProblem>emptyList() : this.resources.problems(definition, tenantId);
     }
 
     /** UX review 2026-10-13 (I1): what the pipelines read; absent in a test that does not ask. */

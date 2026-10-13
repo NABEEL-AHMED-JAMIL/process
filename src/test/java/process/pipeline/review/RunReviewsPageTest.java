@@ -109,4 +109,35 @@ class RunReviewsPageTest {
         assertThat(this.reviews.statuses(Collections.singletonList(run(9405L)), Collections.emptyMap())).isEmpty();
         assertThat(this.reviews.statuses(Collections.emptyList(), Collections.emptyMap())).isEmpty();
     }
+
+    /** AI hard-workflow test (2026-10-13): a failed run's review is not waiting -- there is nothing to review. */
+    @Test
+    void aRunThatEndedWithoutResultsHasNoReviewToWaitFor() {
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = DEFINITION;
+        stored.tenantId = TENANT;
+        stored.version = 1;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"read\",\"task\":\"sample\"}],\"settings\":{\"review\":{\"required\":[\"internal\"]}}}";
+        when(this.definitions.byId(DEFINITION)).thenReturn(Optional.of(stored));
+        SourceJob job = new SourceJob();
+        job.setJobId(JOB);
+        job.setTenantId(TENANT);
+        Map<Long, SourceJob> jobs = new HashMap<>();
+        jobs.put(JOB, job);
+        for (JobStatus ended : new JobStatus[] {JobStatus.Failed, JobStatus.Interrupt, JobStatus.Skip, JobStatus.Missed}) {
+            JobQueue failed = run(9500L + ended.ordinal());
+            failed.setJobStatus(ended);
+            this.follows(failed.getJobQueueId());
+            assertThat(this.reviews.summary(failed, job).get("reviewStatus")).as(ended.name()).isEqualTo("NOT_APPLICABLE");
+            assertThat(this.reviews.statuses(Collections.singletonList(failed), jobs)).containsEntry(failed.getJobQueueId(),
+                RunReviewStatus.NOT_APPLICABLE);
+        }
+        JobQueue running = run(9510L);
+        running.setJobStatus(JobStatus.Running);
+        this.follows(running.getJobQueueId());
+        assertThat(this.reviews.summary(running, job).get("reviewStatus")).as("still running: its results may come").isEqualTo("PENDING");
+        JobQueue completed = run(9511L);
+        this.follows(completed.getJobQueueId());
+        assertThat(this.reviews.summary(completed, job).get("reviewStatus")).isEqualTo("PENDING");
+    }
 }

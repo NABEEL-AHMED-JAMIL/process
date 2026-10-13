@@ -3,6 +3,7 @@ package process.pipeline.review;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import process.model.enums.JobStatus;
 import process.model.enums.ReviewDecision;
 import process.model.enums.ReviewParty;
 import process.model.pojo.JobQueue;
@@ -140,8 +141,8 @@ public class RunReviews {
                 continue;
             }
             Set<ReviewParty> required = this.requiredByDefinition(run, job, Optional.ofNullable(pinned.get(run.getJobQueueId())), byId);
-            out.put(run.getJobQueueId(), RunReviewRules.statusOf(required,
-                this.decisionsByParty(decisions.getOrDefault(run.getJobQueueId(), Collections.emptyList()))));
+            List<RunReviewStore.Decision> made = decisions.getOrDefault(run.getJobQueueId(), Collections.emptyList());
+            out.put(run.getJobQueueId(), applicable(run, RunReviewRules.statusOf(required, this.decisionsByParty(made)), made));
         }
         return out;
     }
@@ -158,8 +159,8 @@ public class RunReviews {
         Optional<RunReviewStore.Status> decided = this.store.statusOf(run.getJobQueueId());
         List<RunReviewStore.Decision> decisions = this.store.decisionsOf(run.getJobQueueId());
         Set<ReviewParty> required = decided.map(status -> status.required).orElseGet(() -> this.requiredByDefinition(run, job));
-        RunReviewStatus status = decided.map(row -> row.status).orElseGet(() -> RunReviewRules.statusOf(required,
-            this.decisionsByParty(decisions)));
+        RunReviewStatus status = decided.map(row -> row.status).orElseGet(() -> applicable(run, RunReviewRules.statusOf(required,
+            this.decisionsByParty(decisions)), decisions));
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("reviewStatus", status.name());
         summary.put("required", required.stream().map(PipelineDefinition.Review::wordOf).collect(Collectors.toList()));
@@ -167,6 +168,22 @@ public class RunReviews {
         summary.put("decidedAt", decided.map(row -> row.decidedAt).map(BusinessTime::wallClockOf).orElse(null));
         summary.put("rerunJobQueueId", decided.map(row -> row.rerunJobQueueId).orElse(null));
         return summary;
+    }
+
+    /** The run statuses that end a run without results to review. */
+    static final Set<JobStatus> ENDED_WITHOUT_RESULTS = Collections.unmodifiableSet(EnumSet.of(JobStatus.Failed, JobStatus.Skip,
+        JobStatus.Interrupt, JobStatus.Missed));
+
+    /**
+     * A review waiting (PENDING, nobody decided) on a run that ended without results -- Failed, Skip, Interrupt, Missed -- is
+     * NOT_APPLICABLE: there is nothing to approve, and the run page and the API never say it waits for review.
+     */
+    static RunReviewStatus applicable(JobQueue run, RunReviewStatus status, List<RunReviewStore.Decision> decisions) {
+        if (status == RunReviewStatus.PENDING && (decisions == null || decisions.isEmpty()) && run.getJobStatus() != null
+            && ENDED_WITHOUT_RESULTS.contains(run.getJobStatus())) {
+            return RunReviewStatus.NOT_APPLICABLE;
+        }
+        return status;
     }
 
     private static Map<String, Object> decision(RunReviewStore.Decision d) {

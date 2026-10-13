@@ -10,6 +10,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import process.model.dto.ResponseDto;
 import process.util.ProcessUtil;
 
+import java.io.IOException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
@@ -35,5 +37,13 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<Object> client = this.handler.handleExceptionInternal(new HttpMediaTypeNotSupportedException("text/plain not supported"),
             null, new HttpHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE, mock(WebRequest.class));
         assertThat(((ResponseDto) client.getBody()).getMessage()).contains("not supported");
+    }
+
+    @Test
+    void aClientThatWentAwayIsNoErrorAndGetsNoAnswer() {
+        IOException pipe = new IOException("Broken pipe");
+        assertThat(GlobalExceptionHandler.isClientAbort(new RuntimeException("failed to write", pipe))).isTrue();
+        assertThat(GlobalExceptionHandler.isClientAbort(new IllegalStateException("x"))).isFalse();
+        assertThat(new GlobalExceptionHandler().handleUncaught(new RuntimeException("x", pipe))).isNull();
     }
 }

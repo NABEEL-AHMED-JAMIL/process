@@ -19,6 +19,7 @@ import process.model.dto.ResponseDto;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.io.IOException;
 import process.util.ProcessUtil;
 import process.util.RequestRefused;
 
@@ -65,6 +66,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseDto> handleUncaught(Exception ex) {
+        if (isClientAbort(ex)) {
+            // The caller went away (a page closed, a poll replaced) while the answer was written: nothing failed here, and
+            // nobody is left to answer (AI hard-workflow test, 2026-10-13: "Broken pipe" logged at ERROR).
+            logger.debug("The client closed the connection before the answer was written: {}", ex.getMessage());
+            return null;
+        }
         logger.error("Unhandled exception reached GlobalExceptionHandler", ex);
         return new ResponseEntity<>(
             new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500),
@@ -102,4 +109,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, message), headers, status);
     }
 
+    /**
+     * Whether the failure is the client's connection closing under the answer -- Tomcat's ClientAbortException, Spring's
+     * AsyncRequestNotUsableException, or an IOException "Broken pipe" / "Connection reset by peer" -- anywhere in its causes.
+     */
+    static boolean isClientAbort(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            String name = t.getClass().getName();
+            if (name.endsWith(".ClientAbortException") || name.endsWith(".AsyncRequestNotUsableException")) {
+                return true;
+            }
+            String message = t.getMessage();
+            if (t instanceof IOException && message != null
+                && (message.contains("Broken pipe") || message.contains("Connection reset by peer"))) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

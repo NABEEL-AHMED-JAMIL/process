@@ -135,6 +135,20 @@ class PipelineDefinitionServiceTest {
         assertThat(saved.getSteps().get(2).getConfig()).containsEntry("target", "contrast");
     }
 
+    /** AI hard-workflow test (2026-10-13): what the steps name in other services is checked before a version is written. */
+    @Test
+    void aStepNamingWhatIsNotThereIsRefusedAtSaveAndAtValidate() throws Exception {
+        StepResourceCheck resources = mock(StepResourceCheck.class);
+        when(resources.problems(any(), any())).thenReturn(Collections.singletonList(new DefinitionProblem("steps[0].config.templateId",
+            "1077 is not a report template of this workspace (it is the AI prompt \"Drug safety weekly\")")));
+        this.service.useResourceCheck(resources);
+        ResponseDto saved = this.service.save(draft(GOOD));
+        assertThat(saved.getStatus()).isEqualTo("ERROR");
+        assertThat(String.valueOf(saved.getData())).contains("steps[0].config.templateId").contains("Drug safety weekly");
+        assertThat(this.service.validate(draft(GOOD)).getStatus()).isEqualTo("ERROR");
+        verify(this.store, never()).save(anyLong(), anyString(), any());
+    }
+
     @Test
     void savingWhatIsAlreadyTheLatestOrTheLegacyWrapWritesNoVersion() throws Exception {
         assertThat(this.service.save(draft(DefinitionCodec.toYaml(PipelineDefinition.legacy("F768927")))).getMessage())
