@@ -113,6 +113,15 @@ public class RunReviewService {
         you.put("canDecide", !refusal.isPresent());
         you.put("refusal", refusal.orElse(null));
         review.put("you", you);
+        // UX review 2026-10-12 (run page): whose Task inbox the internal review waits in -- a role or a group (an access
+        // profile, by id) -- so the run page can say who it is waiting on.
+        if (review.get("required") instanceof List && ((List<?>) review.get("required")).contains("internal")) {
+            PipelineDefinition.Reviewers who = this.reviews.reviewersOf(run, owned.get().job);
+            Map<String, Object> reviewers = new LinkedHashMap<>();
+            reviewers.put("kind", who.getKind());
+            reviewers.put("value", who.getValue());
+            review.put("reviewers", reviewers);
+        }
         return new ResponseDto(SUCCESS, String.format("The run's results are %s.", review.get("reviewStatus")), review);
     }
 

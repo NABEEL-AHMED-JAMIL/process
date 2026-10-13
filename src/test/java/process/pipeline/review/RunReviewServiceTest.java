@@ -197,6 +197,21 @@ class RunReviewServiceTest {
         assertThat((Map<String, Object>) review.get("you")).containsEntry("party", "internal").containsEntry("canDecide", true);
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    void aPendingInternalReviewSaysWhoseTaskInboxItWaitsIn() {
+        this.requires("internal");
+        Map<String, Object> review = data(this.service.review(RUN));
+        // No reviewers set: the workspace's administrators.
+        assertThat((Map<String, Object>) review.get("reviewers")).containsEntry("kind", "role").containsEntry("value", "TENANT_ADMIN");
+    }
+
+    @Test
+    void aReviewOnlyTheCustomerMakesNamesNoInternalReviewers() {
+        this.requires("customer");
+        assertThat(data(this.service.review(RUN))).doesNotContainKey("reviewers");
+    }
+
     @Test
     void aWorkerRunFollowsItsPipelinesDefinitionAsItStoodWhenTheRunWasMade() {
         PipelineDefinitionStore.Stored legacy = new PipelineDefinitionStore.Stored();

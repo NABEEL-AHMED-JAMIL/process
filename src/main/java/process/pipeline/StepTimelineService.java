@@ -144,6 +144,14 @@ public class StepTimelineService {
     /** MIG-346: the Approval steps' requests, shown on their steps. */
     private RunApprovalStore approvals;
 
+    /** UX review 2026-10-12 (run page): each step's name, from the definition the run followed; absent in hand-built tests. */
+    private PipelineDefinitionStore definitions;
+
+    @Autowired(required = false)
+    public void useDefinitions(PipelineDefinitionStore definitions) {
+        this.definitions = definitions;
+    }
+
     @Autowired(required = false)
     public void useApprovals(RunApprovalStore approvals) {
         this.approvals = approvals;
@@ -190,7 +198,9 @@ public class StepTimelineService {
             // MIG-345: a reused step shows the attempt whose output it is, and that output's datasets.
             Map<Long, Integer> attemptOf = new HashMap<>();
             rows.forEach(row -> attemptOf.put(row.stepExecutionId, row.attempt));
-            timeline.put("pipelineDefinitionId", ofAttempt.isEmpty() ? null : ofAttempt.get(0).pipelineDefinitionId);
+            Long definitionId = ofAttempt.isEmpty() ? null : ofAttempt.get(0).pipelineDefinitionId;
+            timeline.put("pipelineDefinitionId", definitionId);
+            Map<String, String> names = this.stepNames(definitionId);
             // MIG-346: an Approval step's request (a reused step shows the one that approved it).
             Map<Long, RunApprovalStore.Approval> approvalsOf = this.approvals == null ? Collections.emptyMap()
                 : this.approvals.ofSteps(ofAttempt.stream().filter(row -> "approval".equals(row.taskCode))
@@ -199,6 +209,7 @@ public class StepTimelineService {
             timeline.put("steps", ofAttempt.stream().map(row -> {
                 long datasetsOf = row.reusedFrom != null ? row.reusedFrom : row.stepExecutionId;
                 Map<String, Object> step = step(row, datasets.getOrDefault(datasetsOf, Collections.emptyList()));
+                step.put("name", names.get(row.stepKey));
                 step.put("reusedFromAttempt", row.reusedFrom == null ? null : attemptOf.get(row.reusedFrom));
                 RunApprovalStore.Approval approval = approvalsOf.get(datasetsOf);
                 if (approval != null) {
@@ -576,6 +587,28 @@ public class StepTimelineService {
         out.put("comment", a.comment);
         out.put("workflowInstanceId", a.workflowInstanceId);
         return out;
+    }
+
+    /**
+     * The steps' names (a step's optional {@code name}: "Vision model: DRAFT label") by key, from the definition the run
+     * followed -- the run page leads with them and keeps the key as the secondary text. A definition that cannot be read
+     * names nothing: the timeline is about what ran, and the keys still say it.
+     */
+    Map<String, String> stepNames(Long pipelineDefinitionId) {
+        if (pipelineDefinitionId == null || this.definitions == null) {
+            return Collections.emptyMap();
+        }
+        try {
+            Map<String, String> names = new HashMap<>();
+            this.definitions.byId(pipelineDefinitionId).ifPresent(stored -> stored.definition().getSteps().forEach(step -> {
+                if (step.getKey() != null && step.getName() != null && !step.getName().trim().isEmpty()) {
+                    names.put(step.getKey(), step.getName().trim());
+                }
+            }));
+            return names;
+        } catch (RuntimeException ex) {
+            return Collections.emptyMap();
+        }
     }
 
     private static Map<String, Object> step(StepStore.StepRow row, List<StepStore.DatasetRow> datasets) {

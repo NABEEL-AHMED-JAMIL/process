@@ -132,6 +132,43 @@ class StepTimelineServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void eachStepCarriesItsNameFromTheDefinitionTheRunFollowed() {
+        PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1001L;
+        stored.tenantId = TENANT;
+        stored.version = 1;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"read\",\"name\":\"The image this run was started for\",\"task\":\"sample\"},"
+            + "{\"key\":\"call\",\"task\":\"api\",\"input\":\"read\"}]}";
+        when(definitions.byId(1001L)).thenReturn(Optional.of(stored));
+        this.service.useDefinitions(definitions);
+        this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "read", "sample", "fail"),
+            new StepStore.Planned(1, "call", "api", "fail")));
+
+        List<Map<String, Object>> list = (List<Map<String, Object>>) this.timeline(null).get("steps");
+
+        assertThat(list).extracting(step -> step.get("key") + "=" + step.get("name"))
+            .containsExactly("read=The image this run was started for", "call=null");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDefinitionThatCannotBeReadNamesNoStepAndTheTimelineStillAnswers() {
+        PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1001L;
+        stored.json = "{not json";
+        when(definitions.byId(1001L)).thenReturn(Optional.of(stored));
+        this.service.useDefinitions(definitions);
+        this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "read", "sample", "fail")));
+
+        List<Map<String, Object>> list = (List<Map<String, Object>>) this.timeline(null).get("steps");
+
+        assertThat(list).extracting(step -> step.get("name")).containsExactly((Object) null);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void aStepsLogIsReadByItsIdWhenItsRunIsTheCallers() {
         List<Long> ids = this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "read", "sample", "fail")));
         this.steps.log(ids.get(0), 1, "INFO", "3 sample row(s).");
