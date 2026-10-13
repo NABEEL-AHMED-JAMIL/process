@@ -360,6 +360,8 @@ class RunApprovalPostgresTest {
             "1:check:Completed:false", "1:after:Completed:false");
         assertThat(login.queryForObject("SELECT status_message FROM step_execution WHERE job_queue_id = ? AND step_key = 'approve'",
             String.class, run)).isEqualTo("Approved by Ana Ruiz (user " + REVIEWER + "): totals match.");
+        assertThat(login.queryForObject("SELECT bulk_id FROM run_approval WHERE run_approval_id = ?", String.class, id))
+            .as("a single decision names no bulk decision").isNull();
         assertThat(this.request(run, 1)).containsEntry("status", "APPROVED").containsEntry("decided_by_user_id", REVIEWER)
             .containsEntry("comment", "totals match").containsEntry("workflow_instance_id", 901L);
         assertThat(ran("after")).isEqualTo(afterBefore + 1);
@@ -384,7 +386,14 @@ class RunApprovalPostgresTest {
     void aRejectionFailsTheRunWithTheReasonAndARetryAsksAgain() throws Exception {
         long run = this.waiting(true);
         long id = ((Number) this.request(run, 1).get("run_approval_id")).longValue();
-        assertThat(this.approvals.decideFromInbox(TENANT, id, false, REVIEWER, "Ana Ruiz", "amounts look off", 911L, 912L).moved).isTrue();
+        // Bulk review: decided in a bulk decision of the Task inbox, the request and the audit line name it.
+        assertThat(this.approvals.decideFromInbox(TENANT, id, false, REVIEWER, "Ana Ruiz", "amounts look off", 911L, 912L,
+            "bulk-7a1c-0001").moved).isTrue();
+        assertThat(login.queryForObject("SELECT bulk_id FROM run_approval WHERE run_approval_id = ?", String.class, id))
+            .isEqualTo("bulk-7a1c-0001");
+        assertThat(login.queryForList("SELECT log_detail FROM job_audit_logs WHERE job_queue_id = ? ORDER BY job_audit_log_id",
+            String.class, run)).contains("Approval request " + id + " at step <approve>: rejected by Ana Ruiz (user " + REVIEWER
+                + ") in the Task inbox (request 911, task 912): amounts look off. Bulk decision bulk-7a1c-0001.");
         this.settle();
         Map<String, Object> failed = this.run(run);
         assertThat(failed.get("job_status")).isEqualTo("Failed");

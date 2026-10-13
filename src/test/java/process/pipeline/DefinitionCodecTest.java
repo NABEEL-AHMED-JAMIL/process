@@ -107,6 +107,26 @@ class DefinitionCodecTest {
             .isInstanceOfSatisfying(DefinitionException.class, ex -> assertThat(ex.getProblems().get(0).getPath()).isEqualTo("steps"));
     }
 
+    /**
+     * Bulk review (2026-10-12): settings.review.individual is true or false -- read, kept through JSON and YAML, and
+     * anything else is a problem at its path; absent, a pipeline's runs may be decided in bulk.
+     */
+    @Test
+    void reviewIndividualIsABooleanKeptThroughJsonAndYaml() throws Exception {
+        String json = "{\"version\":1,\"steps\":[{\"key\":\"a\",\"task\":\"sample\"}],\"settings\":{\"review\":{\"required\":"
+            + "[\"internal\"],\"individual\":true}}}";
+        PipelineDefinition definition = DefinitionCodec.fromJson(json);
+        assertThat(definition.getSettings().getReview().requiresIndividualReview()).isTrue();
+        assertThat(DefinitionCodec.toJson(definition)).isEqualTo(json);
+        assertThat(DefinitionCodec.fromYaml(DefinitionCodec.toYaml(definition)).getSettings().getReview().requiresIndividualReview())
+            .isTrue();
+        assertThat(DefinitionCodec.fromJson(json.replace(",\"individual\":true", "")).getSettings().getReview()
+            .requiresIndividualReview()).isFalse();
+        assertThatThrownBy(() -> DefinitionCodec.fromJson(json.replace("\"individual\":true", "\"individual\":\"sometimes\"")))
+            .isInstanceOfSatisfying(DefinitionException.class, ex -> assertThat(ex.getProblems()).singleElement()
+                .satisfies(problem -> assertThat(problem.getPath()).isEqualTo("settings.review.individual")));
+    }
+
     @Test
     void textThatIsNotJsonOrYamlSaysWhere() {
         assertThatThrownBy(() -> DefinitionCodec.fromJson("{\"version\": 1,"))

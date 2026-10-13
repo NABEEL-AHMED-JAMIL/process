@@ -187,6 +187,26 @@ class CoreRunReviewTasksPostgresTest {
         List<JsonNode> events = this.published();
         assertThat(events).extracting(e -> e.path("eventType").asText()).containsExactly(RunReviewEvents.REQUESTED, RunReviewEvents.DECIDED);
         assertThat(events.get(1).path("payload").path("reviewStatus").asText()).isEqualTo("REJECTED");
+        assertThat(sql.queryForObject("SELECT bulk_id FROM run_review_decision WHERE job_queue_id = ?", String.class, A_RUN))
+            .as("a single decision names no bulk decision").isNull();
+    }
+
+    /** Bulk review: a task decided in a bulk decision of the Task inbox (decision.bulkId) -- the row and the audit line name it. */
+    @Test
+    void aBulkDecisionsIdIsRecordedWithTheRunsDecisionAndAuditLine() throws Exception {
+        complete(A_RUN);
+        relay.relay();
+
+        String approved = change(A, A_RUN, "pipeline-run-review", "Approved", REVIEWER, "Totals match.")
+            .replace("\"comment\":", "\"bulkId\":\"bulk-77-0001\",\"comment\":");
+        listener.onChange(approved);
+
+        JdbcTemplate sql = fx.db.jdbc();
+        assertThat(sql.queryForObject("SELECT status FROM run_review WHERE job_queue_id = ?", String.class, A_RUN)).isEqualTo("APPROVED");
+        assertThat(sql.queryForObject("SELECT bulk_id FROM run_review_decision WHERE job_queue_id = ?", String.class, A_RUN))
+            .isEqualTo("bulk-77-0001");
+        assertThat(sql.queryForList("SELECT log_detail FROM job_audit_logs WHERE job_queue_id = ?", String.class, A_RUN))
+            .anySatisfy(line -> assertThat(line).contains("Task inbox (request 77, task 88)").endsWith(" Bulk decision bulk-77-0001."));
     }
 
     @Test
