@@ -28,6 +28,11 @@ import process.util.ProcessUtil;
  * the platform probes' latest readings (Kafka lag per group, disk, billing reconciliation); and the platform's alerts of
  * the last 24 hours, open first. Three statements over service_health_sample (at most a day of minutes), one over
  * platform_probe, one over alert_incident.
+ *
+ * <p>The planned deploys of the 24 hours (PlannedDeploys, announced by scripts/deploy.sh) as {@code deploys}, and per
+ * service how many of its restarts and minutes not UP fell inside one ({@code plannedRestarts24h},
+ * {@code plannedMinutesNotUp24h}): what the restart and unhealthy rules did not alert on. Two more statements over the
+ * samples, only when there was a deploy.
  */
 @RestController
 @RequestMapping("/reliability.json")
@@ -37,11 +42,13 @@ public class HealthRestApi {
     private final JdbcTemplate jdbc;
     private final HealthCollector collector;
     private final AlertIncidents incidents;
+    private final PlannedDeploys planned;
 
-    public HealthRestApi(JdbcTemplate jdbc, HealthCollector collector, AlertIncidents incidents) {
+    public HealthRestApi(JdbcTemplate jdbc, HealthCollector collector, AlertIncidents incidents, PlannedDeploys planned) {
         this.jdbc = jdbc;
         this.collector = collector;
         this.incidents = incidents;
+        this.planned = planned;
     }
 
     @GetMapping("/health")
@@ -114,6 +121,7 @@ public class HealthRestApi {
                 series.get("cpuPct").add(rounded(rs.getBigDecimal("cpu"), 1));
                 series.get("up").add(rs.getBoolean("up"));
             }, step, step, dayAgo);
+        List<Map<String, Object>> deploys = this.markPlanned(services, now, dayAgo);
         List<Map<String, Object>> probes = new ArrayList<>();
         this.collector.probes().values().forEach(p -> {
             Map<String, Object> one = new LinkedHashMap<>();
@@ -134,9 +142,46 @@ public class HealthRestApi {
         data.put("asOf", now.toString());
         data.put("bucketMinutes", bucket);
         data.put("services", new ArrayList<>(services.values()));
+        data.put("deploys", deploys);
         data.put("probes", probes);
         data.put("incidents", alerts);
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Platform health.", data), HttpStatus.OK);
+    }
+
+    /**
+     * The 24 hours' planned deploys, newest first; and on each service that had one, its restarts and minutes not UP that
+     * fell inside one (zero for the others).
+     */
+    private List<Map<String, Object>> markPlanned(Map<String, Map<String, Object>> services, Instant now, Timestamp dayAgo) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        Map<String, List<DeployWindow>> byService = new LinkedHashMap<>();
+        for (DeployWindow window : this.planned.recent(now)) {
+            if (window.closes().isBefore(dayAgo.toInstant())) {
+                continue;
+            }
+            out.add(window.toMap(now));
+            byService.computeIfAbsent(window.service, k -> new ArrayList<>()).add(window);
+        }
+        services.values().forEach(s -> {
+            s.put("plannedRestarts24h", 0L);
+            s.put("plannedMinutesNotUp24h", 0L);
+        });
+        if (byService.isEmpty()) {
+            return out;
+        }
+        this.jdbc.query("SELECT DISTINCT service, started_at FROM service_health_sample WHERE sampled_at >= ? AND started_at >= ?", rs -> {
+            Map<String, Object> s = services.get(rs.getString(1));
+            if (s != null && DeployWindow.anyCovers(byService.get(rs.getString(1)), rs.getTimestamp(2).toInstant())) {
+                s.put("plannedRestarts24h", (Long) s.get("plannedRestarts24h") + 1);
+            }
+        }, dayAgo, dayAgo);
+        this.jdbc.query("SELECT service, sampled_at FROM service_health_sample WHERE sampled_at >= ? AND status <> 'UP'", rs -> {
+            Map<String, Object> s = services.get(rs.getString(1));
+            if (s != null && DeployWindow.anyCovers(byService.get(rs.getString(1)), rs.getTimestamp(2).toInstant())) {
+                s.put("plannedMinutesNotUp24h", (Long) s.get("plannedMinutesNotUp24h") + 1);
+            }
+        }, dayAgo);
+        return out;
     }
 
     private static String iso(ResultSet rs, String column) throws SQLException {

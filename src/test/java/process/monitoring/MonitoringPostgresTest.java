@@ -319,6 +319,47 @@ class MonitoringPostgresTest {
     }
 
     @Test
+    void aRestartInsideAPlannedDeployOpensNoAlertAndOneOutsideDoesAndResolves() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        login.update("UPDATE alert_rule SET enabled = true WHERE tenant_id IS NULL AND kind = 'SERVICE_RESTARTED'");
+        Instant started = now.minusSeconds(240);
+        RuleChecks.Sample sample = new RuleChecks.Sample();
+        sample.service = "transcriber";
+        sample.at = now;
+        sample.status = "UP";
+        sample.startedAt = started;
+        Map<String, List<RuleChecks.Sample>> recent = new HashMap<>();
+        recent.put("transcriber", Collections.singletonList(sample));
+        when(this.health.probes()).thenReturn(new HashMap<>());
+        when(this.health.recent(any())).thenReturn(recent);
+        when(this.health.newestSample()).thenReturn(Optional.of(now));
+        AlertDelivery delivery = new AlertDelivery(this.notifications, this.identity, app, "http://localhost:4400");
+        DeployWindow deploy = new DeployWindow("transcriber", started.minusSeconds(20), started.plusSeconds(880), started.plusSeconds(50), "ok");
+        AlertEngine planned = new AlertEngine(this.rules, this.incidents, new WorkspaceSignals(app), this.health, delivery,
+            PlannedDeploys.of(Collections.singletonList(deploy)), app, new DataSourceTransactionManager(db.appPool()));
+
+        AlertEngine.Pass inside = planned.evaluate(now);
+
+        assertThat(inside.opened).isZero();
+        assertThat(login.queryForObject("SELECT count(*) FROM alert_incident WHERE kind = 'SERVICE_RESTARTED'", Integer.class)).isZero();
+        assertThat(this.notices).isEmpty();
+
+        // The same restart with no window (a docker restart by hand): an alert, told to the platform administrator.
+        AlertEngine.Pass outside = this.engine.evaluate(now.plusSeconds(60));
+        assertThat(outside.opened).isEqualTo(1);
+        assertThat(login.queryForObject("SELECT title FROM alert_incident WHERE kind = 'SERVICE_RESTARTED' AND state = 'OPEN'", String.class))
+            .isEqualTo("transcriber restarted 5 min ago");
+        assertThat(this.notices).extracting(n -> ((NotificationCreated) n[1]).getAppUserId()).containsExactly(PLATFORM);
+
+        // Past the rule's 30 minutes the start is no longer news: resolved by itself.
+        sample.at = now.plusSeconds(31 * 60);
+        when(this.health.newestSample()).thenReturn(Optional.of(sample.at));
+        this.engine.evaluate(now.plusSeconds(31 * 60));
+        assertThat(login.queryForObject("SELECT state || '/' || resolved_how FROM alert_incident WHERE kind = 'SERVICE_RESTARTED'", String.class))
+            .isEqualTo("RESOLVED/AUTO");
+    }
+
+    @Test
     void aTurnedOffRulesAlertsResolve() {
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         AlertRule rule = ruleOf(A, ADMIN_A, AlertKind.RUN_FAILED, 1, false, false);

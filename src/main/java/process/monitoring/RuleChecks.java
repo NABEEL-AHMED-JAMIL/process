@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * MIG-355: what one rule finds, from what the pass read -- pure functions, no database, so each kind's rule is tested on
@@ -198,10 +199,24 @@ public final class RuleChecks {
 
     /** SERVICE_UNHEALTHY: the last threshold samples of a service all not UP. {@code recent} newest first per service. */
     public static List<Finding> serviceUnhealthy(AlertRule rule, Map<String, List<Sample>> recent) {
+        return serviceUnhealthy(rule, recent, Collections.emptyMap());
+    }
+
+    /**
+     * SERVICE_UNHEALTHY, with the planned deploys: a sample taken inside one of the service's deploy windows is the deploy
+     * (Platform › Reliability marks it), so only the samples outside them count -- the last threshold of those all not UP.
+     */
+    public static List<Finding> serviceUnhealthy(AlertRule rule, Map<String, List<Sample>> recent, Map<String, List<DeployWindow>> planned) {
         List<Finding> out = new ArrayList<>();
         int needed = Math.max(1, rule.threshold);
         for (Map.Entry<String, List<Sample>> entry : recent.entrySet()) {
-            List<Sample> samples = entry.getValue();
+            List<DeployWindow> windows = planned.get(entry.getKey());
+            List<Sample> samples = new ArrayList<>();
+            for (Sample sample : entry.getValue()) {
+                if (!DeployWindow.anyCovers(windows, sample.at)) {
+                    samples.add(sample);
+                }
+            }
             if (samples.size() < needed) {
                 continue;
             }
@@ -224,17 +239,34 @@ public final class RuleChecks {
 
     /** SERVICE_RESTARTED: a service whose JVM started within the window (its latest sample's start time). */
     public static List<Finding> serviceRestarted(AlertRule rule, Map<String, List<Sample>> recent, Instant now) {
+        return serviceRestarted(rule, recent, now, Collections.emptyMap());
+    }
+
+    /**
+     * SERVICE_RESTARTED, with the planned deploys: a JVM start inside one of the service's deploy windows is the deploy, not
+     * news. A start outside every window -- a crash, an out-of-memory kill, a docker restart by hand, or a deploy whose
+     * window expired before the service came back -- alerts, as before.
+     */
+    public static List<Finding> serviceRestarted(AlertRule rule, Map<String, List<Sample>> recent, Instant now,
+        Map<String, List<DeployWindow>> planned) {
         Instant since = now.minus(Duration.ofMinutes(rule.windowMinutes));
         List<Finding> out = new ArrayList<>();
         for (Map.Entry<String, List<Sample>> entry : recent.entrySet()) {
-            Sample latest = entry.getValue().isEmpty() ? null : entry.getValue().get(0);
-            if (latest == null || latest.startedAt == null || latest.startedAt.isBefore(since)) {
+            List<DeployWindow> windows = planned.get(entry.getKey());
+            TreeSet<Instant> starts = new TreeSet<>();
+            for (Sample sample : entry.getValue()) {
+                if (sample.startedAt != null && !sample.startedAt.isBefore(since) && !DeployWindow.anyCovers(windows, sample.startedAt)) {
+                    starts.add(sample.startedAt);
+                }
+            }
+            if (starts.isEmpty()) {
                 continue;
             }
-            long starts = entry.getValue().stream().map(s -> s.startedAt).filter(at -> at != null && !at.isBefore(since)).distinct().count();
-            out.add(Finding.of("service:" + entry.getKey(), entry.getKey() + " restarted " + ago(latest.startedAt, now) + " ago",
-                (starts > 1 ? starts + " starts in the last " + minutes(rule.windowMinutes) + ". " : "")
-                    + "A deploy restarts a service too; a restart nobody made is a crash or an out-of-memory kill.",
+            Instant latest = starts.last();
+            out.add(Finding.of("service:" + entry.getKey(), entry.getKey() + " restarted " + ago(latest, now) + " ago",
+                (starts.size() > 1 ? starts.size() + " starts in the last " + minutes(rule.windowMinutes) + ". " : "")
+                    + "Not a planned deploy (scripts/deploy.sh announces those, and they do not alert): a crash, an out-of-memory kill "
+                    + "or a restart by hand.",
                 "/platform/reliability?service=" + entry.getKey()));
         }
         return out;

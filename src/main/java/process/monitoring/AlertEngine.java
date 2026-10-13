@@ -43,7 +43,8 @@ import process.identity.IdentityPort;
  *   <li>Alerts of a rule turned off are resolved.</li>
  * </ol>
  * While the collector has not sampled for {@link #STALE} the platform's sample rules are not evaluated: no alert opens or
- * closes on readings that are not there.
+ * closes on readings that are not there. A service's restart or unhealthy minutes inside a planned deploy window
+ * (PlannedDeploys: scripts/deploy.sh announces each deploy) open no alert; outside one they do.
  */
 @Component
 public class AlertEngine {
@@ -58,17 +59,25 @@ public class AlertEngine {
     private final WorkspaceSignals signals;
     private final HealthCollector health;
     private final AlertDelivery delivery;
+    private final PlannedDeploys planned;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
 
-    @Autowired
+    /** Without planned deploys: every restart alerts. */
     public AlertEngine(AlertRules rules, AlertIncidents incidents, WorkspaceSignals signals, HealthCollector health, AlertDelivery delivery,
         JdbcTemplate jdbc, PlatformTransactionManager transactions) {
+        this(rules, incidents, signals, health, delivery, PlannedDeploys.none(), jdbc, transactions);
+    }
+
+    @Autowired
+    public AlertEngine(AlertRules rules, AlertIncidents incidents, WorkspaceSignals signals, HealthCollector health, AlertDelivery delivery,
+        PlannedDeploys planned, JdbcTemplate jdbc, PlatformTransactionManager transactions) {
         this.rules = rules;
         this.incidents = incidents;
         this.signals = signals;
         this.health = health;
         this.delivery = delivery;
+        this.planned = planned;
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -97,6 +106,7 @@ public class AlertEngine {
         List<WorkspaceSignals.Waiting> waiting = Collections.emptyList();
         Map<String, List<RuleChecks.Sample>> recent;
         Map<String, RuleChecks.Probe> probes;
+        Map<String, List<DeployWindow>> planned = Collections.emptyMap();
         boolean samplesFresh;
     }
 
@@ -219,9 +229,9 @@ public class AlertEngine {
             case REVIEW_WAITING:
                 return Optional.of(RuleChecks.reviewWaiting(rule, reads.waiting, now));
             case SERVICE_UNHEALTHY:
-                return reads.samplesFresh ? Optional.of(RuleChecks.serviceUnhealthy(rule, reads.recent)) : Optional.empty();
+                return reads.samplesFresh ? Optional.of(RuleChecks.serviceUnhealthy(rule, reads.recent, reads.planned)) : Optional.empty();
             case SERVICE_RESTARTED:
-                return reads.samplesFresh ? Optional.of(RuleChecks.serviceRestarted(rule, reads.recent, now)) : Optional.empty();
+                return reads.samplesFresh ? Optional.of(RuleChecks.serviceRestarted(rule, reads.recent, now, reads.planned)) : Optional.empty();
             case MEMORY_HIGH:
                 return reads.samplesFresh ? Optional.of(RuleChecks.memoryHigh(rule, reads.recent, openSubjects)) : Optional.empty();
             case KAFKA_LAG:
@@ -285,6 +295,7 @@ public class AlertEngine {
             reads.probes = this.health.probes();
             Optional<Instant> newest = this.health.newestSample();
             reads.samplesFresh = newest.isPresent() && Duration.between(newest.get(), now).compareTo(STALE) <= 0;
+            reads.planned = this.planned.byService(now);
         } else {
             reads.recent = Collections.emptyMap();
             reads.probes = Collections.emptyMap();
