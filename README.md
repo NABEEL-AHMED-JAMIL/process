@@ -303,6 +303,19 @@ today there. A required parameter with no value refuses Run now and fails a sche
 Settings: `process.backfill.enabled`, `memory-mb` (512), `max-in-flight` (4), `max-open` (3), `tick-ms` (10000);
 `billing.url` (`http://billing:9130/api/v1`). Migration V211.
 
+## Data retention (MIG-354)
+
+`process.retention`: a workspace's retention policy (`setting.json/retention`, TENANT_ADMIN; platform administrators name
+the workspace), legal holds, the preview, confirmations and the history; `RetentionScheduler` (hourly at :40, ShedLock
+`retentionPass`, `process.retention.enabled`) runs each enabled workspace's daily pass inside `RowSecurity.forTenant`.
+Core removes run outputs (`datasets/{run}/`, `run_dataset` to `retention_log` reason `policy`, results, AI answers),
+run logs (OpenSearch delete-by-query, `job_audit_logs`, `step_log`), form submissions (objects through storage first)
+and audit records (never under `retention_platform.audit_floor_days`); files, documents, AI conversations and
+notifications are their services' (`/internal/{storage,ai,notifications}/retention`). The run row stays, with
+`outputs_removed_at` / `logs_removed_at`. Every workspace starts off and forever. V212 / V212.1; tests
+`RetentionPostgresTest`, `RetentionRulesTest`, `CoreCrossTenantProbeRetentionPostgresTest`. Design:
+`etl-platform/docs/architecture.md`, "Data retention".
+
 ## Monitoring
 
 Spring Boot Actuator is enabled, deliberately narrowed to:
