@@ -21,6 +21,7 @@ import process.pipeline.data.Values;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,7 +55,7 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 @Component
-public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader, InputContracts {
+public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, DatabaseReader, InputContracts, IntegrationNames {
 
     static final String BASE = "/api/v1/internal/pipelines";
     private static final MediaType JSON = MediaType.get("application/json");
@@ -72,6 +73,8 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
         .readTimeout(10, TimeUnit.MINUTES)
         .writeTimeout(2, TimeUnit.MINUTES)
         .build();
+    /** A console read waits seconds, not a step's minutes (describe). */
+    private final OkHttpClient quick = this.http.newBuilder().readTimeout(10, TimeUnit.SECONDS).build();
 
     @Autowired
     public HttpIntegrationPipelines(@Value("${integration.url:http://integration:9180}") String integrationUrl,
@@ -269,6 +272,38 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
         return result;
     }
 
+    // ---- IntegrationNames (UX review 2026-10-13, I1) -------------------------------------------------------------
+
+    /**
+     * POST /describe {tenantId, requestIds, connectionIds} -> {requests: [{requestId, name, collectionId, collectionName}],
+     * connections: [{connectionId, name}]}: the workspace's own among them, named.
+     */
+    @Override
+    public Names describe(long tenantId, Collection<Long> requestIds, Collection<Long> connectionIds) throws IOException {
+        ObjectNode body = this.json.createObjectNode();
+        body.put("tenantId", tenantId);
+        body.set("requestIds", this.json.valueToTree(requestIds == null ? new ArrayList<Long>() : new ArrayList<>(requestIds)));
+        body.set("connectionIds", this.json.valueToTree(connectionIds == null ? new ArrayList<Long>() : new ArrayList<>(connectionIds)));
+        JsonNode data = this.post("/describe", body, this.quick);
+        Names names = new Names();
+        for (JsonNode request : data.path("requests")) {
+            if (!request.hasNonNull("requestId")) {
+                continue;
+            }
+            RequestName name = new RequestName();
+            name.name = request.path("name").asText(null);
+            name.collectionId = request.hasNonNull("collectionId") ? request.get("collectionId").asLong() : null;
+            name.collectionName = request.path("collectionName").asText(null);
+            names.requests.put(request.get("requestId").asLong(), name);
+        }
+        for (JsonNode connection : data.path("connections")) {
+            if (connection.hasNonNull("connectionId")) {
+                names.connections.put(connection.get("connectionId").asLong(), connection.path("name").asText(null));
+            }
+        }
+        return names;
+    }
+
     // ---- DatabaseWriter (through IntegrationDatabaseWriter, which has its own availability) --------------------
 
     public long write(DatabaseWriter.WriteCall call) throws IOException {
@@ -298,13 +333,17 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
 
     /** The envelope's data; its ERROR as a refusal in integration-service's words. */
     private JsonNode post(String path, ObjectNode body) throws IOException {
+        return this.post(path, body, this.http);
+    }
+
+    private JsonNode post(String path, ObjectNode body, OkHttpClient client) throws IOException {
         Optional<String> unavailable = this.unavailable();
         if (unavailable.isPresent()) {
             throw new IllegalStateException(unavailable.get() + ".");
         }
         Request request = new Request.Builder().url(this.base + path).header("X-Internal-Token", this.serviceToken)
             .header("Accept", "application/json").post(RequestBody.create(this.json.writeValueAsBytes(body), JSON)).build();
-        try (Response response = this.http.newCall(request).execute()) {
+        try (Response response = client.newCall(request).execute()) {
             ResponseBody content = response.body();
             String text = content == null ? "" : content.string();
             JsonNode answer = text.isEmpty() ? null : this.readOrNull(text);

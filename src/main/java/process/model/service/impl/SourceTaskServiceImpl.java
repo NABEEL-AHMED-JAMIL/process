@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.pipeline.PipelineSummaries;
+
 import process.model.projection.SourceTaskTypeProjection;
 import process.identity.WorkspaceNames;
 import process.settings.ConfigReferences;
@@ -113,6 +115,14 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     private static final String HOME_PAGES = TaskReference.HOME_PAGE;
 
     private static final String TASK_GROUPS = TaskReference.TASK_GROUP;
+
+    /** UX review 2026-10-13: the Pipelines list's per-row summary; absent in a test that does not ask. */
+    private PipelineSummaries summaries;
+
+    @Autowired(required = false)
+    public void useSummaries(PipelineSummaries summaries) {
+        this.summaries = summaries;
+    }
 
     public SourceTaskServiceImpl(BulkExcel bulkExcel,
         QueryService queryService,
@@ -576,6 +586,10 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                 }
                 this.userNameResolver.attachToDtos(sourceTaskDtoList, this.sourceTaskRepository,
                     SourceTask::getTaskDetailId);
+                // UX review 2026-10-13: steps, outputs, sensitivity, review and the newest run, for the page in two queries.
+                if (this.summaries != null) {
+                    this.summaries.attach(sourceTaskDtoList);
+                }
                 // Whose task each row is, for a platform administrator's list of every workspace (MIG-296).
                 Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity,
                     sourceTaskDtoList.stream().map(SourceTaskDto::getTenantId).collect(Collectors.toList()));

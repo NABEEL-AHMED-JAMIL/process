@@ -43,8 +43,10 @@ public enum PageKey {
         "/message.json",
         "/sourceJob.json/findSourceJobAuditLog", "/sourceJob.json/stepExecutions", "/sourceJob.json/stepLogs",
         "/sourceJob.json/runOutputs", "/sourceJob.json/runDataset", "/sourceJob.json/review", "/aiPrompt.json/runsForJob"),
+    // UX review 2026-10-13 (B3): Run analytics reads run rows through /message.json/fetchLogs only (its failed-runs list).
+    // The Runs explorer's facets (/message.json/runFacets) and the run writes under /message.json are the Queue's.
     REPORTS("reports", "Reports", "Operations", "/operations/reports",
-        "/report.json", "/message.json"),
+        "/report.json", "/message.json/fetchLogs"),
     OBJECTS("objects", "Browse files", "Object Browser", "/objects/files",
         "/fileShare.json", "/fileChat.json", "/aiAgent.json", "/aiPrompt.json"),
     ANALYTICS("analytics", "Analytics Studio", "Object Browser", "/objects/analytics",
@@ -83,7 +85,12 @@ public enum PageKey {
     // the same (these prefixes are analytics-service's; Core keeps the catalogue in step).
     DASHBOARDS_EDIT("dashboards-edit", "Edit dashboards", "Object Browser", "/objects/analytics/dashboards",
         "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
-        "/analyticsBenchmark.json", "/analyticsWorkspace.json");
+        "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
+    // UX review 2026-10-13 (I1): Connections › Sources lists what the workspace's pipelines read, from Core
+    // (/pipeline.json/steps/reads). Identity-service's SOURCES has held the key since MIG-229 (integration-service's
+    // /dataSource.json, gated at the gateway); Core names only its own path here, and identity's PageKey names it too.
+    SOURCES("sources", "Sources", "Integration", "/integration/sources",
+        "/pipeline.json/steps/reads");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is

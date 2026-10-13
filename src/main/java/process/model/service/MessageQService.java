@@ -11,6 +11,9 @@ public interface MessageQService {
 
     ResponseDto fetchLogs(MessageQSearchDto messageQSearch);
 
+    /** UX review 2026-10-13 (B3): the Runs explorer's facets and histogram over fetchLogs' runs. */
+    ResponseDto runFacets(MessageQSearchDto messageQSearch);
+
     ResponseDto failJobLogs(Long jobQId);
 
     ResponseDto interruptJobLogs(Long jobQId);

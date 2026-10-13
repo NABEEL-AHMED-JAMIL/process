@@ -15,6 +15,9 @@ import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
 import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import static process.util.ProcessUtil.SUCCESS;
 import process.model.dto.MessageQSearchDto;
@@ -146,6 +149,19 @@ public class MessageQServiceImpl implements MessageQService {
                 if (!ProcessUtil.isNull(obj[index])) {
                     sourceJobQueue.setStartTime(BusinessTime.wallClockOf(obj[index]).withNano(0));
                 }
+                // UX review 2026-10-13 (B3): the schedule's pipeline and how the run was started.
+                index++;
+                if (obj.length > index && !ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setTaskDetailId(Long.valueOf(obj[index].toString()));
+                }
+                index++;
+                if (obj.length > index && !ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setTaskName(String.valueOf(obj[index]));
+                }
+                index++;
+                if (obj.length > index && !ProcessUtil.isNull(obj[index])) {
+                    sourceJobQueue.setTrigger(String.valueOf(obj[index]));
+                }
                 sourceJobQueues.add(sourceJobQueue);
             }
             objectMap.put(SOURCE_JOB_QUEUES, sourceJobQueues);
@@ -167,6 +183,37 @@ public class MessageQServiceImpl implements MessageQService {
             responseDto = new ResponseDto(SUCCESS, "MessageQ successfully ", objectMap);
         }
         return responseDto;
+    }
+
+    /**
+     * UX review 2026-10-13 (B3): the Runs explorer's facets and histogram over the same runs fetchLogs reads (the range,
+     * the caller's jobs by tenant and JobOwnership, the jobs and runs asked for): {total, statuses, pipelines, triggers,
+     * histogram}. Each facet is counted with the other filters and not its own (RunFacets).
+     */
+    @Override
+    public ResponseDto runFacets(MessageQSearchDto search) {
+        if (search == null || ProcessUtil.isNull(search.getFromDate())) {
+            return new ResponseDto(ERROR, "FromDate missing.");
+        } else if (ProcessUtil.isNull(search.getToDate())) {
+            return new ResponseDto(ERROR, "ToDate missing.");
+        }
+        String bucket;
+        try {
+            bucket = RunFacets.bucketOf(search.getFromDate(), search.getToDate());
+        } catch (DateTimeParseException bad) {
+            return new ResponseDto(ERROR, "FromDate and ToDate are dates (yyyy-MM-dd).");
+        }
+        LocalDate from = LocalDate.parse(search.getFromDate());
+        LocalDate to = LocalDate.parse(search.getToDate());
+        if (to.isBefore(from)) {
+            return new ResponseDto(ERROR, "ToDate is before FromDate.");
+        }
+        if (ChronoUnit.DAYS.between(from, to) >= RunFacets.MAX_DAYS) {
+            return new ResponseDto(ERROR, String.format("The range is at most %d days.", RunFacets.MAX_DAYS));
+        }
+        List<Object[]> rows = this.queryService.executeQuery(this.queryService.runFacets(search, bucket));
+        Map<String, Object> answer = RunFacets.assemble(rows, search, bucket);
+        return new ResponseDto(SUCCESS, String.format("%s run(s).", answer.get("total")), answer);
     }
 
     /** A run is the caller's to act on when its job is (JobOwnership: the tenant, and a tenant user's own job). */

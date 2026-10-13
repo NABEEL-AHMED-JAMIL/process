@@ -27,6 +27,7 @@ import static process.tenancy.CoreProbeFixture.A_PIPELINE;
 import static process.tenancy.CoreProbeFixture.A_PIPELINE_ID;
 import static process.tenancy.CoreProbeFixture.SUCCEEDED;
 import static process.tenancy.CoreProbeFixture.B_PIPELINE_ID;
+import static process.tenancy.CoreProbeFixture.B_TASK;
 import process.tenancy.CoreProbeFixture.Caller;
 
 /**
@@ -58,6 +59,8 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         bStep = step(sql, B_RUN, bDefinition, "bravo run message marker");
         colleagueStep = step(sql, COLLEAGUE_RUN, null, "colleague run message");
         aStep = step(sql, A_RUN, null, "acme step line");
+        // UX review 2026-10-13 (I1): B's task runs B's step-engine pipeline, whose step reads rows written in it.
+        sql.update("UPDATE source_task SET pipeline_id = ? WHERE task_detail_id = ?", B_PIPELINE_ID, B_TASK);
         // MIG-231: B has switched 'select' off in its workspace.
         sql.update("INSERT INTO task_registry_override (tenant_id, task_code, enabled) VALUES (?, 'select', false)", B);
     }
@@ -126,6 +129,26 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         }
         assertThat(fx.foreignRows(A, B, 0L, -1L)).isEqualTo(before);
         assertThat(fx.leaks).isEmpty();
+    }
+
+    /** UX review 2026-10-13 (I1): what the pipelines read is the caller's workspace's; no workspace reads none. */
+    @Test
+    void whatPipelinesReadIsMyWorkspacesOnly() {
+        String before = fx.foreignRows();
+        for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
+            assertThat(fx.probe("GET pipeline.json/steps/reads", caller, () -> fx.pipelineSteps.reads())).contains(SUCCEEDED)
+                .doesNotContain("Bravo Secret Task").doesNotContain(String.valueOf(B_TASK)).doesNotContain(String.valueOf(B_PIPELINE));
+        }
+        for (Long none : NO_WORKSPACE) {
+            assertThat(fx.probe("GET pipeline.json/steps/reads", tenantlessUser(none), () -> fx.pipelineSteps.reads()))
+                .doesNotContain("Bravo Secret Task").doesNotContain(String.valueOf(B_TASK));
+        }
+        // The control: B's own admin reads B's pipeline and its step.
+        Caller adminOfB = new Caller(B, "TENANT_ADMIN", CoreProbeFixture.ADMIN_B, "brian@bravo.example");
+        assertThat(fx.probe("GET pipeline.json/steps/reads(B's own)", adminOfB, () -> fx.pipelineSteps.reads())).contains(SUCCEEDED)
+            .contains("Bravo Secret Task").contains("Sample rows (written in the step)");
+        assertThat(fx.leaks).isEmpty();
+        assertThat(fx.foreignRows()).isEqualTo(before);
     }
 
     /** The control: A's own pipeline reads as its legacy step, saves A's draft as version 1, and reads it back. */

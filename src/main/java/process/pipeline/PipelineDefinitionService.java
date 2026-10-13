@@ -3,6 +3,7 @@ package process.pipeline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.dto.ResponseDto;
 import process.model.enums.Status;
@@ -210,6 +211,31 @@ public class PipelineDefinitionService {
         public Boolean getEnabled() { return enabled; }
 
         public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+    }
+
+    /** UX review 2026-10-13 (I1): what the pipelines read; absent in a test that does not ask. */
+    private PipelineReads reads;
+
+    @Autowired(required = false)
+    public void useReads(PipelineReads reads) {
+        this.reads = reads;
+    }
+
+    /**
+     * UX review 2026-10-13 (I1): what the caller's workspace's step-engine pipelines read, grouped by place (PipelineReads),
+     * for Connections › Sources. A caller with no workspace (a platform administrator) reads none: the page is a
+     * workspace's.
+     */
+    public ResponseDto reads() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null || tenantId <= 0 || this.reads == null) {
+            return new ResponseDto(SUCCESS, "No workspace: no pipelines to read from.", new ArrayList<>());
+        }
+        Map<String, Object> answer = this.reads.forWorkspace(tenantId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> places = (List<Map<String, Object>>) answer.get("data");
+        return new ResponseDto(SUCCESS, String.format("%d of %d pipeline(s) read %d place(s).", answer.get("reading"),
+            answer.get("pipelines"), places.size()), places);
     }
 
     /**

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.gson.Gson;
 import process.model.enums.Status;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Nabeel Ahmed
@@ -32,6 +33,17 @@ public class SourceTaskDto implements AuditNamed {
     private SourceTaskTypeDto sourceTaskType;
     private List<ConfigurationMakerRequest.TagInfo> xmlTagsInfo;
     private Long totalLinksJobs;
+    /**
+     * UX review 2026-10-13 (Pipelines list): what a reader needs instead of Topic / Registry task / Storage -- the engine
+     * steps of the pipeline's latest definition (0 for a legacy pipeline), its Output steps, the sensitivity it says, whether
+     * its results wait for a review, and its newest run the caller may see (PipelineSummaries). Set by listSourceTask only; a null (no sensitivity said, no
+     * run) is left out of the JSON, as every other empty field of this DTO.
+     */
+    private Integer stepCount;
+    private Integer outputCount;
+    private String sensitivity;
+    private Boolean reviewRequired;
+    private Map<String, Object> lastRun;
 
     public SourceTaskDto() {}
 
@@ -190,5 +202,45 @@ public class SourceTaskDto implements AuditNamed {
     @Override
     public void setCreatedBy(Long createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Integer getStepCount() {
+        return stepCount;
+    }
+
+    public void setStepCount(Integer stepCount) {
+        this.stepCount = stepCount;
+    }
+
+    public Integer getOutputCount() {
+        return outputCount;
+    }
+
+    public void setOutputCount(Integer outputCount) {
+        this.outputCount = outputCount;
+    }
+
+    public String getSensitivity() {
+        return sensitivity;
+    }
+
+    public void setSensitivity(String sensitivity) {
+        this.sensitivity = sensitivity;
+    }
+
+    public Boolean getReviewRequired() {
+        return reviewRequired;
+    }
+
+    public void setReviewRequired(Boolean reviewRequired) {
+        this.reviewRequired = reviewRequired;
+    }
+
+    public Map<String, Object> getLastRun() {
+        return lastRun;
+    }
+
+    public void setLastRun(Map<String, Object> lastRun) {
+        this.lastRun = lastRun;
     }
 }

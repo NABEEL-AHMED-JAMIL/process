@@ -10,6 +10,7 @@ import process.model.dto.MessageQSearchDto;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SchedulerRepository;
 import process.model.service.impl.QueryService;
+import process.model.service.impl.RunFacets;
 import process.security.TenantContext;
 
 import java.lang.reflect.Method;
@@ -155,6 +156,23 @@ class ScaleReadsPostgresTest {
         week.setLimit(100_000);
         assertThat(queries.fetchJobQLog(week, false)).as("the ceiling holds")
             .contains("limit " + (QueryService.QUEUE_PAGE_MAX + 1) + " ");
+    }
+
+    /** UX review 2026-10-13 (B3): the Runs explorer's facets count a week of a busy year on the day index, in the database. */
+    @Test
+    void theRunFacetsCountTheRangeOnTheDayIndex() {
+        TenantContext.set(2901L, "TENANT_ADMIN", 42L, "ops@carebridge.test");
+        MessageQSearchDto week = new MessageQSearchDto();
+        week.setFromDate("2026-06-08");
+        week.setToDate("2026-06-14");
+        String facets = new QueryService().runFacets(week, RunFacets.DAY);
+        String shown = plan(facets);
+        System.out.println("-- runFacets\n" + shown);
+        assertThat(shown).contains("idx_job_queue_date_created_day");
+        System.out.println("-- runFacets " + executionMs(facets) + " ms");
+        long slots = db.sql().queryForList(facets).stream().filter(row -> "slot".equals(row.get("facet")))
+            .mapToLong(row -> ((Number) row.get("total")).longValue()).sum();
+        assertThat(slots).as("a week of runs, not the year").isBetween(7_000L, 8_000L);
     }
 
     /** P1 #20: which jobs ever ran, and their schedulers, read with one array parameter, not an IN list per id. */

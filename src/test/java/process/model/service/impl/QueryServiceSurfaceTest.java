@@ -10,6 +10,7 @@ import process.security.TenantContext;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -25,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * QueryService's public surface, written down where a change to it fails the build (MIG-101, contradiction
  * B4; the inventory MIG-82 asked for before the Core/Analytics/Identity cut).
  *
- * The coverage audit counted 14 public methods; there are 16, plus toString. It missed the second
+ * The coverage audit counted 14 public methods; there were 16, plus toString (18 since UX review 2026-10-13: runFacets and
+ * lastRunsOfTasks). It missed the second
  * fetchAllLinkJobsWithSourceTaskQuery overload and both executeQuery overloads -- two of the three
  * executors, and so the class's whole logging exposure (DEF-142, fixed by MIG-74). Three execute; the
  * other 13 build SQL, and every one of the 13 carries tenantClause, the only tenant isolation these
@@ -93,14 +95,26 @@ class QueryServiceSurfaceTest {
         builders.put("runReportRows(String,String)", new Builder(
             () -> this.queries.runReportRows("2026-09-01", "2026-09-21"),
             "job_audit_logs", "job_queue", "source_job", "source_task"));
-        // MessageQServiceImpl: the run log and its per-status totals.
+        // MessageQServiceImpl: the run log and its per-status totals. UX review 2026-10-13 (B3): each run names its pipeline
+        // (source_task) and how it was started -- a retry, the customer API (api_intake), approved documents
+        // (document_approval), a file (inbox_arrival), Run now or the schedule (RunFacets).
+        MessageQSearchDto byTrigger = new MessageQSearchDto();
+        byTrigger.setFromDate("2026-09-01");
+        byTrigger.setToDate("2026-09-21");
+        byTrigger.setTriggers(new HashSet<>(Arrays.asList("file")));
+        String[] runTables = {"api_intake", "document_approval", "inbox_arrival", "job_queue", "source_job", "source_task"};
         builders.put("fetchJobQLog(MessageQSearchDto,boolean)", new Builder(
-            () -> this.queries.fetchJobQLog(runs, false) + "\n" + this.queries.fetchJobQLog(runs, true), "job_queue", "source_job"));
+            () -> this.queries.fetchJobQLog(runs, false) + "\n" + this.queries.fetchJobQLog(byTrigger, true), runTables));
+        // MessageQServiceImpl.runFacets (B3): the same runs counted by status, pipeline, trigger and time slot.
+        builders.put("runFacets(MessageQSearchDto,String)", new Builder(() -> this.queries.runFacets(runs, RunFacets.DAY), runTables));
+        // PipelineSummaries (the Pipelines list): each pipeline's newest run the caller may see.
+        builders.put("lastRunsOfTasks(Collection)", new Builder(
+            () -> this.queries.lastRunsOfTasks(Arrays.asList(7L, 8L)), "job_queue", "source_job"));
         return builders;
     }
 
     @Test
-    void sixteenPublicMethodsThreeExecutorsAndThirteenBuilders() {
+    void eighteenPublicMethodsThreeExecutorsAndFifteenBuilders() {
         TenantContext.set(TENANT, "TENANT_ADMIN", 42L, "ops@carebridge.test");
         Set<String> declared = Arrays.stream(QueryService.class.getDeclaredMethods())
             .filter(m -> Modifier.isPublic(m.getModifiers()) && !m.isSynthetic() && !"toString".equals(m.getName()))
@@ -109,8 +123,8 @@ class QueryServiceSurfaceTest {
         documented.addAll(this.builders().keySet());
 
         assertThat(declared).as("QueryService's public methods; update this test's list with the change").isEqualTo(documented);
-        assertThat(declared).hasSize(16);
-        assertThat(this.builders()).hasSize(13);
+        assertThat(declared).hasSize(18);
+        assertThat(this.builders()).hasSize(15);
     }
 
     @Test
@@ -136,6 +150,12 @@ class QueryServiceSurfaceTest {
 
     private static Set<String> tables(String sql) {
         Set<String> tables = new TreeSet<>();
+        // A common table expression (runFacets' "with r as") is read by name, and is no table.
+        Set<String> named = new TreeSet<>();
+        Matcher ctes = Pattern.compile("(?i)\\bwith\\s+([a-z_]+)\\s+as\\s*\\(").matcher(sql);
+        while (ctes.find()) {
+            named.add(ctes.group(1).toLowerCase());
+        }
         Matcher matcher = Pattern.compile("(?i)\\b(?:from|join)\\s+([a-z_]+)\\b").matcher(sql);
         while (matcher.find()) {
             // extract(hour from cast(...)) is a FROM that names no table, and "join lateral (" a JOIN that names
@@ -144,6 +164,7 @@ class QueryServiceSurfaceTest {
                 tables.add(matcher.group(1).toLowerCase());
             }
         }
+        tables.removeAll(named);
         return tables;
     }
 

@@ -142,7 +142,9 @@ class TimestampWireFormatPostgresTest {
         String sent = wire(response.getData());
         System.out.println("WIRE fetchLogs " + sent);
         // The scale review (P0 #3) added total, hasMore and limit beside them; the two lists are as they were.
-        assertThat(sent).isEqualTo("{\"total\":1,\"jobStatusStatistic\":[{\"name\":\"COMPLETED\",\"value\":1}],\"hasMore\":false,\"limit\":2000,\"sourceJobQueues\":[{\"jobQueueId\":310001,\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10\",\"jobStatus\":\"Completed\",\"jobId\":31001,\"jobSend\":true,\"dateCreated\":\"2026-01-16T05:30:00.000+00:00\"}]}");
+        assertThat(sent).isEqualTo("{\"total\":1,\"jobStatusStatistic\":[{\"name\":\"COMPLETED\",\"value\":1}],\"hasMore\":false,\"limit\":2000,\"sourceJobQueues\":[{\"jobQueueId\":310001,\"startTime\":\"2026-01-15T23:30:00\",\"endTime\":\"2026-01-15T23:45:10\",\"jobStatus\":\"Completed\",\"jobId\":31001,\"jobSend\":true,\"dateCreated\":\"2026-01-16T05:30:00.000+00:00\","
+            // UX review 2026-10-13 (B3), re-recorded on purpose: the run also names its pipeline and how it was started.
+            + "\"taskDetailId\":31201,\"taskName\":\"wire task\",\"trigger\":\"schedule\"}]}");
     }
 
     /** The Dashboard's per-day and per-hour tiles: the run belongs to 15 January, 23:00, in Chicago. */

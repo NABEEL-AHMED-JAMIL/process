@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static process.pipeline.Definitions.row;
 
@@ -95,6 +96,26 @@ class HttpIntegrationPipelinesTest {
         assertThat(result.truncated).isTrue();
         assertThat(this.seen).containsExactly("POST /api/v1/internal/pipelines/api/run token=" + TOKEN + " {\"tenantId\":41,\"jobQueueId\":7401,"
             + "\"stepKey\":\"fetch\",\"requestId\":12,\"environmentId\":null,\"version\":null,\"variables\":{\"since\":\"2026-09-28\"}}");
+    }
+
+    /** UX review 2026-10-13 (I1): integration-service's CorePipelineNamesRestApiTest.CORE_DESCRIBE is this body. */
+    @Test
+    void describeNamesTheWorkspacesRequestsAndConnections() throws Exception {
+        this.reply = "{\"status\":\"SUCCESS\",\"data\":{\"requests\":[{\"requestId\":1083,\"name\":\"Patients\",\"collectionId\":1079,"
+            + "\"collectionName\":\"FHIR sandbox\"}],\"connections\":[{\"connectionId\":12,\"name\":\"Lab warehouse\"}]}}";
+        HttpIntegrationPipelines integration = new HttpIntegrationPipelines(this.start(), TOKEN, true, false);
+
+        IntegrationNames.Names names = integration.describe(2960L, Arrays.asList(1083L, 1084L, 1099L), Arrays.asList(12L, 13L));
+
+        assertThat(names.requests).containsOnlyKeys(1083L);
+        assertThat(names.requests.get(1083L).name).isEqualTo("Patients");
+        assertThat(names.requests.get(1083L).collectionId).isEqualTo(1079L);
+        assertThat(names.requests.get(1083L).collectionName).isEqualTo("FHIR sandbox");
+        assertThat(names.connections).containsOnly(entry(12L, "Lab warehouse"));
+        assertThat(this.seen).containsExactly("POST /api/v1/internal/pipelines/describe token=" + TOKEN
+            + " {\"tenantId\":2960,\"requestIds\":[1083,1084,1099],\"connectionIds\":[12,13]}");
+        HttpIntegrationPipelines off = new HttpIntegrationPipelines("http://nowhere", TOKEN, false, false);
+        assertThatThrownBy(() -> off.describe(1L, null, null)).hasMessageContaining("not deployed yet");
     }
 
     @Test

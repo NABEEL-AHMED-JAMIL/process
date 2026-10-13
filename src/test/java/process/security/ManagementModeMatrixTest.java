@@ -115,6 +115,7 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.emailExport", "download, by mail to themselves");
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.askAssistant", "asking the assistant about a run");
         CUSTOMERS_IN_EITHER_MODE.put("MessageQRestApi.fetchLogs", read);
+        CUSTOMERS_IN_EITHER_MODE.put("MessageQRestApi.runFacets", read + " (UX review 2026-10-13: fetchLogs' runs, counted)");
         CUSTOMERS_IN_EITHER_MODE.put("SourceTaskRestApi.listSourceTask", read);
         CUSTOMERS_IN_EITHER_MODE.put("SourceTaskRestApi.fetchAllLinkJobsWithSourceTaskId", read);
         CUSTOMERS_IN_EITHER_MODE.put("PipelineDefinitionRestApi.validate", "checks a definition, saves nothing");

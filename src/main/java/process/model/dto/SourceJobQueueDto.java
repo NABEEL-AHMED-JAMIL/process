@@ -29,6 +29,10 @@ public class SourceJobQueueDto {
     private Boolean runManual;
     private Timestamp dateCreated;
     private List<JobStatusStatisticDto> jobStatusStatistic;
+    /** UX review 2026-10-13 (B3): the pipeline the run's schedule runs, and how the run was started (RunTriggers). */
+    private Long taskDetailId;
+    private String taskName;
+    private String trigger;
 
     public SourceJobQueueDto() {}
 
@@ -155,5 +159,29 @@ public class SourceJobQueueDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    public Long getTaskDetailId() {
+        return taskDetailId;
+    }
+
+    public void setTaskDetailId(Long taskDetailId) {
+        this.taskDetailId = taskDetailId;
+    }
+
+    public String getTaskName() {
+        return taskName;
+    }
+
+    public void setTaskName(String taskName) {
+        this.taskName = taskName;
+    }
+
+    public String getTrigger() {
+        return trigger;
+    }
+
+    public void setTrigger(String trigger) {
+        this.trigger = trigger;
     }
 }

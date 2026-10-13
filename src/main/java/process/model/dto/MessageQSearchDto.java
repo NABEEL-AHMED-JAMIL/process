@@ -22,6 +22,10 @@ public class MessageQSearchDto {
     private Integer limit;
     /** Which window of {@code limit} runs, from 0. */
     private Integer page;
+    /** UX review 2026-10-13 (B3): only the runs of these pipelines (source_task.task_detail_id, through the run's schedule). */
+    private Set<Long> taskDetailIds;
+    /** UX review 2026-10-13 (B3): only the runs started this way -- RunTriggers' keys (manual, file, document, retry, api, schedule). */
+    private Set<String> triggers;
 
     public MessageQSearchDto() {}
 
@@ -88,6 +92,22 @@ public class MessageQSearchDto {
 
     public void setPage(Integer page) {
         this.page = page;
+    }
+
+    public Set<Long> getTaskDetailIds() {
+        return taskDetailIds;
+    }
+
+    public void setTaskDetailIds(Set<Long> taskDetailIds) {
+        this.taskDetailIds = taskDetailIds;
+    }
+
+    public Set<String> getTriggers() {
+        return triggers;
+    }
+
+    public void setTriggers(Set<String> triggers) {
+        this.triggers = triggers;
     }
 
     @Override

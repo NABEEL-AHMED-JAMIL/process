@@ -40,6 +40,10 @@ class DrillDownColumnsTest {
         "end_time", "job_id", "job_send", "job_status", "job_status_message", "run_manual", "skip_manual", "skip_time",
         "start_time"));
 
+    /** UX review 2026-10-13 (B3): what the run log reads after the drill-down's columns. */
+    static final List<String> RUN_LOG_EXTRA = Collections.unmodifiableList(Arrays.asList("sj.task_detail_id", "st.task_name",
+        "tr.run_trigger"));
+
     private final QueryService queries = new QueryService();
 
     @BeforeEach
@@ -59,13 +63,19 @@ class DrillDownColumnsTest {
         assertThat(selectList(sql)).containsExactlyElementsOf(qualified("job_queue", RUN_COLUMNS));
     }
 
+    /**
+     * The run log reads the drill-down's columns in the same order, then (UX review 2026-10-13, B3, re-recorded on purpose)
+     * the schedule's pipeline and how the run was started, which MessageQServiceImpl reads after them.
+     */
     @Test
     void theRunLogListReadsTheSameColumnsInTheSameOrder() {
         MessageQSearchDto search = new MessageQSearchDto();
         search.setFromDate("2026-09-01");
         search.setToDate("2026-09-21");
 
-        assertThat(selectList(this.queries.fetchJobQLog(search, false))).containsExactlyElementsOf(qualified("jq", RUN_COLUMNS));
+        List<String> expected = new ArrayList<>(qualified("jq", RUN_COLUMNS));
+        expected.addAll(RUN_LOG_EXTRA);
+        assertThat(selectList(this.queries.fetchJobQLog(search, false))).containsExactlyElementsOf(expected);
     }
 
     @Test

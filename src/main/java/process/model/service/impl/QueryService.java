@@ -633,14 +633,40 @@ public class QueryService {
      * while the runs show one.
      */
     public String fetchJobQLog(MessageQSearchDto messageQSearch, boolean isState) {
+        // UX review 2026-10-13 (B3): each run also names its schedule's pipeline and how it was started (RunFacets).
         String selectPortion = isState
             ? "select UPPER(jq.job_status) as job_status, count(*) as total_count \n"
             : "select jq.job_queue_id, jq.date_created, jq.end_time, jq.job_id, jq.job_send, jq.job_status, jq.job_status_message, "
-                + "jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time \n";
+                + "jq.run_manual, jq.skip_manual, jq.skip_time, jq.start_time, sj.task_detail_id, st.task_name, tr.run_trigger \n";
 
         String query = selectPortion + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n";
+        if (!isState) {
+            query += "left join source_task st on st.task_detail_id = sj.task_detail_id \n";
+        }
+        if (!isState || RunFacets.triggerList(messageQSearch.getTriggers()) != null) {
+            query += RunFacets.triggerJoin("jq");
+        }
+        query += this.runRange(messageQSearch);
+        if (isState) {
+            return query + "\ngroup by UPPER(jq.job_status)";
+        }
+        String statuses = RunFacets.statusList(messageQSearch.getJobStatuses());
+        if (statuses != null) {
+            query += String.format("and UPPER(jq.job_status) in (%s)", statuses);
+        }
+        int window = queueWindow(messageQSearch.getLimit());
+        int page = messageQSearch.getPage() == null || messageQSearch.getPage() < 0 ? 0 : messageQSearch.getPage();
+        return query + String.format("\norder by job_queue_id desc limit %d offset %d", window + 1, (long) page * window);
+    }
+
+    /**
+     * The runs one Queue read covers, before any status: the range (on the day index), not deleted, the caller's jobs
+     * (tenant and JobOwnership), and the jobs, runs, pipelines and triggers asked for. fetchJobQLog's rows and counts and
+     * runFacets read the same set.
+     */
+    private String runRange(MessageQSearchDto messageQSearch) {
         // Spelled as idx_job_queue_date_created_day is, so the range is an index read (DashboardIndexPostgresTest).
-        query += String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
+        String query = String.format("where cast(jq.date_created AT TIME ZONE 'America/Chicago' as date) between '%s' and '%s' \n",
                 this.requireValidDate(messageQSearch.getFromDate()), this.requireValidDate(messageQSearch.getToDate()));
         query += "and UPPER(sj.job_status) <> 'DELETE' and UPPER(jq.status) <> 'DELETE' \n";
         query += this.jobClause("sj") + "\n";
@@ -650,17 +676,67 @@ public class QueryService {
         if (!ProcessUtil.isNull(messageQSearch.getJobQId()) && !messageQSearch.getJobQId().isEmpty()) {
             query += String.format("and jq.job_queue_id in (%s) \n", this.idList(messageQSearch.getJobQId()));
         }
-        if (isState) {
-            return query + "\ngroup by UPPER(jq.job_status)";
+        if (messageQSearch.getTaskDetailIds() != null && !messageQSearch.getTaskDetailIds().isEmpty()) {
+            query += String.format("and sj.task_detail_id in (%s) \n", this.idList(messageQSearch.getTaskDetailIds()));
         }
-        if (!ProcessUtil.isNull(messageQSearch.getJobStatuses()) && !messageQSearch.getJobStatuses().isEmpty()) {
-            String jobStatus = messageQSearch.getJobStatuses().stream()
-                    .map(status -> "'" + status.toString().toUpperCase() + "'").collect(Collectors.joining(","));
-            query += String.format("and UPPER(jq.job_status) in (%s)", jobStatus);
+        String triggers = RunFacets.triggerList(messageQSearch.getTriggers());
+        if (triggers != null) {
+            query += String.format("and tr.run_trigger in (%s) \n", triggers);
         }
-        int window = queueWindow(messageQSearch.getLimit());
-        int page = messageQSearch.getPage() == null || messageQSearch.getPage() < 0 ? 0 : messageQSearch.getPage();
-        return query + String.format("\norder by job_queue_id desc limit %d offset %d", window + 1, (long) page * window);
+        return query;
+    }
+
+    /**
+     * UX review 2026-10-13 (B3): the Runs explorer's counts in one statement, grouped in the database. The range's runs
+     * (the jobs and runs asked for, the caller's only -- as fetchJobQLog reads them) once, then four counts over them:
+     * by status with the pipeline and trigger filters, by pipeline with the status and trigger filters, by trigger with
+     * the status and pipeline filters, and by slot (hour or day of the business wall clock) and status with all three.
+     * Rows: facet, key, name, slot, count (RunFacets.assemble).
+     */
+    public String runFacets(MessageQSearchDto search, String bucket) {
+        if (!RunFacets.HOUR.equals(bucket) && !RunFacets.DAY.equals(bucket)) {
+            throw new IllegalArgumentException("bucket is hour or day");
+        }
+        MessageQSearchDto range = new MessageQSearchDto(search.getFromDate(), search.getToDate(), search.getJobId(), search.getJobQId(), null);
+        // The slot as text: the business wall clock as written, never through a JVM zone (ModelApplicationTimeZoneTest).
+        String runs = "with r as (select jq.job_status as status, sj.task_detail_id as tdi, st.task_name as tname, tr.run_trigger as trig, "
+            + String.format("to_char(date_trunc('%s', jq.date_created AT TIME ZONE 'America/Chicago'), 'YYYY-MM-DD\"T\"HH24:MI:SS') as slot \n",
+                bucket)
+            + "from job_queue jq inner join source_job sj on sj.job_id = jq.job_id \n"
+            + "left join source_task st on st.task_detail_id = sj.task_detail_id \n"
+            + RunFacets.triggerJoin("jq")
+            + this.runRange(range) + ") \n";
+        String statuses = RunFacets.statusList(search.getJobStatuses());
+        String byStatus = statuses == null ? "true" : String.format("UPPER(r.status) in (%s)", statuses);
+        String byPipeline = search.getTaskDetailIds() == null || search.getTaskDetailIds().isEmpty() ? "true"
+            : String.format("r.tdi in (%s)", this.idList(search.getTaskDetailIds()));
+        String triggers = RunFacets.triggerList(search.getTriggers());
+        String byTrigger = triggers == null ? "true" : String.format("r.trig in (%s)", triggers);
+        return runs
+            + "select 'status' as facet, cast(r.status as text) as key, cast(null as text) as name, cast(null as text) as slot, "
+            + "count(*) as total from r where " + byPipeline + " and " + byTrigger + " group by r.status \n"
+            + "union all select 'pipeline', cast(r.tdi as text), max(r.tname), cast(null as text), count(*) from r where "
+            + byStatus + " and " + byTrigger + " and r.tdi is not null group by r.tdi \n"
+            + "union all select 'trigger', r.trig, cast(null as text), cast(null as text), count(*) from r where "
+            + byStatus + " and " + byPipeline + " group by r.trig \n"
+            + "union all select 'slot', cast(r.status as text), cast(null as text), r.slot, count(*) from r where "
+            + byStatus + " and " + byPipeline + " and " + byTrigger + " group by r.slot, r.status";
+    }
+
+    /**
+     * UX review 2026-10-13 (Pipelines list): the newest run of any schedule on each of these pipelines (source tasks) that
+     * the caller may see -- the jobs read as fetchJobQLog reads them (tenant, JobOwnership, not deleted). Per pipeline, its
+     * schedules' newest runs (each one index read of job_queue by job), the newest of those. Rows: task_detail_id,
+     * job_queue_id, job_id, job_status, at (the start, else when the run was made).
+     */
+    public String lastRunsOfTasks(Collection<Long> taskDetailIds) {
+        return "select t.id, x.job_queue_id, x.job_id, x.job_status, x.at from (select unnest(array[" + this.idList(taskDetailIds)
+            + "]::bigint[]) as id) t \n"
+            + "join lateral (select q.job_queue_id, q.job_id, q.job_status, coalesce(q.start_time, q.date_created) as at \n"
+            + "  from source_job sj join lateral (select jq.job_queue_id, jq.job_id, jq.job_status, jq.start_time, jq.date_created "
+            + "from job_queue jq where jq.job_id = sj.job_id and UPPER(jq.status) <> 'DELETE' order by jq.job_queue_id desc limit 1) q on true \n"
+            + "  where sj.task_detail_id = t.id and UPPER(sj.job_status) <> 'DELETE' " + this.jobClause("sj") + "\n"
+            + "  order by q.job_queue_id desc limit 1) x on true";
     }
 
     /** Numbers only, whatever the set held: each id is written back from a Long, never from the caller's text. */

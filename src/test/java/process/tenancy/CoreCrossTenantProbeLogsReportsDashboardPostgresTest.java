@@ -126,6 +126,14 @@ class CoreCrossTenantProbeLogsReportsDashboardPostgresTest {
                 new MessageQSearchDto(DAY_BEFORE, DAY_AFTER, new HashSet<>(Arrays.asList(B_JOB, B_JOB_NAMING_USER_A)),
                     new HashSet<>(Arrays.asList(B_RUN, B_RUN_NAMING_USER_A)), null)));
             assertThat(narrowed).as("B's runs narrowed to are not A's runs").doesNotContain(String.valueOf(B_RUN));
+            // UX review 2026-10-13 (B3): the Runs explorer's facets read the same runs as fetchLogs.
+            assertThat(fx.probe("POST message.json/runFacets", caller, () -> fx.messages.runFacets(
+                new MessageQSearchDto(DAY_BEFORE, DAY_AFTER, null, null, null)))).doesNotContain("Bravo Secret Task");
+            MessageQSearchDto bsRuns = new MessageQSearchDto(DAY_BEFORE, DAY_AFTER, new HashSet<>(Arrays.asList(B_JOB, B_JOB_NAMING_USER_A)),
+                new HashSet<>(Arrays.asList(B_RUN, B_RUN_NAMING_USER_A)), null);
+            bsRuns.setTaskDetailIds(new HashSet<>(Collections.singletonList(CoreProbeFixture.B_TASK)));
+            assertThat(fx.probe("POST message.json/runFacets(their job, run and pipeline)", caller, () -> fx.messages.runFacets(bsRuns)))
+                .as("B's runs narrowed to count nothing").contains("{\"total\":0,\"statuses\"").doesNotContain("Bravo Secret Task");
 
             fx.probe("GET report.json/runs", caller, () -> fx.reports.runs(DAY_BEFORE, DAY_AFTER));
 
@@ -203,6 +211,8 @@ class CoreCrossTenantProbeLogsReportsDashboardPostgresTest {
             Caller caller = tenantlessUser(none);
             fx.probe("POST message.json/fetchLogs", caller, () -> fx.messages.fetchLogs(
                 new MessageQSearchDto(DAY_BEFORE, DAY_AFTER, null, null, null)));
+            assertThat(fx.probe("POST message.json/runFacets", caller, () -> fx.messages.runFacets(
+                new MessageQSearchDto(DAY_BEFORE, DAY_AFTER, null, null, null)))).contains("{\"total\":0,\"statuses\"");
             fx.probe("GET report.json/runs", caller, () -> fx.reports.runs(DAY_BEFORE, DAY_AFTER));
             assertThat(allTile(fx.probe("GET dashboard.json/jobStatusStatistics", caller,
                 () -> fx.dashboard.jobStatusStatistics(DAY_BEFORE, DAY_AFTER)))).isZero();

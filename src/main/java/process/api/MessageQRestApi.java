@@ -11,6 +11,7 @@ import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
 import process.util.ProcessUtil;
+import process.util.RequestRefused;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +41,22 @@ public class MessageQRestApi {
             return new ResponseEntity<>(this.messageQService.fetchLogs(messageQSearch), HttpStatus.OK);
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLogs ", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * UX review 2026-10-13 (B3): the Runs explorer's facets (status, pipeline, trigger) and time histogram, for fetchLogs'
+     * body. Gated as the Queue (Runs) page: Run analytics holds /message.json/fetchLogs only.
+     */
+    @RequestMapping(value = "/runFacets", method = RequestMethod.POST)
+    public ResponseEntity<?> runFacets(@RequestBody MessageQSearchDto messageQSearch) {
+        try {
+            return new ResponseEntity<>(this.messageQService.runFacets(messageQSearch), HttpStatus.OK);
+        } catch (RequestRefused refused) {
+            throw refused;
+        } catch (Exception ex) {
+            logger.error("An error occurred while runFacets ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

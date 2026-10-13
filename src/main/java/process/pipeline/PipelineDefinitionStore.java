@@ -167,6 +167,56 @@ public class PipelineDefinitionStore {
         }, args.toArray());
     }
 
+    /** A pipeline as the console lists it (a source task) with its step-engine pipeline's latest definition. */
+    public static final class TaskDefinition {
+        public long taskDetailId;
+        public String taskName;
+        public String pipelineId;
+        public Stored stored;
+    }
+
+    /**
+     * UX review 2026-10-13 (I1, and the Pipelines list's columns): the live pipelines of the console's list -- source tasks,
+     * Active or Inactive -- whose pipeline id names a live pipeline that has a definition, each with that pipeline's latest
+     * version (the lowest-keyed live pipeline of the id, as {@link #latestFor(long, String)} picks it). One query for the
+     * workspace, or for these task ids when {@code taskDetailIds} is not null. A pipeline without a definition (a legacy one)
+     * is left out. {@code tenantId} null reads whatever row security shows the caller (a platform administrator's list).
+     */
+    public List<TaskDefinition> latestForTasks(Long tenantId, Collection<Long> taskDetailIds) {
+        List<Object> args = new ArrayList<>();
+        StringBuilder where = new StringBuilder("st.task_status IN ('Active', 'Inactive')");
+        if (tenantId != null) {
+            where.append(" AND st.tenant_id = ?");
+            args.add(tenantId);
+        }
+        if (taskDetailIds != null) {
+            List<Long> ids = new ArrayList<>();
+            for (Long id : taskDetailIds) {
+                if (id != null && !ids.contains(id)) {
+                    ids.add(id);
+                }
+            }
+            if (ids.isEmpty()) {
+                return new ArrayList<>();
+            }
+            where.append(" AND st.task_detail_id IN (").append(String.join(", ", Collections.nCopies(ids.size(), "?"))).append(")");
+            args.addAll(ids);
+        }
+        return this.jdbc.query("SELECT st.task_detail_id AS of_task, st.task_name AS of_task_name, st.pipeline_id AS of_pipeline, "
+            + COLUMNS + " FROM source_task st "
+            + "JOIN LATERAL (SELECT p.pipeline_key FROM pipeline p WHERE p.tenant_id = st.tenant_id AND p.pipeline_id = st.pipeline_id "
+            + "AND p.status <> 'Delete' ORDER BY p.pipeline_key LIMIT 1) k ON true "
+            + "JOIN LATERAL (SELECT * FROM pipeline_definition x WHERE x.pipeline_key = k.pipeline_key ORDER BY x.version DESC LIMIT 1) d ON true "
+            + "WHERE " + where + " ORDER BY lower(st.task_name), st.task_detail_id", (rs, n) -> {
+                TaskDefinition task = new TaskDefinition();
+                task.taskDetailId = rs.getLong("of_task");
+                task.taskName = rs.getString("of_task_name");
+                task.pipelineId = rs.getString("of_pipeline");
+                task.stored = row(rs, n);
+                return task;
+            }, args.toArray());
+    }
+
     public Optional<Stored> byId(long pipelineDefinitionId) {
         return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_definition_id = ?",
             PipelineDefinitionStore::row, pipelineDefinitionId));

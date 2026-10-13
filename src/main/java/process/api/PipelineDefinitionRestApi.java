@@ -23,6 +23,9 @@ import process.pipeline.PipelineDefinitionService;
  *   <li>GET pipeline.json/steps/tasks: the Task Registry as the caller's workspace sees it (MIG-231) -- each task's
  *       entry with its config schema and enabled, and one Legacy entry per pipeline of the workspace;</li>
  *   <li>POST pipeline.json/steps/tasks/enabled: a workspace admin switches a task on, off, or back to its default.</li>
+ *   <li>GET pipeline.json/steps/reads (UX review 2026-10-13, I1): what the workspace's pipelines read -- storage, API
+ *       requests, database connections, document types -- grouped by place, with the pipelines and steps that read each.
+ *       Gated as Connections › Sources (page key sources: Core's and Identity's PageKey), not as the pipelines page.</li>
  * </ul>
  *
  * A missing pipelineKey is Spring's 400; a pipeline of another workspace, or none, is the envelope's
@@ -58,6 +61,11 @@ public class PipelineDefinitionRestApi {
     @RequestMapping(value = "/pipeline.json/steps/tasks", method = RequestMethod.GET)
     public ResponseEntity<?> tasks() {
         return new ResponseEntity<>(this.service.tasks(), HttpStatus.OK);
+    }
+
+    @RequestMapping(value = "/pipeline.json/steps/reads", method = RequestMethod.GET)
+    public ResponseEntity<?> reads() {
+        return new ResponseEntity<>(this.service.reads(), HttpStatus.OK);
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")

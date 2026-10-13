@@ -56,11 +56,12 @@ class DrillDownPostgresTest {
         sql.execute("CREATE SCHEMA hibernate_order");
         sql.execute("CREATE TABLE hibernate_order.job_queue (job_queue_id bigint PRIMARY KEY, attempt integer NOT NULL, bucket varchar(255), "
             + "callback_token_attempt integer, callback_token_expires_at timestamptz, callback_token_hash varchar(64), "
-            + "date_created timestamptz NOT NULL, end_time timestamptz, job_id bigint NOT NULL, job_send boolean, "
-            + "job_status varchar(255) NOT NULL, job_status_message text, next_attempt_at timestamptz, output_folder varchar(255), "
+            + "date_created timestamptz NOT NULL, end_time timestamptz, input_bucket varchar(255), input_key varchar(1024), job_id bigint NOT NULL, "
+            + "job_send boolean, job_status varchar(255) NOT NULL, job_status_message text, next_attempt_at timestamptz, output_folder varchar(255), "
             + "run_manual boolean, skip_manual boolean, skip_time timestamptz, start_time timestamptz, status varchar(255) NOT NULL)");
         sql.update("INSERT INTO hibernate_order.job_queue SELECT job_queue_id, attempt, bucket, callback_token_attempt, "
-            + "callback_token_expires_at, callback_token_hash, date_created, end_time, job_id, job_send, job_status, job_status_message, "
+            + "callback_token_expires_at, callback_token_hash, date_created, end_time, input_bucket, input_key, job_id, job_send, job_status, "
+            + "job_status_message, "
             + "next_attempt_at, output_folder, run_manual, skip_manual, skip_time, start_time, status FROM public.job_queue");
     }
 
@@ -112,9 +113,10 @@ class DrillDownPostgresTest {
         List<Object[]> result = this.rows(searchPath, new QueryService().fetchJobQLog(search, false));
         assertThat(result).hasSize(1);
         Object[] row = result.get(0);
-        // The select list, by name, must be exactly the drill-down's: that is the order both readers use.
+        // The select list, by name, starts exactly as the drill-down's: that is the order both readers use (then, since UX
+        // review 2026-10-13, the pipeline and the trigger).
         assertThat(DrillDownColumnsTest.selectList(new QueryService().fetchJobQLog(search, false)))
-            .hasSameSizeAs(DrillDownColumnsTest.RUN_COLUMNS);
+            .hasSize(DrillDownColumnsTest.RUN_COLUMNS.size() + DrillDownColumnsTest.RUN_LOG_EXTRA.size());
         SourceJobQueueDto run = new SourceJobQueueDto();
         run.setJobQueueId(((Number) row[0]).longValue());
         run.setDateCreated((Timestamp) row[1]);

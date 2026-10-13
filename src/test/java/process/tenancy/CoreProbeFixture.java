@@ -63,6 +63,7 @@ import process.pipeline.DefinitionValidator;
 import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.PipelineReads;
 import process.pipeline.StepReferences;
 import process.pipeline.StepTasks;
 import process.pipeline.registry.JdbcTaskOverrideStore;
@@ -492,8 +493,11 @@ final class CoreProbeFixture implements AutoCloseable {
         StepTasks stepTasks = Definitions.builtInTasks();
         JdbcTaskOverrideStore taskSwitches = new JdbcTaskOverrideStore(this.db.appJdbc());
         TaskRegistry registry = new TaskRegistry(stepTasks, taskSwitches);
-        this.pipelineSteps = new PipelineDefinitionRestApi(new PipelineDefinitionService(pipelineRows,
-            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches, names));
+        PipelineDefinitionService definitionService = new PipelineDefinitionService(pipelineRows,
+            new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches, names);
+        // UX review 2026-10-13 (I1): what the workspace's pipelines read, as the application wires it.
+        definitionService.useReads(new PipelineReads(new PipelineDefinitionStore(this.db.appJdbc()), stepTasks));
+        this.pipelineSteps = new PipelineDefinitionRestApi(definitionService);
         this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         JdbcRunReviewStore reviewRows = new JdbcRunReviewStore(this.db.appJdbc());
         RunReviews runReviews = new RunReviews(new JdbcStepStore(this.db.appJdbc()), new PipelineDefinitionStore(this.db.appJdbc()),
