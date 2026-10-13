@@ -41,7 +41,11 @@ import static process.util.ProcessUtil.SUCCESS;
  *   <li>{@code bulkId}: the client's (^[A-Za-z0-9-]{8,64}$), else one is made. The same bulkId and run again is done once:
  *       "Already recorded in this bulk decision."</li>
  *   <li>{@code dryRun}: the same checks, nothing written and no event -- the console's confirm panel asks it first.</li>
- *   <li>At most {@value #RATE_CAP} bulk requests a rolling minute per caller (dry runs count), on this instance: a 429.</li>
+ *   <li>At most {@value #RATE_CAP} valid bulk requests a rolling minute per caller (dry runs count): a 429. A request that is
+ *       not valid is refused (400) before it is counted, as workflow-service and ai-service count theirs. The count is held
+ *       in this instance's memory: with more than one Core instance each keeps its own, so a caller could make
+ *       {@value #RATE_CAP} per instance (etl-platform docs/capacity.md; a shared store, e.g. Redis, when Core runs on more
+ *       than one).</li>
  *   <li>The workspace's review policy ({@link ReviewPolicy}) off: every approve is skipped "bulk-off"; reject stays allowed.</li>
  * </ul>
  */
@@ -97,7 +101,6 @@ public class RunReviewBulk {
 
     /** Decides every run of the request on its own, as the caller; refused as a whole ({@link Refused}) when the request is not valid. */
     public ResponseDto decide(RunReviewBulkRequest request) {
-        this.countAgainstTheCap();
         Long tenantId = TenantContext.getTenantId();
         if (tenantId == null) {
             throw new Refused(HttpStatus.BAD_REQUEST, "Reviews belong to a workspace; this account is not attached to one.");
@@ -129,6 +132,8 @@ public class RunReviewBulk {
             throw new Refused(HttpStatus.BAD_REQUEST, "bulkId is 8 to 64 letters, digits and '-'.");
         }
         boolean dryRun = Boolean.TRUE.equals(request.getDryRun());
+        // Valid: now it counts against the caller's cap (a refused request never used one up).
+        this.countAgainstTheCap();
         boolean bulkApprove = decision != ReviewDecision.APPROVED || this.reads.execute(status -> this.policy.bulkApproveRuns(tenantId));
 
         List<Map<String, Object>> done = new ArrayList<>();
@@ -175,7 +180,7 @@ public class RunReviewBulk {
         return new ResponseDto(SUCCESS, message, data);
     }
 
-    /** One more bulk request by the caller in the rolling minute; a 429 past {@value #RATE_CAP}. */
+    /** One more valid bulk request by the caller in the rolling minute, on this instance; a 429 past {@value #RATE_CAP}. */
     private void countAgainstTheCap() {
         String caller = TenantContext.getAppUserId() != null ? "user:" + TenantContext.getAppUserId()
             : "name:" + TenantContext.getUsername();

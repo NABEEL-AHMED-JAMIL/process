@@ -439,13 +439,32 @@ class RunReviewBulkTest {
         assertThat(this.bulk.decide(request("APPROVED", null, BULK, true, 1L)).getStatus()).isEqualTo("SUCCESS");
     }
 
+    /** Validated first, then counted (as workflow-service and ai-service do): a refused request never uses up the cap. */
+    @Test
+    void aRequestThatIsNotValidIsA400AndIsNotCounted() {
+        for (int i = 0; i < 25; i++) {
+            refusedWith(() -> this.bulk.decide(request("APPROVED", null, BULK, true)), HttpStatus.BAD_REQUEST,
+                "List the runs to decide (jobQueueIds).");
+            refusedWith(() -> this.bulk.decide(request("MAYBE", null, BULK, true, 1L)), HttpStatus.BAD_REQUEST,
+                "decision is APPROVED or REJECTED.");
+        }
+        for (int i = 0; i < 20; i++) {
+            assertThat(this.bulk.decide(request("APPROVED", null, BULK, true, 1L)).getStatus()).isEqualTo("SUCCESS");
+        }
+        refusedWith(() -> this.bulk.decide(request("APPROVED", null, BULK, true, 1L)), HttpStatus.TOO_MANY_REQUESTS,
+            "Too many bulk decisions in a minute; wait a moment and try again.");
+        // Past the cap, a request that is not valid is still told why (400), not 429.
+        refusedWith(() -> this.bulk.decide(request("REJECTED", null, BULK, true, 1L)), HttpStatus.BAD_REQUEST,
+            "A rejection says why: the comment is required.");
+    }
+
     // ---------------------------------------------------------------------------------------------------- the policy
 
     @Test
     void thePolicyIsOnUntilAnAdministratorTurnsItOff() {
         assertThat(data(this.policy.read())).containsEntry("bulkApproveRuns", true).containsEntry("saved", false)
             .containsEntry("updatedBy", null);
-        assertThat(this.policy.save(null).getStatus()).isEqualTo("ERROR");
+        refusedWith(() -> this.policy.save(null), HttpStatus.BAD_REQUEST, "bulkApproveRuns is true or false.");
 
         Map<String, Object> saved = data(this.policy.save(false));
 
@@ -454,7 +473,8 @@ class RunReviewBulkTest {
         assertThat(this.policy.bulkApproveRuns(TENANT)).isFalse();
         assertThat(this.policy.bulkApproveRuns(OTHER_TENANT)).as("another workspace's own").isTrue();
         TenantContext.set(null, "PLATFORM_ADMIN", 1L, "admin@platform.local");
-        assertThat(this.policy.read().getStatus()).isEqualTo("ERROR");
+        refusedWith(this.policy::read, HttpStatus.BAD_REQUEST, ReviewPolicy.NO_WORKSPACE);
+        refusedWith(() -> this.policy.save(true), HttpStatus.BAD_REQUEST, ReviewPolicy.NO_WORKSPACE);
     }
 
     // --------------------------------------------------------------------------------- individual on the review reads

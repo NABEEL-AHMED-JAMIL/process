@@ -24,10 +24,12 @@ import java.util.Map;
  *   <li>POST sourceJob.json/review/bulkDecide {jobQueueIds, decision, comment, bulkId, dryRun}: a tenant administrator
  *       approves or rejects many runs' internal review, each run decided on its own by a single decision's rules
  *       (RunReviewBulk); answered per run -- done, skipped with a reason, failed. A request that is not valid is a 400, and
- *       past 20 bulk requests a minute a 429; nothing is done then.</li>
+ *       a valid one past 20 bulk requests a minute a 429; nothing is done then.</li>
  *   <li>GET sourceJob.json/review/policy: the workspace's "Allow bulk approve" for pipeline runs, to any member;</li>
  *   <li>POST sourceJob.json/review/policy {bulkApproveRuns}: a tenant administrator sets it.</li>
  * </ul>
+ * Every refusal is a 4xx with its sentence in the envelope -- 400 for what is not valid (an account with no workspace
+ * included), 403 for who may not (the @PreAuthorize), 429 for too many -- as the other services answer theirs.
  */
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
@@ -49,7 +51,7 @@ public class RunReviewBulkRestApi {
         try {
             return new ResponseEntity<>(this.bulk.decide(request), HttpStatus.OK);
         } catch (RunReviewBulk.Refused refused) {
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, refused.getMessage()), refused.getStatus());
+            return refusal(refused);
         } catch (RuntimeException ex) {
             this.logger.error("An error occurred while deciding runs' reviews in bulk.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500),
@@ -59,13 +61,25 @@ public class RunReviewBulkRestApi {
 
     @RequestMapping(value = "/sourceJob.json/review/policy", method = RequestMethod.GET)
     public ResponseEntity<?> policy() {
-        return new ResponseEntity<>(this.policy.read(), HttpStatus.OK);
+        try {
+            return new ResponseEntity<>(this.policy.read(), HttpStatus.OK);
+        } catch (RunReviewBulk.Refused refused) {
+            return refusal(refused);
+        }
     }
 
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     @RequestMapping(value = "/sourceJob.json/review/policy", method = RequestMethod.POST)
     public ResponseEntity<?> savePolicy(@RequestBody(required = false) Map<String, Object> body) {
         Object on = body == null ? null : body.get("bulkApproveRuns");
-        return new ResponseEntity<>(this.policy.save(on instanceof Boolean ? (Boolean) on : null), HttpStatus.OK);
+        try {
+            return new ResponseEntity<>(this.policy.save(on instanceof Boolean ? (Boolean) on : null), HttpStatus.OK);
+        } catch (RunReviewBulk.Refused refused) {
+            return refusal(refused);
+        }
+    }
+
+    private static ResponseEntity<ResponseDto> refusal(RunReviewBulk.Refused refused) {
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, refused.getMessage()), refused.getStatus());
     }
 }
