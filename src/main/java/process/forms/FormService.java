@@ -10,6 +10,7 @@ import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.service.impl.TransactionServiceImpl;
 import process.security.TenantContext;
+import process.util.FailureReference;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -276,7 +277,8 @@ public class FormService {
         try {
             found = this.workflows.find(tenantId, key);
         } catch (RuntimeException unreachable) {
-            return "The workflow could not be checked (" + unreachable.getMessage() + "); try again.";
+            logger.warn("The workflow {} could not be checked for a form", key, unreachable);
+            return FailureReference.sentence("The workflow could not be checked; try again.");
         }
         if (!found.isPresent()) {
             return "The workflow '" + key + "' was not found in this workspace.";

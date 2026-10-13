@@ -15,12 +15,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import process.model.dto.ReportExportRequestDto;
 import process.model.service.StorageBrowserService;
 import process.model.dto.ResponseDto;
 import process.util.ProcessUtil;
+import process.util.FailureReference;
 
 import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
@@ -249,7 +251,7 @@ public class ReportExportServiceImpl {
                     csv.getBytes(StandardCharsets.UTF_8), "csv", "xlsx");
             } catch (Exception ex) {
                 logger.error("Report export: csv -> xlsx conversion failed", ex);
-                return new ResponseDto(ERROR, "The spreadsheet could not be built: " + ex.getMessage());
+                return new ResponseDto(ERROR, FailureReference.sentence("The spreadsheet could not be built."));
             }
             if (payload == null || payload.length == 0) {
                 return new ResponseDto(ERROR, "The spreadsheet came back empty.");
@@ -298,7 +300,7 @@ public class ReportExportServiceImpl {
                 new ByteArrayInputStream(payload), payload.length, contentType);
         } catch (Exception ex) {
             logger.error("Report export: could not write {} to {}", key, dto.getBucket(), ex);
-            return new ResponseDto(ERROR, "Could not save to that bucket: " + ex.getMessage());
+            return new ResponseDto(ERROR, FailureReference.sentence("Could not save to that bucket."));
         }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("bucket", dto.getBucket().trim());
@@ -337,7 +339,9 @@ public class ReportExportServiceImpl {
                 String.format("Submitted to %s (HTTP %s).", target, response.getStatusCodeValue()), data);
         } catch (Exception ex) {
             logger.error("Report export: submit to {} failed", target, ex);
-            return new ResponseDto(ERROR, "The endpoint did not accept it: " + ex.getMessage());
+            return new ResponseDto(ERROR, FailureReference.sentence(ex instanceof HttpStatusCodeException
+                ? "The endpoint did not accept it (HTTP " + ((HttpStatusCodeException) ex).getRawStatusCode() + ")."
+                : "The endpoint did not accept it."));
         }
     }
 

@@ -122,9 +122,9 @@ public final class ServiceReading {
     // ------------------------------------------------------------------------------------------------------ prometheus
 
     /** Reads the Prometheus page a line at a time; false when it could not be read (the figures stay unset). */
-    static boolean prometheus(HttpClient http, String base, ServiceReading out, Duration timeout) {
+    static boolean prometheus(HttpClient http, String base, ServiceReading out, Duration timeout, String token) {
         try {
-            HttpResponse<InputStream> answer = http.send(HttpRequest.newBuilder(URI.create(base + "/prometheus")).timeout(timeout).GET().build(),
+            HttpResponse<InputStream> answer = http.send(internal(HttpRequest.newBuilder(URI.create(base + "/prometheus")), token).timeout(timeout).GET().build(),
                 HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = answer.body()) {
                 if (answer.statusCode() != 200) {
@@ -237,28 +237,28 @@ public final class ServiceReading {
     // ------------------------------------------------------------------------------------------------------ actuator metrics
 
     /** The figures from /actuator/metrics, one small answer each; false when the endpoint is not served. */
-    static boolean metrics(HttpClient http, String base, ServiceReading out, Duration timeout) {
-        JsonNode used = metric(http, base, "jvm.memory.used", timeout, "area:heap");
+    static boolean metrics(HttpClient http, String base, ServiceReading out, Duration timeout, String token) {
+        JsonNode used = metric(http, base, token, "jvm.memory.used", timeout, "area:heap");
         if (used == null) {
             return false;
         }
         out.heapUsedBytes = statistic(used, "VALUE");
-        JsonNode max = metric(http, base, "jvm.memory.max", timeout, "area:heap");
+        JsonNode max = metric(http, base, token, "jvm.memory.max", timeout, "area:heap");
         Double maxValue = max == null ? null : statistic(max, "VALUE");
         out.heapMaxBytes = maxValue != null && maxValue > 0 ? maxValue : null;
-        JsonNode afterGc = metric(http, base, "jvm.memory.usage.after.gc", timeout, "area:heap", "pool:long-lived");
+        JsonNode afterGc = metric(http, base, token, "jvm.memory.usage.after.gc", timeout, "area:heap", "pool:long-lived");
         Double ratio = afterGc == null ? null : statistic(afterGc, "VALUE");
         out.heapAfterGcPct = ratio == null ? null : ratio * 100;
-        JsonNode start = metric(http, base, "process.start.time", timeout);
+        JsonNode start = metric(http, base, token, "process.start.time", timeout);
         Double startSeconds = start == null ? null : statistic(start, "VALUE");
         out.startedAt = startSeconds == null ? null : Instant.ofEpochMilli(Math.round(startSeconds * 1000));
-        JsonNode cpu = metric(http, base, "process.cpu.usage", timeout);
+        JsonNode cpu = metric(http, base, token, "process.cpu.usage", timeout);
         Double cpuValue = cpu == null ? null : statistic(cpu, "VALUE");
         out.cpuPct = cpuValue == null || cpuValue < 0 ? null : cpuValue * 100;
-        JsonNode threads = metric(http, base, "jvm.threads.live", timeout);
+        JsonNode threads = metric(http, base, token, "jvm.threads.live", timeout);
         Double live = threads == null ? null : statistic(threads, "VALUE");
         out.threads = live == null ? null : live.intValue();
-        JsonNode requests = metric(http, base, "http.server.requests", timeout);
+        JsonNode requests = metric(http, base, token, "http.server.requests", timeout);
         double count = 0;
         double total = 0;
         if (requests != null) {
@@ -271,7 +271,7 @@ public final class ServiceReading {
                 }
                 for (JsonNode uri : tag.path("values")) {
                     if (uri.asText().startsWith("/actuator")) {
-                        JsonNode own = metric(http, base, "http.server.requests", timeout, "uri:" + uri.asText());
+                        JsonNode own = metric(http, base, token, "http.server.requests", timeout, "uri:" + uri.asText());
                         if (own != null) {
                             count -= orZero(statistic(own, "COUNT"));
                             total -= orZero(statistic(own, "TOTAL_TIME"));
@@ -280,7 +280,7 @@ public final class ServiceReading {
                 }
             }
         }
-        JsonNode failed = metric(http, base, "http.server.requests", timeout, "outcome:SERVER_ERROR");
+        JsonNode failed = metric(http, base, token, "http.server.requests", timeout, "outcome:SERVER_ERROR");
         out.requests = Math.max(0, count);
         out.seconds = Math.max(0, total);
         out.errors = failed == null ? 0 : orZero(statistic(failed, "COUNT"));
@@ -292,13 +292,21 @@ public final class ServiceReading {
         return value == null || value.isNaN() ? 0 : value;
     }
 
-    private static JsonNode metric(HttpClient http, String base, String name, Duration timeout, String... tags) {
+    /**
+     * A service's metrics answer only the platform's internal token (vulnerabilities review 2026-10-13, C7: they were open
+     * to anyone who could reach the port); health stays open, for the container's own health check.
+     */
+    static HttpRequest.Builder internal(HttpRequest.Builder request, String token) {
+        return token == null || token.isEmpty() ? request : request.header("X-Internal-Token", token);
+    }
+
+    private static JsonNode metric(HttpClient http, String base, String token, String name, Duration timeout, String... tags) {
         StringBuilder url = new StringBuilder(base).append("/metrics/").append(name);
         for (int i = 0; i < tags.length; i++) {
             url.append(i == 0 ? '?' : '&').append("tag=").append(URLEncoder.encode(tags[i], StandardCharsets.UTF_8));
         }
         try {
-            HttpResponse<String> answer = http.send(HttpRequest.newBuilder(URI.create(url.toString())).timeout(timeout).GET().build(),
+            HttpResponse<String> answer = http.send(internal(HttpRequest.newBuilder(URI.create(url.toString())), token).timeout(timeout).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
             return answer.statusCode() == 200 ? JSON.readTree(answer.body()) : null;
         } catch (IOException failed) {

@@ -200,7 +200,10 @@ public class FileChatEmailExportTest {
             .thenThrow(new IllegalStateException("soffice timed out"));
         ResponseDto response = this.service.emailExport(request("# R", "md", "pdf", "a@b.com"));
         assertEquals(ERROR, response.getStatus());
-        assertTrue(response.getMessage().contains("soffice timed out"), response.getMessage());
+        // Vulnerabilities review 2026-10-13, C8: a fixed sentence (with the correlation id when there is one); the
+        // converter's own text, which can name internal hosts and temp paths, stays in the log.
+        assertTrue(response.getMessage().startsWith("The export failed."), response.getMessage());
+        assertTrue(!response.getMessage().contains("soffice timed out"), response.getMessage());
     }
 
     @Test

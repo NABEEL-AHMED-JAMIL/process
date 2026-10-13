@@ -198,9 +198,9 @@ public class HealthCollector {
                     ServiceReading.health(this.http, target.base, reading, TIMEOUT);
                     if (!"UNREACHABLE".equals(reading.status)) {
                         if ("prometheus".equals(target.mode)) {
-                            ServiceReading.prometheus(this.http, target.base, reading, TIMEOUT);
+                            ServiceReading.prometheus(this.http, target.base, reading, TIMEOUT, this.serviceToken);
                         } else if ("metrics".equals(target.mode)) {
-                            ServiceReading.metrics(this.http, target.base, reading, TIMEOUT);
+                            ServiceReading.metrics(this.http, target.base, reading, TIMEOUT, this.serviceToken);
                         }
                     }
             }

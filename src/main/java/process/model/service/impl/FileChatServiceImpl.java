@@ -23,6 +23,7 @@ import process.security.TenantContext;
 import process.util.ContentTypeUtil;
 import process.util.OpenSearchRagClient;
 import process.util.TextChunker;
+import process.util.FailureReference;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
@@ -485,7 +486,7 @@ public class FileChatServiceImpl implements FileChatService {
             return new ResponseDto(SUCCESS, "Replied.", response.getData());
         } catch (Exception ex) {
             logger.error("File Chat: sendMessage failed for bucket={} key={}", dto.getBucket(), dto.getKey(), ex);
-            return new ResponseDto(ERROR, "The AI didn't respond: " + ex.getMessage());
+            return new ResponseDto(ERROR, FailureReference.sentence("The AI didn't respond."));
         }
     }
 
@@ -565,7 +566,7 @@ public class FileChatServiceImpl implements FileChatService {
             return new Converted(converted, null);
         } catch (Exception ex) {
             logger.error("File Chat: export conversion failed ({} -> {})", sourceFormat, targetFormat, ex);
-            return new Converted(null, new ResponseDto(ERROR, "The export failed: " + ex.getMessage()));
+            return new Converted(null, new ResponseDto(ERROR, FailureReference.sentence("The export failed.")));
         }
     }
 

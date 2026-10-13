@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -513,6 +514,33 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
      * storedSaslPassword is the ciphertext already on the row, or null when there is no row yet -- a
      * blank password field on an edit means "keep that one", so it decides whether one exists at all.
      */
+    /**
+     * Vulnerabilities review 2026-10-13, C5: an empty endpoint identification algorithm switches the broker's hostname
+     * check off, so any host holding a certificate the truststore trusts would be accepted. Only "https" (verify) or
+     * nothing (Kafka's default, which verifies) is accepted, and only a platform administrator may switch the check
+     * off -- for a broker whose certificate names do not match its DNS names. A workspace administrator cannot,
+     * neither on a saved profile nor on a Test connection.
+     */
+    String endpointIdentificationRefusal(String algorithm) {
+        if (algorithm == null) {
+            return null;
+        }
+        if (algorithm.trim().isEmpty()) {
+            return TenantContext.isPlatformAdmin() ? null
+                : "Only a platform administrator can switch off hostname verification for a Kafka connection.";
+        }
+        return "https".equalsIgnoreCase(algorithm.trim()) ? null
+            : "sslEndpointIdentificationAlgorithm must be https (verify the hostname), or empty to switch the check off.";
+    }
+
+    /** The stored form: null (Kafka's default), "https", or "" (off; a platform administrator's choice, above). */
+    static String endpointIdentificationAlgorithm(String algorithm) {
+        if (algorithm == null) {
+            return null;
+        }
+        return algorithm.trim().isEmpty() ? "" : algorithm.trim().toLowerCase(Locale.ROOT);
+    }
+
     private ResponseDto validateProfile(KafkaConnectionProfileDto dto, String storedSaslPassword) {
         if (isNull(dto.getProfileName()) || dto.getProfileName().trim().isEmpty()) {
             return new ResponseDto(ERROR, "Profile name missing.");
@@ -532,6 +560,10 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         }
         if (isNull(dto.getSecurityProtocol()) || !VALID_SECURITY_PROTOCOLS.contains(dto.getSecurityProtocol())) {
             return new ResponseDto(ERROR, "securityProtocol must be one of " + VALID_SECURITY_PROTOCOLS + ".");
+        }
+        String endpointCheck = this.endpointIdentificationRefusal(dto.getSslEndpointIdentificationAlgorithm());
+        if (endpointCheck != null) {
+            return new ResponseDto(ERROR, endpointCheck);
         }
         if (dto.getSecurityProtocol().startsWith("SASL_")) {
             if (isNull(dto.getSaslMechanism()) || !VALID_SASL_MECHANISMS.contains(dto.getSaslMechanism())) {
@@ -797,7 +829,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         } else if (Boolean.TRUE.equals(dto.getClearSslTruststorePassword())) {
             profile.setSslTruststorePasswordEnc(null);
         }
-        profile.setSslEndpointIdentificationAlgorithm(dto.getSslEndpointIdentificationAlgorithm());
+        profile.setSslEndpointIdentificationAlgorithm(endpointIdentificationAlgorithm(dto.getSslEndpointIdentificationAlgorithm()));
         profile.setAdditionalProperties(dto.getAdditionalProperties());
         // A credential must not outlive the protocol that used it. Moving a profile off SASL cleared the
         // username on screen but left the encrypted password in the row with nothing able to reach it.

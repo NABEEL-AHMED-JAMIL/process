@@ -33,7 +33,6 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 response.sendError(401, "Unauthorized")).and()
             .authorizeRequests()
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .antMatchers("/ws/**").permitAll()
                 // Service to service (MIG-22): InternalSecretRestApi checks INTERNAL_SERVICE_TOKEN itself,
                 // and the gateway refuses /api/v1/internal from outside.
                 .antMatchers(HttpMethod.POST, "/internal/**").permitAll()

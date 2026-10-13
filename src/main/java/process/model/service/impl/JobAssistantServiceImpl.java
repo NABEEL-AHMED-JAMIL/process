@@ -19,6 +19,7 @@ import process.model.service.AiAgentService;
 import process.security.JobOwnership;
 import process.security.TenantFilterHelper;
 import process.util.ProcessUtil;
+import process.util.FailureReference;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
@@ -119,7 +120,7 @@ public class JobAssistantServiceImpl {
             return new ResponseDto(ProcessUtil.SUCCESS, "Replied.", response.getData());
         } catch (Exception ex) {
             this.logger.error("Job assistant failed for job {}", dto.getJobId(), ex);
-            return new ResponseDto(ProcessUtil.ERROR_MESSAGE, "The assistant didn't respond: " + ex.getMessage());
+            return new ResponseDto(ProcessUtil.ERROR_MESSAGE, FailureReference.sentence("The assistant didn't respond."));
         }
     }
 
