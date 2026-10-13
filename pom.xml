@@ -40,11 +40,25 @@
         <tomcat.version>9.0.122</tomcat.version>
         <netty.version>4.1.138.Final</netty.version>
         <postgresql.version>42.7.13</postgresql.version>
-        <!-- 1.33, the last 1.x: Liquibase 4.9 (Boot 2.7's) calls SafeConstructor(), which SnakeYAML 2 removed. -->
-        <snakeyaml.version>1.33</snakeyaml.version>
         <logback.version>1.2.13</logback.version>
         <spring-framework.version>5.3.39</spring-framework.version>
         <spring-security.version>5.7.14</spring-security.version>
+        <!--
+          Vulnerabilities review 2026-10-13, group A (etl-platform/docs/reviews/vulnerabilities-2026-10-13.md):
+          newer releases inside lines that run on Spring Boot 2.7, until the Boot 4.1 migration.
+          Jackson 2.18 enforces StreamReadConstraints (20 MB strings, depth 1000, 1000-digit numbers);
+          the review doc lists the large-body tests.
+        -->
+        <jackson-bom.version>2.18.11</jackson-bom.version>
+        <log4j2.version>2.25.5</log4j2.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <!-- SnakeYAML 2.4 (CVE-2022-1471) needs Liquibase 4.22+: 4.9.1 (Boot 2.7's) calls SafeConstructor(), which
+             SnakeYAML 2 removed. 4.33.0 is the last Apache-licensed line (5.x changed the license). -->
+        <snakeyaml.version>2.4</snakeyaml.version>
+        <liquibase.version>4.33.0</liquibase.version>
+        <!-- spring-kafka 2.9 needs kafka-clients 3.2 or later; 3.9.2 is the newest 3.x (4.0 drops deprecated client APIs). -->
+        <spring-kafka.version>2.9.13</spring-kafka.version>
+        <kafka.version>3.9.2</kafka.version>
     </properties>
 
     <dependencies>
@@ -110,14 +124,15 @@
             <version>${swagger.version}</version>
         </dependency>
 
-        <!-- Kafka. spring-kafka and kafka-clients stay on Boot 2.7.18's 2.8.11 and 3.1.2 (MIG-323): 2.9 needs
-             kafka-clients 3.2+, and Core's client is not moved without the SASL matrix (run-kafka-matrix.sh). -->
+        <!-- Kafka: spring-kafka 2.9.13 with kafka-clients 3.9.2, as every other service (properties above). MIG-323 kept
+             Core on Boot 2.7.18's 2.8.11 and 3.1.2 until the SASL matrix (run-kafka-matrix.sh) had passed on the new
+             client; it did for the vulnerabilities review of 2026-10-13 (CVE-2023-34040 and kafka-clients' advisories). -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
             <exclusions>
                 <!-- MIG-323: org.lz4 1.8.0 has two highs (CVE-2025-12183, CVE-2025-66566) and the project moved to
-                     at.yawk.lz4, same net.jpountz classes; 1.12.0 below has every method kafka-clients 3.1.2 calls. -->
+                     at.yawk.lz4, same net.jpountz classes; 1.12.0 below has every method kafka-clients 3.9.2 calls. -->
                 <exclusion>
                     <groupId>org.lz4</groupId>
                     <artifactId>lz4-java</artifactId>

@@ -1,5 +1,6 @@
 package process.schema;
 
+import liquibase.ChecksumVersion;
 import liquibase.changelog.ChangeLogParameters;
 import liquibase.changelog.ChangeSet;
 import liquibase.changelog.DatabaseChangeLog;
@@ -32,6 +33,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * of today's changelog. No database: the changelog is parsed as SpringLiquibase would parse it, with the
  * parameters the deployment passes (spring.liquibase.parameters.*: kafka:9092 over PLAINTEXT).
  *
+ * Liquibase 4.33 (vulnerabilities review 2026-10-13) writes version-9 checksums, but it validates a stored "8:"
+ * checksum by computing the version-8 one, and only when that matches does it rewrite the row as "9:". So each
+ * recorded row is compared at the version it was recorded with: a mismatch is exactly what would stop the live
+ * database at start-up. Rows appended after the upgrade carry "9:".
+ *
  * Rows from files the master changelog no longer includes (V1-V49, archived behind the V50 baseline) are
  * not run and not validated, so they are only counted, not compared.
  */
@@ -46,11 +52,11 @@ class AppliedChangesetChecksumsTest {
         DatabaseChangeLog changelog = parse();
 
         Set<String> includedFiles = new HashSet<>();
-        Map<String, String> computed = new LinkedHashMap<>();
+        Map<String, ChangeSet> byKey = new LinkedHashMap<>();
         for (ChangeSet changeSet : changelog.getChangeSets()) {
             String file = normalize(changeSet.getFilePath());
             includedFiles.add(file);
-            computed.put(key(changeSet.getId(), changeSet.getAuthor(), file), changeSet.generateCheckSum().toString());
+            byKey.put(key(changeSet.getId(), changeSet.getAuthor(), file), changeSet);
         }
 
         List<String> mismatched = new ArrayList<>();
@@ -61,7 +67,10 @@ class AppliedChangesetChecksumsTest {
             if (!includedFiles.contains(file)) {
                 continue;
             }
-            String now = computed.get(row.getKey());
+            ChangeSet changeSet = byKey.get(row.getKey());
+            // The version the row was recorded with ("8:" before Liquibase 4.33 rewrote them, "9:" after).
+            String now = changeSet == null ? null : changeSet.generateCheckSum(
+                ChecksumVersion.enumFromChecksumVersion(Integer.parseInt(row.getValue().split(":", 2)[0]))).toString();
             if (now == null) {
                 lost.add(row.getKey());
             } else if (!now.equals(row.getValue())) {
