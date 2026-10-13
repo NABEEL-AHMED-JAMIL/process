@@ -74,4 +74,7 @@ public interface RunApprovalStore {
 
     /** A run's requests, by step execution, for its timeline. */
     Map<Long, Approval> ofSteps(Collection<Long> stepExecutionIds);
+
+    /** Every request of a run (each attempt's), oldest first: who its Approval steps went to, for who may read the run. */
+    List<Approval> ofRun(long jobQueueId);
 }

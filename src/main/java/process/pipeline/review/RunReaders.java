@@ -12,7 +12,9 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineDefinition;
 import process.pipeline.RunOwnership;
+import process.pipeline.approval.RunApprovalStore;
 import process.security.TenantContext;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,6 +27,10 @@ import java.util.function.LongSupplier;
  * a tenant user of the run's workspace whom the pipeline names to decide its internal review (settings.review.reviewers,
  * a role or a group -- an access profile, by id), for a run whose results need that review. Before this a reviewer was
  * sent a run to decide in the Task inbox and refused the run itself, since its job does not name them.
+ *
+ * Run page polish 2026-10-12: likewise the people an Approval step of the run went to (run_approval's reviewers, MIG-346),
+ * whatever the run's review -- their Task inbox task links to the run, and the run page is where they see what they are
+ * approving. Before this a reviewer in the group opened the task's link and was told the run did not exist.
  *
  * Reads only: retrying, running again and deciding stay the owner's and the administrators' ({@link RunOwnership#owned}),
  * and the Task inbox's for the reviewers. The page gate is unchanged in kind: the run reads open to the Queue page as well
@@ -42,19 +48,22 @@ public class RunReaders {
     private final SourceJobRepository jobs;
     private final RunReviews reviews;
     private final IdentityPort identity;
+    private final RunApprovalStore approvals;
     private final LongSupplier clock;
     private final Map<Long, CachedGroup> groups = new ConcurrentHashMap<>();
 
     @Autowired
-    public RunReaders(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, IdentityPort identity) {
-        this(runs, jobs, reviews, identity, System::currentTimeMillis);
+    public RunReaders(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, IdentityPort identity, RunApprovalStore approvals) {
+        this(runs, jobs, reviews, identity, approvals, System::currentTimeMillis);
     }
 
-    RunReaders(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, IdentityPort identity, LongSupplier clock) {
+    RunReaders(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, IdentityPort identity, RunApprovalStore approvals,
+        LongSupplier clock) {
         this.runs = runs;
         this.jobs = jobs;
         this.reviews = reviews;
         this.identity = identity;
+        this.approvals = approvals;
         this.clock = clock;
     }
 
@@ -85,10 +94,24 @@ public class RunReaders {
         }
         JobQueue run = inWorkspace.get().run;
         SourceJob job = inWorkspace.get().job;
-        if (!this.reviews.required(run, job).contains(ReviewParty.INTERNAL)) {
-            return Optional.empty();
+        if (this.reviews.required(run, job).contains(ReviewParty.INTERNAL) && this.names(this.reviews.reviewersOf(run, job))) {
+            return inWorkspace;
         }
-        return this.names(this.reviews.reviewersOf(run, job)) ? inWorkspace : Optional.empty();
+        return this.namedByAnApproval(jobQueueId) ? inWorkspace : Optional.empty();
+    }
+
+    /** Whether an Approval step of the run went to the caller: their role, or their group. */
+    private boolean namedByAnApproval(Long jobQueueId) {
+        if (this.approvals == null || jobQueueId == null) {
+            return false;
+        }
+        List<RunApprovalStore.Approval> asked = this.approvals.ofRun(jobQueueId);
+        for (RunApprovalStore.Approval approval : asked) {
+            if (this.names(PipelineDefinition.Reviewers.of(approval.reviewersKind, approval.reviewersValue))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether these reviewers name the caller: their role, or the group (access profile) they are on. */

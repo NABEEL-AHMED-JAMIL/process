@@ -68,6 +68,12 @@ public class JdbcRunApprovalStore implements RunApprovalStore {
     }
 
     @Override
+    public List<Approval> ofRun(long jobQueueId) {
+        return this.jdbc.query("SELECT " + COLUMNS + " FROM run_approval WHERE job_queue_id = ? ORDER BY run_approval_id",
+            JdbcRunApprovalStore::row, jobQueueId);
+    }
+
+    @Override
     public Map<Long, Approval> ofSteps(Collection<Long> stepExecutionIds) {
         Map<Long, Approval> out = new HashMap<>();
         if (stepExecutionIds == null || stepExecutionIds.isEmpty()) {

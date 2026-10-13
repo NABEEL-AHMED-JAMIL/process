@@ -17,6 +17,7 @@ import process.model.service.impl.TransactionServiceImpl;
 import process.pipeline.InMemoryStepStore;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.StepStore;
+import process.pipeline.approval.RunApprovalStore;
 import process.security.TenantContext;
 
 import java.sql.Timestamp;
@@ -59,7 +60,8 @@ class RunReadersTest {
     private final IdentityPort identity = mock(IdentityPort.class);
     private final AtomicLong now = new AtomicLong(1_000_000L);
     private final RunReviews reviews = new RunReviews(this.steps, this.definitions, this.store);
-    private final RunReaders readers = new RunReaders(this.runs, this.jobs, this.reviews, this.identity, this.now::get);
+    private final RunApprovalStore approvals = mock(RunApprovalStore.class);
+    private final RunReaders readers = new RunReaders(this.runs, this.jobs, this.reviews, this.identity, this.approvals, this.now::get);
     private JobQueue run;
     private SourceJob job;
 
@@ -233,6 +235,51 @@ class RunReadersTest {
         as(TENANT, "TENANT_USER", VIEWER);
         assertThat(service.review(RUN).getStatus()).isEqualTo("ERROR");
         assertThat((List<?>) ((Map<String, Object>) service.waiting(null).getData()).get("runs")).isEmpty();
+    }
+
+    /** One Approval step of the run, waiting on these reviewers. */
+    private void approvalBy(String kind, String value) {
+        RunApprovalStore.Approval approval = new RunApprovalStore.Approval();
+        approval.runApprovalId = 1006L;
+        approval.tenantId = TENANT;
+        approval.jobQueueId = RUN;
+        approval.status = RunApprovalStore.PENDING;
+        approval.reviewersKind = kind;
+        approval.reviewersValue = value;
+        when(this.approvals.ofRun(RUN)).thenReturn(Collections.singletonList(approval));
+    }
+
+    @Test
+    void aMemberOfTheGroupAnApprovalStepWentToReadsTheRunWhateverItsReview() {
+        this.review("{\"required\":[]}");
+        this.approvalBy("group", String.valueOf(REVIEWER_PROFILE));
+        as(TENANT, "TENANT_USER", REVIEWER);
+        assertThat(this.readers.readable(RUN)).isPresent();
+        assertThat(this.readers.readsAsReviewerOnly(RUN)).isTrue();
+        // Another profile, and the same profile id in another workspace, read nothing.
+        as(TENANT, "TENANT_USER", VIEWER);
+        assertThat(this.readers.readable(RUN)).isEmpty();
+        this.person(5001L, OTHER_TENANT, REVIEWER_PROFILE);
+        as(OTHER_TENANT, "TENANT_USER", 5001L);
+        assertThat(this.readers.readable(RUN)).isEmpty();
+    }
+
+    @Test
+    void anApprovalByTheAdministratorsOpensTheRunToNoTenantUserAndARoleApprovalToThatRole() {
+        this.review("{\"required\":[]}");
+        this.approvalBy("role", "TENANT_ADMIN");
+        as(TENANT, "TENANT_USER", REVIEWER);
+        assertThat(this.readers.readable(RUN)).isEmpty();
+        this.approvalBy("role", "TENANT_USER");
+        assertThat(this.readers.readable(RUN)).isPresent();
+    }
+
+    @Test
+    void aRunWithNoApprovalAndNoReviewHasNoReviewersToReadIt() {
+        this.review("{\"required\":[]}");
+        when(this.approvals.ofRun(RUN)).thenReturn(Collections.emptyList());
+        as(TENANT, "TENANT_USER", REVIEWER);
+        assertThat(this.readers.readable(RUN)).isEmpty();
     }
 
     @Test
