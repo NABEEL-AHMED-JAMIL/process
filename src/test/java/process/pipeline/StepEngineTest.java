@@ -25,6 +25,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +48,8 @@ import static process.pipeline.Definitions.config;
 import static process.pipeline.Definitions.row;
 import static process.pipeline.Definitions.sample;
 import static process.pipeline.Definitions.step;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 /**
  * MIG-230: the step engine, one test per way a step can end and per on-error mode. The run is reported through a
@@ -660,6 +663,44 @@ class StepEngineTest {
         assertThat(file.byteCount).isEqualTo((long) this.datasets.files.get(kept.storageKey).length);
         assertThat(manifest.get(1).runDatasetId).isNull();
         assertThat(manifest.get(1).expiresAt).isNull();
+    }
+
+    /** MIG-347: a backfill run's parameters and run.* values fill every step's settings before the step reads them. */
+    @Test
+    void aRunsParametersAndItsDateFillTheStepsSettings() {
+        PipelineDefinition definition = Definitions.of(step("read", "sample", config("rows", Arrays.asList(config("region",
+                "{{param.region}}", "day", "{{run.date}}", "from", "{{run.windowStart}}")))),
+            step("send", "upload_bucket", config("bucket", "exports", "key", "out/{{param.region}}/{{run.date}}/{{run}}.json", "format", "json")));
+        PipelineDefinition.Parameter region = PipelineDefinition.Parameter.of("region", "choice");
+        region.setChoices(Arrays.asList("north", "south"));
+        region.setDefaultValue("north");
+        definition.setParameters(Collections.singletonList(region));
+        Map<String, String> given = new LinkedHashMap<>();
+        given.put("region", "south");
+        this.run.setRunParams(RunParameters.RunValues.ofDay(given, LocalDate.parse("2026-10-02"),
+            ZoneId.of("America/Chicago")).toJson());
+
+        this.runs(definition);
+
+        assertThat(this.worker.last()).startsWith("Completed");
+        assertThat(this.steps.outputsOfRun(RUN_ID)).extracting(o -> o.objectKey).containsExactly("out/south/2026-10-02/" + RUN_ID + ".json");
+        assertThat(this.worker.reports).anyMatch(r -> r.contains("For 2026-10-02 (2026-10-02T00:00:00-05:00 to 2026-10-03T00:00:00-05:00, "
+            + "America/Chicago); parameters {region=south}."));
+    }
+
+    /** MIG-347: a required parameter with no value declines the run before a step runs; it is never retried. */
+    @Test
+    void aRequiredParameterWithNoValueDeclinesTheRun() {
+        PipelineDefinition definition = Definitions.of(step("read", "sample", config("rows", Arrays.asList(config("since", "{{param.since}}")))));
+        PipelineDefinition.Parameter since = PipelineDefinition.Parameter.of("since", "date");
+        since.setRequired(true);
+        definition.setParameters(Collections.singletonList(since));
+
+        this.runs(definition);
+
+        assertThat(this.worker.last()).isEqualTo("Failed: Declined by the step engine: Its parameters do not stand: since: required, and it "
+            + "has no default.");
+        assertThat(this.statuses()).containsExactly(entry("read", "Skip"));
     }
 
     /** Recorded once per step per attempt: a try that kept and recorded, then failed, is replaced by the try that passed. */

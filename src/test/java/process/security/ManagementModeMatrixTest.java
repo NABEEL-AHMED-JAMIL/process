@@ -117,6 +117,17 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("CustomerRunRetryRestApi.retry", "MIG-345: the customer API retrying a failed run, as the console's "
             + "retry and Run now");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");
+        // MIG-347: a backfill runs an existing schedule for past dates -- Run now's rule, a period at a time; preview is a read (POST
+        // for its body), and pausing, resuming, cancelling or retrying one is the same running of the same schedule.
+        String backfill = "running an existing schedule for past dates, as Run now (MIG-347)";
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.preview", "a read: what a backfill would run and cost (POST for its body, MIG-347)");
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.start", backfill);
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.pause", backfill);
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.resume", backfill);
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.cancel", backfill);
+        CUSTOMERS_IN_EITHER_MODE.put("BackfillRestApi.retryFailed", backfill);
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerBackfillsRestApi.start", "MIG-347: the customer API backfilling a pipeline, as the console's");
+        CUSTOMERS_IN_EITHER_MODE.put("CustomerBackfillsRestApi.cancel", "MIG-347: the customer API cancelling its backfill, as the console's");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.prepareContext", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.sendMessage", "asking about their own files");
         CUSTOMERS_IN_EITHER_MODE.put("FileChatRestApi.endSession", "asking about their own files");

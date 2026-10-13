@@ -30,6 +30,14 @@ public interface SourceJobService {
     ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception;
 
     /**
+     * MIG-347: as above, with the run's parameter values ({@code runParams}: job_queue.run_params, checked by the caller
+     * against the pipeline's parameters -- process.pipeline.PipelineParameters; null for the defaults).
+     */
+    default ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles, String runParams) throws Exception {
+        return this.runSourceJob(sourceJobDto, modelProfiles);
+    }
+
+    /**
      * Run now for a workflow step (MIG-273): the job is run as its workspace -- the caller has set it -- with every check
      * Run now makes, and {@code reason} written in the run's audit log. Answers the queued run's id in the data, or the
      * same refusal Run now gives.

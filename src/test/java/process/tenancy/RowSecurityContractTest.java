@@ -47,6 +47,16 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("RunApprovals: in code #2",
             "the approval sweep (MIG-346) reads every workspace's approval requests whose run no longer waits on them; each is"
                 + " cancelled as its own workspace");
+        // MIG-347: the backfill dispatcher settles every workspace's ended backfill runs on their periods and reads the open backfills
+        // and the platform's backfill runs in flight; each backfill is then worked as its own workspace.
+        paths.put("BackfillDispatcher: in code #1",
+            "the backfill dispatcher (MIG-347) records on every workspace's backfill periods the outcome of their runs that ended");
+        paths.put("BackfillDispatcher: in code #2",
+            "the backfill dispatcher (MIG-347) reads which backfills of every workspace are open (ids only); each is then worked as its"
+                + " own workspace");
+        paths.put("BackfillDispatcher: in code #3",
+            "the backfill dispatcher (MIG-347) counts the backfill runs in flight on the platform (a number), the cap every workspace's"
+                + " backfills share");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");

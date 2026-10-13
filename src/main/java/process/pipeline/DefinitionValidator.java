@@ -99,7 +99,28 @@ public class DefinitionValidator {
         }
         this.source(definition.getSource(), problems);
         this.settings(definition.getSettings(), problems);
+        // MIG-347: the run parameters, and every {{param.name}} a step names is one of them.
+        problems.addAll(RunParameters.problems(definition.getParameters()));
         List<PipelineDefinition.Step> steps = definition.getSteps();
+        if (steps != null) {
+            Set<String> declared = new HashSet<>();
+            definition.effectiveParameters().forEach(p -> {
+                if (p != null && p.getName() != null) {
+                    declared.add(p.getName());
+                }
+            });
+            for (int i = 0; i < steps.size(); i++) {
+                if (steps.get(i) == null) {
+                    continue;
+                }
+                for (String named : RunParameters.namedParameters(steps.get(i).getConfig())) {
+                    if (!declared.contains(named)) {
+                        problems.add(new DefinitionProblem("steps[" + i + "].config", String.format("{{param.%s}} names no parameter of this "
+                            + "pipeline: add it under parameters", named)));
+                    }
+                }
+            }
+        }
         if (steps == null || steps.isEmpty()) {
             problems.add(new DefinitionProblem("steps", "a pipeline has at least one step"));
             return problems;

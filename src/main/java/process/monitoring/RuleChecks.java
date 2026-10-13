@@ -29,20 +29,26 @@ public final class RuleChecks {
 
     // ------------------------------------------------------------------------------------------------------ workspace
 
-    /** RUN_FAILED: threshold or more failed runs of a pipeline in the window, unless a later run of it completed. */
+    /**
+     * RUN_FAILED: threshold or more failed runs of a pipeline in the window, unless a later run of it completed. MIG-347: a
+     * backfill's failures are their own group, one alert per backfill (subject backfill:&lt;id&gt;) however many of its dates
+     * fail, linked to the backfill; a later run of the schedule does not clear them -- a failed date stays failed until the
+     * backfill retries it (WorkspaceSignals reads only dates still failed).
+     */
     public static List<Finding> runFailed(AlertRule rule, List<WorkspaceSignals.Failure> failures, Map<Long, Instant> lastCompleted,
         Instant now) {
         Instant since = now.minus(Duration.ofMinutes(rule.windowMinutes));
-        Map<Long, List<WorkspaceSignals.Failure>> byJob = new LinkedHashMap<>();
+        Map<String, List<WorkspaceSignals.Failure>> byGroup = new LinkedHashMap<>();
         for (WorkspaceSignals.Failure failure : failures) {
             if (failure.tenantId != rule.tenantId || (rule.jobId != null && failure.jobId != rule.jobId)
                 || failure.endedAt == null || failure.endedAt.isBefore(since)) {
                 continue;
             }
-            byJob.computeIfAbsent(failure.jobId, id -> new ArrayList<>()).add(failure);
+            String group = failure.backfillId == null ? "pipeline:" + failure.jobId : "backfill:" + failure.backfillId;
+            byGroup.computeIfAbsent(group, id -> new ArrayList<>()).add(failure);
         }
         List<Finding> out = new ArrayList<>();
-        for (Map.Entry<Long, List<WorkspaceSignals.Failure>> entry : byJob.entrySet()) {
+        for (Map.Entry<String, List<WorkspaceSignals.Failure>> entry : byGroup.entrySet()) {
             List<WorkspaceSignals.Failure> runs = entry.getValue();
             if (runs.size() < rule.threshold) {
                 continue;
@@ -53,17 +59,23 @@ public final class RuleChecks {
                     latest = run;
                 }
             }
-            Instant recovered = lastCompleted.get(entry.getKey());
+            String name = name(latest.jobName, latest.jobId);
+            String detail = "Run " + latest.runId + ("Interrupt".equals(latest.status) ? " stopped responding and was closed" : " failed")
+                + (latest.message == null || latest.message.trim().isEmpty() ? "." : ": " + oneLine(latest.message, 400));
+            if (latest.backfillId != null) {
+                String title = runs.size() == 1 ? "A date of backfill #" + latest.backfillId + " of " + name + " failed"
+                    : runs.size() + " dates of backfill #" + latest.backfillId + " of " + name + " failed";
+                out.add(new Finding(entry.getKey(), title, detail, "/runs/backfills?backfill=" + latest.backfillId, latest.jobId, latest.runId,
+                    null));
+                continue;
+            }
+            Instant recovered = lastCompleted.get(latest.jobId);
             if (recovered != null && recovered.isAfter(latest.endedAt)) {
                 continue;
             }
-            String name = name(latest.jobName, entry.getKey());
             String title = rule.threshold <= 1 && runs.size() == 1 ? name + " failed"
                 : runs.size() + " runs of " + name + " failed in " + minutes(rule.windowMinutes);
-            String detail = "Run " + latest.runId + ("Interrupt".equals(latest.status) ? " stopped responding and was closed" : " failed")
-                + (latest.message == null || latest.message.trim().isEmpty() ? "." : ": " + oneLine(latest.message, 400));
-            out.add(new Finding("pipeline:" + entry.getKey(), title, detail, "/runs/failed?pipeline=" + entry.getKey(), entry.getKey(),
-                latest.runId, null));
+            out.add(new Finding(entry.getKey(), title, detail, "/runs/failed?pipeline=" + latest.jobId, latest.jobId, latest.runId, null));
         }
         return out;
     }

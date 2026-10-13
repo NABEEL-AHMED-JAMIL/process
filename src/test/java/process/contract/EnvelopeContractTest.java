@@ -90,6 +90,12 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.monitoring.AlertRules$Refused"), "caught in AlertRestApi and FailedRunsRestApi (MIG-355): an alert "
             + "rule, an alert, a failed-runs search or a bulk retry refused as a whole, answered with its own status (400, 404 or 429) and "
             + "sentence in the envelope");
+        internal.put(declared("process.backfill.Backfills$Refused"), "caught in BackfillRestApi and CustomerBackfills (MIG-347): a "
+            + "backfill's preview, start, pause, resume, cancel, retry or read refused as a whole, answered with its own status (400, 404, "
+            + "409 or 422) and sentence -- in the envelope for the console, as problem+json for the customer API");
+        internal.put(declared("process.billing.BillingPort$BillingUnavailable"), "caught in Backfills (MIG-347: a backfill's cost "
+            + "estimate and billed amount are said to be unavailable) and WorkspaceZones (the business zone until billing answers); "
+            + "never reaches the console's edge");
         internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
         internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
             + "field (Wave 5 Forms lite)");

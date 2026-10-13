@@ -56,6 +56,8 @@ public class WorkspaceSignals {
         public Instant endedAt;
         public String jobName;
         public String message;
+        /** MIG-347: the backfill the run is part of; null for any other run. */
+        public Long backfillId;
     }
 
     /** A schedule's slot with no run: Skip (its previous run was still going) or Missed (the platform was down). */
@@ -110,10 +112,12 @@ public class WorkspaceSignals {
     }
 
     public List<Failure> failures(Collection<Long> tenants, Instant since) {
+        // MIG-347: a backfill's failed run counts while its period is still FAILED on it: retried and completed, it is not a failure now.
         return this.across(tenants, (array) -> this.jdbc.query("SELECT q.tenant_id, q.job_id, q.job_queue_id, q.job_status, "
-            + "COALESCE(q.end_time, q.skip_time) AS ended_at, j.job_name, q.job_status_message FROM job_queue q "
+            + "COALESCE(q.end_time, q.skip_time) AS ended_at, j.job_name, q.job_status_message, q.backfill_id FROM job_queue q "
             + "JOIN source_job j ON j.job_id = q.job_id WHERE q.job_status IN ('Failed', 'Interrupt') AND COALESCE(q.end_time, q.skip_time) >= ? "
             + "AND q.tenant_id = ANY (?) AND (q.end_reason IS NULL OR q.end_reason <> 'OPERATOR') "
+            + "AND (q.backfill_id IS NULL OR EXISTS (SELECT 1 FROM backfill_slot s WHERE s.job_queue_id = q.job_queue_id AND s.state = 'FAILED')) "
             + "ORDER BY COALESCE(q.end_time, q.skip_time) DESC LIMIT " + MAX_ROWS, (rs, i) -> {
                 Failure f = new Failure();
                 f.tenantId = rs.getLong(1);
@@ -123,11 +127,12 @@ public class WorkspaceSignals {
                 f.endedAt = instant(rs, 5);
                 f.jobName = rs.getString(6);
                 f.message = rs.getString(7);
+                f.backfillId = (Long) rs.getObject(8);
                 return f;
             }, Timestamp.from(since), array));
     }
 
-    /** When each of these pipelines last completed a run, since {@code since}. */
+    /** When each of these pipelines last completed a run, since {@code since} (MIG-347: a live run -- a backfill's past date says nothing of now). */
     public Map<Long, Instant> lastCompleted(Collection<Long> jobIds, Instant since) {
         Map<Long, Instant> out = new HashMap<>();
         if (jobIds.isEmpty()) {
@@ -137,7 +142,7 @@ public class WorkspaceSignals {
             + "completed a run (ids and times)", () -> this.jdbc.execute((ConnectionCallback<Void>) connection -> {
             Array ids = connection.createArrayOf("bigint", jobIds.toArray());
             try (PreparedStatement query = connection.prepareStatement("SELECT job_id, max(end_time) FROM job_queue "
-                + "WHERE job_status = 'Completed' AND job_id = ANY (?) AND end_time >= ? GROUP BY job_id")) {
+                + "WHERE job_status = 'Completed' AND job_id = ANY (?) AND end_time >= ? AND backfill_id IS NULL GROUP BY job_id")) {
                 query.setArray(1, ids);
                 query.setTimestamp(2, Timestamp.from(since));
                 try (ResultSet rs = query.executeQuery()) {

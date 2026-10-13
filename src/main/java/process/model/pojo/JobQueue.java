@@ -201,6 +201,29 @@ public class JobQueue {
     @Column(name = "input_key", length = 1024)
     private String inputKey;
 
+    /**
+     * MIG-347: this run's parameter values and run.* values (process.pipeline.RunParameters), normalised JSON: set by "Run
+     * with..." and by a backfill. Null for every other run, which takes its pipeline's defaults. Not on the wire.
+     */
+    @JsonIgnore
+    @Column(name = "run_params", columnDefinition = "TEXT")
+    private String runParams;
+
+    /** MIG-347: the period this run is for -- a scheduled run's slot, a backfill run's period start (wall clock). Not on the wire. */
+    @JsonIgnore
+    @Column(name = "run_slot_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private LocalDateTime runSlotAt;
+
+    /** MIG-347: 0, the job's own in-flight lane; 1 to 4, a backfill's (V211's one-in-flight index is per job and lane). */
+    @JsonIgnore
+    @Column(name = "run_lane", nullable = false)
+    private short runLane;
+
+    /** MIG-347: the backfill this run is part of; null for any other run. */
+    @JsonIgnore
+    @Column(name = "backfill_id")
+    private Long backfillId;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -408,6 +431,26 @@ public class JobQueue {
     public String getInputKey() { return inputKey; }
 
     public void setInputKey(String inputKey) { this.inputKey = inputKey; }
+
+    public String getRunParams() { return runParams; }
+
+    public void setRunParams(String runParams) { this.runParams = runParams; }
+
+    public LocalDateTime getRunSlotAt() { return runSlotAt; }
+
+    public void setRunSlotAt(LocalDateTime runSlotAt) { this.runSlotAt = runSlotAt; }
+
+    public short getRunLane() { return runLane; }
+
+    public void setRunLane(short runLane) { this.runLane = runLane; }
+
+    public Long getBackfillId() { return backfillId; }
+
+    public void setBackfillId(Long backfillId) { this.backfillId = backfillId; }
+
+    /** MIG-347: whether this run is one of a backfill's, in a lane of its own beside the job's live runs. */
+    @JsonIgnore
+    public boolean isBackfillRun() { return this.runLane > 0; }
 
     public Long getTenantId() {
         return tenantId;

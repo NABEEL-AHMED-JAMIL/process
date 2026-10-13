@@ -90,6 +90,16 @@ class JobStatusInFlightTest {
         assertThat(statusesNamedIn(index)).isEqualTo(expected());
     }
 
+    /** MIG-347: V211 rebuilt the index per job and lane, with the same predicate. */
+    @Test
+    void theIndexRebuiltPerLaneNamesExactlyTheSet() throws Exception {
+        String changeset = new String(Files.readAllBytes(Paths.get("src/main/resources/db/changelog/changelog-sets/"
+            + "V211.0-backfill-and-run-parameters/V211__backfill_and_run_parameters.sql")), StandardCharsets.UTF_8);
+        String index = changeset.substring(changeset.indexOf("CREATE UNIQUE INDEX ux_job_queue_one_in_flight_per_job"));
+        assertThat(index).startsWith("CREATE UNIQUE INDEX ux_job_queue_one_in_flight_per_job ON public.job_queue (job_id, run_lane)");
+        assertThat(statusesNamedIn(index)).isEqualTo(expected());
+    }
+
     /** And no query on job_queue names an in-flight list of its own that has drifted from it. */
     @Test
     void everyJobQueueQueryThatNamesQueueNamesTheWholeSet() {

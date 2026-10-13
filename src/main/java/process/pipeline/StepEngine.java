@@ -65,6 +65,7 @@ import java.util.stream.Collectors;
 import java.util.TreeSet;
 import process.pipeline.approval.RunApprovalStore;
 import process.pipeline.approval.RunApprovalEvents;
+import java.util.Set;
 
 /**
  * Runs a pipeline as ordered steps (MIG-230), for a run whose pipeline has a stored definition that is not its legacy
@@ -188,6 +189,8 @@ public class StepEngine {
 
     /** MIG-360: the files a run took when it took a batch (the inbox's store); without it, a run's own file alone. */
     private RunInputs runInputs;
+    /** MIG-347: a run's {{param.*}} and {{run.*}} values; without one wired, the business zone and the defaults. */
+    private RunValuesResolver runValues = RunValuesResolver.plain();
     /** MIG-345: the attempts someone asked for (a resume, a restart); without it, every attempt starts at the first step. */
     private RunAttemptStore attempts;
 
@@ -209,6 +212,11 @@ public class StepEngine {
     @Autowired(required = false)
     public void useRunInputs(RunInputs runInputs) {
         this.runInputs = runInputs;
+    }
+
+    @Autowired(required = false)
+    public void useRunValues(RunValuesResolver runValues) {
+        this.runValues = runValues == null ? RunValuesResolver.plain() : runValues;
     }
 
     /** MIG-364: the documents a run was started for (the document trigger's store) and where their values are read. */
@@ -449,6 +457,8 @@ public class StepEngine {
         /** MIG-364: the documents the run was started for, and the first one's values, each read once, when a step first asks. */
         private volatile List<RunDocuments.Document> documents;
         private volatile Map<String, Object> documentValues;
+        /** MIG-347: the run's parameter and run.* values, worked out once, when the attempt starts or a step first asks. */
+        private volatile RunValuesResolver.Outcome values;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -458,6 +468,22 @@ public class StepEngine {
             this.definition = plan.definition;
             this.settings = plan.definition == null ? new PipelineDefinition.Settings() : plan.definition.effectiveSettings();
             this.stepList = plan.definition == null ? Collections.emptyList() : plan.definition.getSteps();
+        }
+
+        /** MIG-347: the run's values (RunValuesResolver), once per attempt. */
+        RunValuesResolver.Outcome values() {
+            RunValuesResolver.Outcome found = this.values;
+            if (found == null) {
+                found = runValues.resolve(this.plan.job, this.run, this.definition);
+                this.values = found;
+            }
+            return found;
+        }
+
+        /** MIG-347: {{param.*}} and {{run.*}} by placeholder name; empty when the run's parameters do not stand. */
+        Map<String, Object> placeholders() {
+            RunValuesResolver.Outcome found = this.values();
+            return found.values == null ? Collections.<String, Object>emptyMap() : found.values.placeholders();
         }
 
         /** MIG-360: the run's files -- the batch it took, else its own file, else none. One query, the first time. */
@@ -564,6 +590,19 @@ public class StepEngine {
                 report(this.run, JobStatus.Failed, declined);
                 return;
             }
+            // MIG-347: the run's parameters -- given, else defaults -- checked against the version it follows before a step runs.
+            RunValuesResolver.Outcome values = this.values();
+            if (values.refusal != null) {
+                String declined = String.format("Declined by the step engine: %s", values.refusal);
+                try {
+                    this.stopAll(steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned), 0,
+                        JobStatus.Skip.name(), "Not run: " + declined);
+                } catch (RuntimeException unrecorded) {
+                    logger.warn("Run {}: its declined steps could not be recorded: {}", this.run.getJobQueueId(), reasonOf(unrecorded));
+                }
+                report(this.run, JobStatus.Failed, declined);
+                return;
+            }
             List<Long> rows = steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned);
             // MIG-345: a resume takes the earlier attempt's outputs of the steps before the one that failed -- read again at
             // the start, so an output that expired since the retry was asked for declines the attempt rather than fail a step.
@@ -592,6 +631,10 @@ public class StepEngine {
                     this.stepList.subList(0, resumed.from).stream().map(PipelineDefinition.Step::getKey).collect(Collectors.joining(", ")),
                     this.stepList.subList(resumed.from, this.stepList.size()).stream().map(PipelineDefinition.Step::getKey)
                         .collect(Collectors.joining(", ")));
+            if (values.values != null && (this.run.getRunSlotAt() != null || this.run.getRunParams() != null)) {
+                runningLine += String.format(" For %s (%s to %s, %s)%s.", values.values.date, values.values.windowStart, values.values.windowEnd,
+                    values.values.zone, values.values.params.isEmpty() ? "" : "; parameters " + values.values.params);
+            }
             ResponseDto running = report(this.run, JobStatus.Running, runningLine);
             if (refused(running)) {
                 this.stopAll(rows, 0, "Interrupt", "Not run: the run was closed before its steps started.");
@@ -1122,6 +1165,7 @@ public class StepEngine {
                 }
                 boolean streams = task.isPresent() && task.get() instanceof StreamingStepTask;
                 Context context = streams ? new StreamTry(this, step, row, input, t, log) : new Context(this, step, row, input, t, log);
+                context.sqlFields = task.map(found -> RunParameters.sqlFields(found.spec().configSchema())).orElse(Collections.<String>emptySet());
                 tried.streamed = streams;
                 // MIG-345: the bucket objects this try reads, fingerprinted on the way.
                 InputDigests.Recorder recorder = new InputDigests.Recorder();
@@ -1516,6 +1560,9 @@ public class StepEngine {
         private final StepLog log;
         /** The files this try kept: name -> {run_dataset_id, expiry millis}. */
         final Map<String, long[]> kept = new HashMap<>();
+        /** MIG-347: the task's SQL settings, whose filled-in text values have their quotes doubled. */
+        Set<String> sqlFields = Collections.emptySet();
+        private Map<String, Object> filled;
 
         Context(Execution execution, PipelineDefinition.Step step, long row, Execution.Input input, int tryNumber, StepLog log) {
             this.execution = execution;
@@ -1551,9 +1598,20 @@ public class StepEngine {
             return this.tryNumber;
         }
 
+        /** MIG-347: the step's settings with {{param.*}} and {{run.*}} filled in (the step fills its own placeholders). */
         @Override
         public Map<String, Object> config() {
-            return this.step.effectiveConfig();
+            Map<String, Object> config = this.filled;
+            if (config == null) {
+                config = RunParameters.fill(this.step.effectiveConfig(), this.execution.placeholders(), this.sqlFields);
+                this.filled = config;
+            }
+            return config;
+        }
+
+        @Override
+        public Map<String, Object> runValues() {
+            return this.execution.placeholders();
         }
 
         @Override

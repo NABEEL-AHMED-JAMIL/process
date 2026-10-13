@@ -6,6 +6,8 @@ The server behind the ETL Console ("Core"). It began as a Kafka-backed **schedul
 
 Its frontend is the Angular 22 console in [`../scheduler1`](../scheduler1) (`next-app`, served on :4400 by etl-platform). The older Angular 8 console was retired on 2026-09-24.
 
+> **As of 2026-10-13** (branch `media-extraction`): a pipeline's run parameters (`{{param.name}}`, `{{run.date}}`, `{{run.windowStart}}`, `{{run.windowEnd}}` in any step) and backfills -- a schedule run once for each day, hour or week of a past range, a few at a time ([Backfill and run parameters](#backfill-and-run-parameters-mig-347)); monitoring that alerts (MIG-355). Migrations V210–V211.
+
 > **As of 2026-10-12** (branch `media-extraction`): a failed run retries from its failed step (MIG-345); the append, approval, send_webhook, sort, limit and read_documents steps, and a "When a document is approved" job trigger (MIG-346, MIG-365, MIG-364); render_pdf streams (ADR-027); reviewers read the run they review; runs are approved or rejected in bulk ([Run review and bulk review](#run-review-and-bulk-review-2026-10-12)). Migrations V205–V209.
 
 > **As of 2026-10-07** (branch `media-extraction`, platform-commons 1.16.0): the step engine streams big files and spills to disk (ADR-026 phase 1, MIG-344); Read API, Aggregate, Compute, Send Notification and Measure image gained the features listed under [Pipeline steps](#pipeline-steps-as-of-2026-10-12); the customer API's runs, pipelines, events, files, reviews and view links are served here ([The customer API in Core](#the-customer-api-in-core-mig-332333334335-adr-025)). Architecture records: `../etl-platform/docs/adr/ADR-026-big-data-step-engine.md`, `ADR-025-customer-api.md`.
@@ -256,6 +258,50 @@ The gateway rewrites `/v1/x` to `/api/v1/customer/x` on the owning service; unde
 | `GET /v1/files/{id}`, `/meta`, `/content?token=` | `CustomerFilesRestApi`, `CustomerFileLinkRestApi` | a 302 to a 5-minute signed link on the API itself, never a bucket URL; every read logged in `file_access_log` |
 
 Creating POSTs take an `Idempotency-Key` (receipts per workspace, client and key). **Events out:** V203's `api_event_out` journal is written by triggers in the transaction of the change (a run Running/Completed/Failed, a made file, a settled form submission) and by every review decision; `CustomerEventRelay` (ShedLock, every second) relays it through `platform_outbox` to `platform.customer.events.v1`, once and in order per workspace. integration-service turns those into signed webhooks. A pipeline's `emits` names `file.available` when a step makes a file. Checked live by etl-platform's `tests/customer-api/*_check.py`.
+
+## Backfill and run parameters (MIG-347)
+
+**Run parameters.** A pipeline's definition declares `parameters` -- name, type (`date`, `datetime`, `text`, `number`,
+`boolean`, `choice`), label, default, required, choices; at most 20 (`RunParameters`, checked by `DefinitionValidator`,
+which also refuses a `{{param.x}}` no parameter declares). The step engine fills `{{param.name}}` and `{{run.date}}`,
+`{{run.windowStart}}`, `{{run.windowEnd}}` into every text setting of every step before the step reads it (a SQL setting's
+text values have their quotes doubled; a backslash is refused). A run's values are on `job_queue.run_params`: "Run with…"
+(`sourceJob.json/runSourceJobWith`'s `parameters`) and a backfill write them; a scheduled run takes the defaults, and
+its `run.date` is its slot's day (`job_queue.run_slot_at`) in the workspace's **billing time zone** (asked of billing,
+`WorkspaceZones`, ten minutes a workspace; America/Chicago when billing cannot answer); a run started otherwise is for
+today there. A required parameter with no value refuses Run now and fails a scheduled run before its steps
+(`RunValuesResolver`).
+
+**Backfills.** `Backfills` (rules), `BackfillStore` (SQL), `BackfillDispatcher` (every 10 s, ShedLock `backfillDispatch`):
+
+- A backfill is one schedule, a range of days, a step (`DAILY` / `HOURLY` / `WEEKLY`, in the billing zone, so a DST day
+  is 23 or 25 hours), a concurrency (1 to `process.backfill.memory-mb` / the run memory budget, at most 4), whether
+  completed periods run again, and the parameter values. At most 366 periods; at most `process.backfill.max-open` (3)
+  open a workspace. Its periods are `backfill_slot` rows; one open period per job and start across backfills
+  (`ux_backfill_slot_open_per_job`): the idempotency per (job, date).
+- **Lanes (V211).** `ux_job_queue_one_in_flight_per_job` is keyed `(job_id, run_lane)`: lane 0 is the job's own (Run now,
+  the schedule, inbox, forms, documents, the API -- still one in flight), lanes 1-4 are backfill runs, so a backfill
+  never blocks a live run and its concurrency is enforced by the database. Backfill runs leave `source_job`'s running
+  status alone and send no per-run mail; the creator hears in the bell when it ends.
+- The dispatcher settles ended runs onto their periods, then works each open backfill as its own workspace: a deleted
+  schedule cancels it; a paused workspace or a schedule switched off holds it (`hold_reason`); otherwise it queues its
+  next periods, oldest first, as many as its concurrency and the platform cap (`process.backfill.max-in-flight`, 4)
+  allow, each in a free lane, skipping a period that already has a completed run (a scheduled slot or a backfill
+  period in it) unless re-run was asked. The runs then go the usual way (pre-dispatch, the step engine, the callback's
+  rules, the meters).
+- Pause, resume, cancel (runs already started finish), retry failed (each failed period gets a new run; a single
+  backfill run is not retried from its run page). Progress, an ETA from the runs' average time, and for administrators
+  the cost estimate made at start (the pipeline's average run cost over 30 days from billing's `runCosts` x the periods
+  that will run) beside what the runs were billed so far.
+- Monitoring: a backfill's failed dates are one RUN_FAILED alert per backfill (`backfill:<id>`), cleared when retried.
+
+| Endpoint | Who |
+|---|---|
+| `POST sourceJob.json/backfills/preview`, `/start`; `GET sourceJob.json/backfills`, `/detail`, `/ofRun`; `POST /pause`, `/resume`, `/cancel`, `/retryFailed` | Schedules' page; a tenant user only their own schedules; estimates and billed amounts to administrators |
+| `POST /v1/pipelines/{id}/backfills` (runs:write, Idempotency-Key), `GET /v1/backfills/{id}` (runs:read), `POST /v1/backfills/{id}/cancel` (runs:write) | an API client of the workspace (`CustomerBackfills`) |
+
+Settings: `process.backfill.enabled`, `memory-mb` (512), `max-in-flight` (4), `max-open` (3), `tick-ms` (10000);
+`billing.url` (`http://billing:9130/api/v1`). Migration V211.
 
 ## Monitoring
 

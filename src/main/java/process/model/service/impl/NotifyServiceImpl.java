@@ -247,8 +247,13 @@ public class NotifyServiceImpl implements NotifyService {
             return new ResponseDto(String.format(
                 "Job %s run failed and has been queued for another attempt.", jobQueue.getJobId()), jobQueue);
         }
-        logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
-        this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
+        // MIG-347: a backfill's run is one of the job's past dates in a lane of its own: the job's running status stays its
+        // live runs' (Run now and the schedule read it), and the backfill tells of its runs as a whole, not by a mail each.
+        boolean backfill = run.get().isBackfillRun();
+        if (!backfill) {
+            logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
+            this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
+        }
         JobStatus runBefore = this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), newStatus, jobQueue.getJobStatusMessage());
         // The pipeline execution SLI (MIG-196): the worker's own outcome, or its decline if it never reported Running.
         this.bulkAction.runEnded(jobQueue.getJobQueueId(), runBefore, newStatus, RunEnd.reportedBy(runBefore, newStatus));
@@ -264,23 +269,25 @@ public class NotifyServiceImpl implements NotifyService {
                     .note(newStatus.name()));
             }
         }
-        switch (newStatus) {
-            case Failed:
-                logger.info("Job {} marked as Failed", jobQueue.getJobId());
-                if (job.get().isFailJob()) {
-                    logger.info("Sending failure notification email for job {}", jobQueue.getJobId());
-                    this.jobMail.send(jobQueue, newStatus);
-                }
-                break;
-            case Completed:
-                logger.info("Job {} marked as Completed", jobQueue.getJobId());
-                if (job.get().isCompleteJob()) {
-                    logger.info("Sending completion notification email for job {}", jobQueue.getJobId());
-                    this.jobMail.send(jobQueue, newStatus);
-                }
-                break;
-            default:
-                break;
+        if (!backfill) {
+            switch (newStatus) {
+                case Failed:
+                    logger.info("Job {} marked as Failed", jobQueue.getJobId());
+                    if (job.get().isFailJob()) {
+                        logger.info("Sending failure notification email for job {}", jobQueue.getJobId());
+                        this.jobMail.send(jobQueue, newStatus);
+                    }
+                    break;
+                case Completed:
+                    logger.info("Job {} marked as Completed", jobQueue.getJobId());
+                    if (job.get().isCompleteJob()) {
+                        logger.info("Sending completion notification email for job {}", jobQueue.getJobId());
+                        this.jobMail.send(jobQueue, newStatus);
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
         logger.info("Successfully changed job {} status to {}", jobQueue.getJobId(), newStatus);
         return new ResponseDto(String.format("Job %s status changed to %s", jobQueue.getJobId(), newStatus), jobQueue);

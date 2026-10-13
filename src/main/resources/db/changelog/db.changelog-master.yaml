@@ -239,3 +239,6 @@ databaseChangeLog:
   # V210: MIG-355 -- monitoring that alerts: alert_rule, alert_incident, service_health_sample, platform_probe, api_event_out kind 'alert', partial indexes for the rules.
   - include:
       file: db/changelog/yaml/V210.0-monitoring.yaml
+  # V211: MIG-347 -- backfill and run parameters: job_queue.run_params, run_slot_at, run_lane, backfill_id; the one-in-flight index per (job, lane); backfill, backfill_slot.
+  - include:
+      file: db/changelog/yaml/V211.0-backfill-and-run-parameters.yaml

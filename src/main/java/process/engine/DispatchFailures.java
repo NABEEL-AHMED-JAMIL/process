@@ -72,7 +72,10 @@ public class DispatchFailures {
         if (retryable && this.bulkAction.scheduleRetry(jobQueue, statusMessage)) {
             return;
         }
-        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
+        // MIG-347: a backfill's run leaves the job's running status to its live runs.
+        if (!jobQueue.isBackfillRun()) {
+            this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
+        }
         JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);
         this.bulkAction.runEnded(jobQueue.getJobQueueId(), before, JobStatus.Failed, retryable ? RunEnd.DISPATCH : refusedAs);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), statusMessage);

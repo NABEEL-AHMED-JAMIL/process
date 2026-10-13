@@ -61,6 +61,36 @@ class DefinitionValidatorTest {
             new DefinitionProblem("settings.inputContract", "name the contract by its id or by its name, not both"));
     }
 
+    /**
+     * MIG-347: a pipeline's run parameters are checked with it, they survive the JSON and YAML round trip, and every
+     * {{param.name}} a step names must be one of them.
+     */
+    @Test
+    void runParametersAreCheckedAndEveryOneAStepNamesIsDeclared() throws Exception {
+        PipelineDefinition definition = this.valid();
+        PipelineDefinition.Parameter since = PipelineDefinition.Parameter.of("since", "date");
+        since.setRequired(true);
+        since.setLabel("Read from");
+        PipelineDefinition.Parameter region = PipelineDefinition.Parameter.of("region", "choice");
+        region.setChoices(Arrays.asList("north", "south"));
+        region.setDefaultValue("north");
+        definition.setParameters(Arrays.asList(since, region));
+        definition.getSteps().get(1).setName("Shape {{param.region}} from {{param.since}} for {{run.date}}");
+        assertThat(this.validator.problems(definition)).isEmpty();
+        PipelineDefinition read = DefinitionCodec.fromJson(DefinitionCodec.toJson(definition));
+        assertThat(read.getParameters()).hasSize(2);
+        assertThat(read.getParameters().get(1).getDefaultValue()).isEqualTo("north");
+        assertThat(DefinitionCodec.toJson(definition)).contains("\"parameters\":[{\"name\":\"since\",\"type\":\"date\",\"label\":\"Read from\","
+            + "\"required\":true}");
+        assertThat(DefinitionCodec.fromYaml(DefinitionCodec.toYaml(definition)).getParameters().get(0).required()).isTrue();
+
+        definition.getSteps().get(1).setConfig(config("columns", config("id", "{{param.nobody}}")));
+        region.setDefaultValue("east");
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("parameters[1].default", "one of north, south"),
+            new DefinitionProblem("steps[1].config", "{{param.nobody}} names no parameter of this pipeline: add it under parameters"));
+    }
+
     /** MIG-243: a pipeline's sensitivity is one of the data policies' three levels, or not said (internal). */
     @Test
     void theSensitivityIsPublicInternalOrSensitive() {

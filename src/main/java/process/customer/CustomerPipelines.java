@@ -250,6 +250,21 @@ public class CustomerPipelines {
             emits.add(CustomerEventTypes.FILE_AVAILABLE);
         }
         view.put("emits", emits);
+        // MIG-347: the run parameters a backfill (and, in the console, Run with...) gives its runs; none for a legacy pipeline.
+        List<Map<String, Object>> parameters = new ArrayList<>();
+        if (entry.definition != null && !entry.definition.isLegacy()) {
+            for (PipelineDefinition.Parameter p : entry.definition.effectiveParameters()) {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("name", p.getName());
+                one.put("type", p.getType());
+                one.put("label", p.getLabel());
+                one.put("required", p.required());
+                one.put("default", p.getDefaultValue());
+                one.put("choices", p.getChoices());
+                parameters.add(one);
+            }
+        }
+        view.put("parameters", parameters);
         return view;
     }
 

@@ -116,7 +116,7 @@ class OneRunInFlightTest {
     void anEnqueuerThatLosesTheRaceToTheIndexRecordsASkipNotAnError() {
         Scheduler scheduler = this.due();
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0, 1);
-        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
+        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any()))
             .thenThrow(refusedByTheIndex());
         JobQueue skip = new JobQueue();
         skip.setJobQueueId(77L);
@@ -138,12 +138,12 @@ class OneRunInFlightTest {
     void aSlotRefusedAgainIsLeftForTheNextTick() {
         this.due();
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
-        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
+        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any()))
             .thenThrow(refusedByTheIndex());
 
         this.engine.addJobInQueue();
 
-        verify(this.bulkAction, times(2)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false));
+        verify(this.bulkAction, times(2)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any());
         verify(this.bulkAction, never()).updateNextScheduler(any());
     }
 
@@ -159,12 +159,12 @@ class OneRunInFlightTest {
         queued.setJobQueueId(78L);
         queued.setJobId(JOB_ID);
         queued.setStartTime(LocalDateTime.of(2026, 9, 24, 12, 0));
-        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false))).thenReturn(queued);
+        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any())).thenReturn(queued);
 
         this.engine.addJobInQueue();
 
         InOrder order = inOrder(this.bulkAction);
-        order.verify(this.bulkAction).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false));
+        order.verify(this.bulkAction).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any());
         order.verify(this.bulkAction).changeJobStatus(JOB_ID, JobStatus.Queue);
         order.verify(this.bulkAction).changeJobLastJobRun(JOB_ID, queued.getStartTime());
         order.verify(this.bulkAction).sendJobStatusNotification(JOB_ID, true);
@@ -175,12 +175,12 @@ class OneRunInFlightTest {
     void anyOtherFailureIsNotMistakenForBusy() {
         this.due();
         when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
-        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false)))
+        when(this.bulkAction.createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any()))
             .thenThrow(new IllegalStateException("connection refused"));
 
         this.engine.addJobInQueue();
 
-        verify(this.bulkAction, times(1)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false));
+        verify(this.bulkAction, times(1)).createJobQueue(eq(JOB_ID), any(), eq(JobStatus.Queue), anyString(), eq(false), any());
         verify(this.bulkAction, never()).createJobQueue(anyLong(), any(), eq(JobStatus.Skip), anyString(), anyBoolean());
     }
 

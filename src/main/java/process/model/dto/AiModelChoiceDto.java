@@ -5,6 +5,7 @@ import process.ai.AiPort;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * What the console sends to aiModelChoice.json (MIG-242's Core part): a job's model per AI step -- its schedule's
@@ -63,6 +64,13 @@ public class AiModelChoiceDto {
     private Long jobId;
 
     private List<StepChoice> steps = new ArrayList<>();
+
+    /** MIG-347: "Run with..."'s parameter values by name (checked against the pipeline's parameters); null for the defaults. */
+    private Map<String, Object> parameters;
+
+    public Map<String, Object> getParameters() { return parameters; }
+
+    public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
 
     public Long getJobId() { return jobId; }
 

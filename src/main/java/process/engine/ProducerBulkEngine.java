@@ -142,11 +142,20 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * queued run (a workflow's run_pipeline step records its id, MIG-273).
      */
     public JobQueue addManualJobInQueue(SourceJob sourceJob, String modelProfiles) {
+        return this.addManualJobInQueue(sourceJob, modelProfiles, null);
+    }
+
+    /**
+     * MIG-347: as above, with the run's parameter values ({@code runParams}, RunParameters.RunValues JSON already checked by
+     * the caller against the pipeline's parameters; null for none -- the run takes the defaults).
+     */
+    public JobQueue addManualJobInQueue(SourceJob sourceJob, String modelProfiles, String runParams) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
-        if (modelProfiles != null && jobQueue != null) {
+        if ((modelProfiles != null || runParams != null) && jobQueue != null) {
             jobQueue.setModelProfiles(modelProfiles);
+            jobQueue.setRunParams(runParams);
             this.transactionService.saveOrUpdateJobQueue(jobQueue);
         }
         // Under the request's id, which the run now carries (MIG-94): the trace's enqueue hop.
@@ -385,7 +394,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     // console shows. Closing the queue row alone leaves the job reading Start for
                     // ever -- the same symptom, one table across. Only clear it once the job has
                     // genuinely nothing in flight, so a newer run that did start is left alone.
-                    if (this.bulkAction.getCountForInQueueJobByJobId(jobQueue.getJobId()) == 0) {
+                    if (!jobQueue.isBackfillRun() && this.bulkAction.getCountForInQueueJobByJobId(jobQueue.getJobId()) == 0) {
                         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Interrupt);
                     }
                     this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
@@ -494,7 +503,10 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         } else {
             // The run row BEFORE the job is marked Queue: should the index refuse it, nothing of this
             // attempt -- the job's status included -- survives the rollback.
-            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false);
+            // MIG-347: with the slot the run is for -- its run.date (the slot's day in the workspace's billing zone) and what a
+            // backfill reads as "this period already has a completed run".
+            jobQueue = this.bulkAction.createJobQueue(scheduler.getJobId(), BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue.", false,
+                scheduler.getNextRunAt());
             this.bulkAction.changeJobStatus(scheduler.getJobId(), JobStatus.Queue);
             this.bulkAction.changeJobLastJobRun(scheduler.getJobId(), jobQueue.getStartTime());
             this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", scheduler.getJobId()));
@@ -751,7 +763,9 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         // escaped markup -- pushed everything worth reading off the end of the line.
         jobQueue.setJobStatusMessage("Handed to the worker queue at offset " + offset + ".");
         this.transactionService.updateJobQueue(jobQueue);
-        this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
+        if (!jobQueue.isBackfillRun()) {
+            this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
+        }
 
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format(
             "Job %s handed to the worker queue at offset %s.", jobQueue.getJobId(), offset));

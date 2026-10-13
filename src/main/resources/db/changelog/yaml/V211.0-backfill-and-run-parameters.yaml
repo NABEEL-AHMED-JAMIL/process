@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 211.0-backfill-and-run-parameters
+      author: nabeel.amd93
+      description: "MIG-347: backfill and run parameters -- job_queue.run_params, run_slot_at, run_lane and backfill_id; the one-in-flight index keyed (job_id, run_lane) so a backfill's lanes run beside the job's own; backfill (a schedule run for each period of a past range) and backfill_slot (one row per period and its run, one open period per job and start)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V211.0-backfill-and-run-parameters/V211__backfill_and_run_parameters.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V211.0-backfill-and-run-parameters/V211__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

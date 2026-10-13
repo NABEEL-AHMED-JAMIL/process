@@ -73,7 +73,8 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select setting_value from orchestration_setting where setting_key = ?1", nativeQuery = true)
     String findOrchestrationSetting(String settingKey);
 
-    @Query(value = "select count(*) from job_queue where job_id = ?1 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
+    // MIG-347: the job's own lane (0): a backfill's runs, in lanes of their own, do not make the job busy.
+    @Query(value = "select count(*) from job_queue where job_id = ?1 and run_lane = 0 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
     int getCountForInQueueJobByJobId(Long jobId);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)

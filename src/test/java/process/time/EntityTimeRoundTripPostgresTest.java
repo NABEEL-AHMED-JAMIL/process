@@ -84,7 +84,9 @@ class EntityTimeRoundTripPostgresTest {
             {"pipeline_config", "900981", "updated_at", "2026-07-04T13:00:00Z"},
             {"pipeline_config", "900981", "value_set_at", "2026-01-16T05:45:10.123456Z"},
             // V163 (the workspace pause), born timestamptz too.
-            {"scheduler", "900301", "paused_since", "2026-11-01T07:30:00.000001Z"}};
+            {"scheduler", "900301", "paused_since", "2026-11-01T07:30:00.000001Z"},
+            // V211 (MIG-347): the period a run is for -- a scheduled slot, a backfill period -- born timestamptz.
+            {"job_queue", "900102", "run_slot_at", "2026-11-01T07:30:00Z"}};
         for (String[] row : born) {
             sql.update(String.format("UPDATE public.%s SET %s = ?::timestamptz WHERE %s", row[0], row[2],
                 TimestamptzMigrationPostgresTest.whereKey(sql, row[0], row[1])), row[3]);

@@ -3,6 +3,7 @@ package process.pipeline;
 import java.util.Arrays;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.util.ArrayList;
@@ -24,6 +25,8 @@ import process.model.enums.ReviewParty;
  * <pre>
  * version: 1
  * source: {type: task}                 # none (default) | task: the job's task payload, one row of its tags
+ * parameters:                          # MIG-347: what a run is given (Run with..., a backfill); steps read {{param.name}}
+ *   - {name: region, type: choice, choices: [north, south], default: north}
  * steps:
  *   - key: read                        # unique, [a-z][a-z0-9_]*; what step_execution and run_dataset name
  *     task: sample                     # a registered step task (StepTasks)
@@ -46,7 +49,7 @@ import process.model.enums.ReviewParty;
  * validation problem ({@link DefinitionValidator}), so a person sees every mistake at once, each at its path.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"version", "source", "steps", "settings"})
+@JsonPropertyOrder({"version", "source", "parameters", "steps", "settings"})
 public class PipelineDefinition {
 
     public static final int CURRENT_VERSION = 1;
@@ -56,6 +59,8 @@ public class PipelineDefinition {
 
     private Integer version;
     private Source source;
+    /** MIG-347: the run parameters a run of this pipeline takes ({{param.name}} in any step); none when absent. */
+    private List<Parameter> parameters;
     private List<Step> steps = new ArrayList<>();
     private Settings settings;
 
@@ -108,6 +113,82 @@ public class PipelineDefinition {
     public Settings getSettings() { return settings; }
 
     public void setSettings(Settings settings) { this.settings = settings; }
+
+    public List<Parameter> getParameters() { return parameters; }
+
+    public void setParameters(List<Parameter> parameters) { this.parameters = parameters; }
+
+    /** MIG-347: the declared parameters, never null. */
+    @JsonIgnore
+    public List<Parameter> effectiveParameters() {
+        return this.parameters == null ? Collections.<Parameter>emptyList() : this.parameters;
+    }
+
+    /**
+     * MIG-347: one run parameter -- a value a person (Run with..., a backfill) or the API gives a run, which every step reads
+     * as {{param.name}}. Its type says what a value may be (RunParameters.TYPES); a default is what a run that gives none
+     * takes (a scheduled run always does); a required parameter with no default must be given, so a scheduled run of its
+     * pipeline fails until it has one.
+     *
+     * <pre>
+     * parameters:
+     *   - {name: region, type: choice, choices: [north, south], default: north}
+     *   - {name: since, type: date, required: true, label: "Read from"}
+     * </pre>
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"name", "type", "label", "description", "required", "default", "choices"})
+    public static class Parameter {
+
+        private String name;
+        private String type;
+        private String label;
+        private String description;
+        private Boolean required;
+        @JsonProperty("default")
+        private Object defaultValue;
+        private List<String> choices;
+
+        public static Parameter of(String name, String type) {
+            Parameter parameter = new Parameter();
+            parameter.setName(name);
+            parameter.setType(type);
+            return parameter;
+        }
+
+        /** Whether a run must have a value for it (required: true); not a bean getter, so "required" stays one property. */
+        public boolean required() { return Boolean.TRUE.equals(this.required); }
+
+        public String getName() { return name; }
+
+        public void setName(String name) { this.name = name; }
+
+        public String getType() { return type; }
+
+        public void setType(String type) { this.type = type; }
+
+        public String getLabel() { return label; }
+
+        public void setLabel(String label) { this.label = label; }
+
+        public String getDescription() { return description; }
+
+        public void setDescription(String description) { this.description = description; }
+
+        public Boolean getRequired() { return required; }
+
+        public void setRequired(Boolean required) { this.required = required; }
+
+        @JsonProperty("default")
+        public Object getDefaultValue() { return defaultValue; }
+
+        @JsonProperty("default")
+        public void setDefaultValue(Object defaultValue) { this.defaultValue = defaultValue; }
+
+        public List<String> getChoices() { return choices; }
+
+        public void setChoices(List<String> choices) { this.choices = choices; }
+    }
 
     /** Where the first step's input comes from. */
     @JsonInclude(JsonInclude.Include.NON_NULL)

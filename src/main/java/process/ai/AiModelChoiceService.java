@@ -1,5 +1,7 @@
 package process.ai;
 
+import process.pipeline.PipelineParameters;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.TreeMap;
 
 import static process.util.ProcessUtil.ERROR;
 import static process.util.ProcessUtil.SUCCESS;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Core's side of choosing the AI model at run time (Wave 4, MIG-242's Core part). ai-service keeps the models each AI
@@ -82,6 +85,13 @@ public class AiModelChoiceService {
     private final SourceJobService sourceJobs;
     private final PipelineDefinitionStore definitions;
     private final StepReferences references;
+    /** MIG-347: the run parameters a job's pipeline declares; absent in a hand-built test. */
+    private PipelineParameters parameters;
+
+    @Autowired(required = false)
+    public void useParameters(PipelineParameters parameters) {
+        this.parameters = parameters;
+    }
 
     public AiModelChoiceService(SourceJobRepository jobs, SourceTaskRepository tasks, JobQueueRepository runs, PipelineRepository pipelines,
         AiPort ai, ModelChoiceStore store, SourceJobService sourceJobs, PipelineDefinitionStore definitions, StepReferences references) {
@@ -151,6 +161,8 @@ public class AiModelChoiceService {
         answer.put("jobId", j.getJobId());
         answer.put("taskDetailId", taskIdOf(j));
         answer.put("steps", steps);
+        // MIG-347: "Run with..." asks for the pipeline's run parameters too.
+        answer.put("parameters", this.parameters == null ? Collections.emptyList() : this.parameters.of(j));
         return new ResponseDto(SUCCESS, String.format("%d AI step(s).", steps.size()), answer);
     }
 
@@ -188,9 +200,21 @@ public class AiModelChoiceService {
         if (checked.refusal != null) {
             return new ResponseDto(ERROR, checked.refusal);
         }
+        // MIG-347: the run's parameter values, checked against what its pipeline declares; none given takes the defaults.
+        String runParams = null;
+        if (this.parameters != null) {
+            PipelineParameters.Checked values = this.parameters.check(job.get(), dto.getParameters());
+            if (values.refusal != null) {
+                return new ResponseDto(ERROR, values.refusal);
+            }
+            runParams = values.runParams;
+        } else if (dto.getParameters() != null && !dto.getParameters().isEmpty()) {
+            return new ResponseDto(ERROR, "This job's pipeline has no parameters.");
+        }
         SourceJobDto run = new SourceJobDto();
         run.setJobId(job.get().getJobId());
-        return this.sourceJobs.runSourceJob(run, ModelProfiles.write(checked.byStep));
+        return runParams == null ? this.sourceJobs.runSourceJob(run, ModelProfiles.write(checked.byStep))
+            : this.sourceJobs.runSourceJob(run, ModelProfiles.write(checked.byStep), runParams);
     }
 
     /** What each AI step of a run asked for and ran on, every attempt: the run's manifest of models and prompt versions. */

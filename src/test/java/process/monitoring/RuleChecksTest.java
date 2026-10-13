@@ -49,6 +49,30 @@ class RuleChecksTest {
         return f;
     }
 
+    /**
+     * MIG-347: a backfill's failed dates are one alert per backfill, beside the pipeline's own; a later completed run of the
+     * schedule does not clear them (only the backfill's retry does, which WorkspaceSignals sees as the date no longer failed).
+     */
+    @Test
+    void aBackfillsFailuresAreOneAlertPerBackfill() {
+        WorkspaceSignals.Failure first = failure(A, 10, 101, 9);
+        first.backfillId = 7L;
+        WorkspaceSignals.Failure second = failure(A, 10, 102, 4);
+        second.backfillId = 7L;
+        WorkspaceSignals.Failure other = failure(A, 10, 103, 3);
+        other.backfillId = 8L;
+        WorkspaceSignals.Failure live = failure(A, 10, 104, 2);
+        Map<Long, Instant> completed = Collections.singletonMap(10L, NOW.minus(Duration.ofMinutes(1)));
+        List<Finding> found = RuleChecks.runFailed(rule(AlertKind.RUN_FAILED, A, 1, 60), Arrays.asList(first, second, other, live), completed,
+            NOW);
+        // The live failure recovered (a later run completed); the backfills' did not.
+        assertThat(found).extracting(f -> f.subject).containsExactly("backfill:7", "backfill:8");
+        assertThat(found.get(0).title).isEqualTo("2 dates of backfill #7 of Claims intake (synthetic) failed");
+        assertThat(found.get(0).link).isEqualTo("/runs/backfills?backfill=7");
+        assertThat(found.get(0).runId).isEqualTo(102L);
+        assertThat(found.get(1).title).isEqualTo("A date of backfill #8 of Claims intake (synthetic) failed");
+    }
+
     @Test
     void oneFailedRunIsAnAlertForItsPipelineOnly() {
         List<Finding> found = RuleChecks.runFailed(rule(AlertKind.RUN_FAILED, A, 1, 60),

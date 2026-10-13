@@ -1,5 +1,7 @@
 package process.model.service.impl;
 
+import process.pipeline.PipelineParameters;
+
 import process.pipeline.review.RunReaders;
 import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
@@ -141,6 +143,14 @@ public class SourceJobServiceImpl implements SourceJobService {
 
     /** UX review 2026-10-12 (R2): a run's reviewers read its log too (RunReaders); absent in hand-built tests. */
     private RunReaders runReaders;
+
+    /** MIG-347: the run parameters a job's pipeline declares (absent in a test that wires none: no check). */
+    private PipelineParameters pipelineParameters;
+
+    @Autowired(required = false)
+    public void usePipelineParameters(PipelineParameters pipelineParameters) {
+        this.pipelineParameters = pipelineParameters;
+    }
 
     @Autowired(required = false)
     public void setRunReaders(RunReaders runReaders) {
@@ -672,11 +682,17 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Override
     @Transactional
     public ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles) throws Exception {
+        return this.runSourceJob(sourceJobDto, modelProfiles, null);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJob(SourceJobDto sourceJobDto, String modelProfiles, String runParams) throws Exception {
         if (ProcessUtil.isNull(sourceJobDto.getJobId())) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Object queued = this.queueRun(sourceJobDto.getJobId(), modelProfiles);
+        Object queued = this.queueRun(sourceJobDto.getJobId(), modelProfiles, runParams);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
         }
@@ -695,7 +711,7 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Object queued = this.queueRun(jobId, null);
+        Object queued = this.queueRun(jobId, null, null);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
         }
@@ -710,7 +726,7 @@ public class SourceJobServiceImpl implements SourceJobService {
      * Run now's rules, the one place they live: the job is active and the caller's, its last run is not still in flight,
      * and its workspace is not paused. Its callers are public and transactional and switch the tenant filter on first. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
      */
-    private Object queueRun(Long jobId, String modelProfiles) {
+    private Object queueRun(Long jobId, String modelProfiles, String runParams) {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
@@ -728,7 +744,16 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format("This job's workspace is %s, so its runs are paused; "
                 + "it can be run again once the workspace is Active.", paused.get()));
         }
-        return this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles);
+        // MIG-347: a run given no values takes its pipeline's defaults; one whose required parameter has none cannot start --
+        // said here rather than as a failed run ("Run with..." gives the value).
+        if (runParams == null && this.pipelineParameters != null) {
+            PipelineParameters.Checked defaults = this.pipelineParameters.check(sourceJob.get(), null);
+            if (defaults.refusal != null) {
+                return new ResponseDto(ERROR, defaults.refusal + " Use Run with... to give them.");
+            }
+        }
+        return runParams == null ? this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles)
+            : this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles, runParams);
     }
 
     @Override

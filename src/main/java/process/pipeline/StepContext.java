@@ -35,6 +35,14 @@ public interface StepContext {
         return input == null || input.size() == 0 ? null : input.getRows().get(0);
     }
 
+    /**
+     * MIG-347: the run's {{param.name}}, {{run.date}}, {{run.windowStart}} and {{run.windowEnd}} values by placeholder name --
+     * already filled into {@link #config()}; a task's own templates (Templates.ofRun) read them too. Empty outside a run.
+     */
+    default Map<String, Object> runValues() {
+        return Collections.emptyMap();
+    }
+
     /** The run's job (source_job.job_id); null outside a run. */
     default Long jobId() {
         return null;

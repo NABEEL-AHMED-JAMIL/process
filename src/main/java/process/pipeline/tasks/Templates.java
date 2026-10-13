@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
  * {{document_count}} and {{document_ids}} (the documents' ids joined by commas), and the first document's values as
  * {{document.<field>}} (and {{document.id}}, {{document.file_name}}, {{document.approval}}, ...) -- read from Document
  * Intelligence only when a template names one; in a run no document started, {{document.<field>}} and {{document_ids}} are
- * empty and {{document_count}} is 0. An unknown
+ * empty and {{document_count}} is 0. MIG-347: the run's parameters as {{param.<name>}}, and {{run.date}}, {{run.windowStart}}
+ * and {{run.windowEnd}} -- the day the run is for in the workspace's billing zone and its period. An unknown
  * placeholder is left as written, so a mistake shows in the result instead of vanishing.
  */
 final class Templates {
@@ -48,6 +49,9 @@ final class Templates {
         if (rows != null) {
             values.put("rows", rows);
         }
+        // MIG-347: {{param.name}} and {{run.date}}, {{run.windowStart}}, {{run.windowEnd}} -- in the step's settings already,
+        // and in what a step fills from its own templates (a row's text, a notice's body).
+        values.putAll(context.runValues());
         String inputKey = context.inputKey();
         if (inputKey != null && !inputKey.isEmpty()) {
             values.put("input_key", inputKey);

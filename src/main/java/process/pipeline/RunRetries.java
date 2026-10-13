@@ -248,6 +248,11 @@ public class RunRetries {
         if (run.getJobStatus() != JobStatus.Failed) {
             kind = NOT_FAILED;
             why = String.format("Run %d is %s, not failed: only a failed run is retried.", run.getJobQueueId(), words(run.getJobStatus()));
+        } else if (run.isBackfillRun()) {
+            // MIG-347: a backfill's run is retried with its date by the backfill ("Retry failed"), in a free lane of its own.
+            kind = NOT_RESUMABLE;
+            why = String.format("Run %d is part of backfill #%d: retry its failed dates from the backfill (Runs › Backfills).",
+                run.getJobQueueId(), run.getBackfillId());
         } else if (job.getJobStatus() != Status.Active) {
             kind = INACTIVE;
             why = "The pipeline's schedule is not active; switch it on to retry its runs.";
@@ -495,7 +500,9 @@ public class RunRetries {
                     return "The run moved on meanwhile (another retry, or an operator); read it again.";
                 }
                 this.attempts.record(attempt);
-                this.bulk.changeJobStatus(job.getJobId(), JobStatus.Queue);
+                if (!run.isBackfillRun()) {
+                    this.bulk.changeJobStatus(job.getJobId(), JobStatus.Queue);
+                }
                 this.bulk.saveJobAuditLogs(run.getJobQueueId(), line);
                 return null;
             });

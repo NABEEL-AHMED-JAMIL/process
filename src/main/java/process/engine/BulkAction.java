@@ -183,7 +183,14 @@ public class BulkAction {
 
     public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
         JobStatus jobStatus, String message, Boolean isSkip) {
+        return this.createJobQueue(jobId, scheduledTime, jobStatus, message, isSkip, null);
+    }
+
+    /** MIG-347: as above, for the schedule slot {@code slotAt} (job_queue.run_slot_at; null for none). */
+    public JobQueue createJobQueue(Long jobId, LocalDateTime scheduledTime,
+        JobStatus jobStatus, String message, Boolean isSkip, LocalDateTime slotAt) {
         JobQueue jobQueue = new JobQueue();
+        jobQueue.setRunSlotAt(slotAt);
         if (isSkip) {
             jobQueue.setSkipTime(scheduledTime);
         } else {
@@ -365,7 +372,10 @@ public class BulkAction {
         row.setJobStatusMessage(String.format(
             "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
         this.transactionService.saveOrUpdateJobQueue(row);
-        this.changeJobStatus(jobId, JobStatus.Queue);
+        // MIG-347: a backfill's run leaves the job's running status to its live runs.
+        if (!row.isBackfillRun()) {
+            this.changeJobStatus(jobId, JobStatus.Queue);
+        }
         this.saveJobAuditLogs(jobQueueId, String.format(
             "Attempt %s of %s failed: %s Queued for attempt %s at %s.",
             attempt, maxAttempts, endWithStop(reason), nextAttempt, dueAt));

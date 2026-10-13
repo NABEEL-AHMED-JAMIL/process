@@ -58,7 +58,8 @@ public class DocumentQueueSweep {
         List<long[]> ready = RowSecurity.acrossTenants("the document queue sweep (MIG-364) reads which jobs of every workspace have"
             + " approved documents waiting and no run in flight (ids only); each job's next run is started as its own workspace",
             () -> this.jdbc.query("SELECT DISTINCT a.tenant_id, a.job_id FROM document_approval a WHERE a.outcome = 'Waiting' "
-                + "AND NOT EXISTS (SELECT 1 FROM job_queue q WHERE q.job_id = a.job_id AND UPPER(q.job_status) IN ('QUEUE', 'START', 'RUNNING')) "
+                + "AND NOT EXISTS (SELECT 1 FROM job_queue q WHERE q.job_id = a.job_id AND q.run_lane = 0 "
+                + "AND UPPER(q.job_status) IN ('QUEUE', 'START', 'RUNNING')) "
                 + "ORDER BY a.job_id LIMIT " + BATCH, (rs, i) -> new long[] {rs.getLong("tenant_id"), rs.getLong("job_id")}));
         int started = 0;
         for (long[] job : ready) {

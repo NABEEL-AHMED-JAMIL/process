@@ -235,7 +235,9 @@ public class MessageQServiceImpl implements MessageQService {
                 return new ResponseDto(ERROR, "Only a run still in flight ('Queue', 'Start', 'Running') can be failed.", jobQId);
             }
             String failMessage = String.format("Job %s fail by manual.", jobQueue.get().getJobId());
-            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
+            if (!jobQueue.get().isBackfillRun()) {
+                this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
+            }
             JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
             this.bulkAction.runEnded(jobQueue.get().getJobQueueId(), before, JobStatus.Failed, RunEnd.OPERATOR);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), failMessage);
@@ -267,7 +269,9 @@ public class MessageQServiceImpl implements MessageQService {
         }
         if (jobQueue.isPresent()) {
             String interruptMessage = String.format("Job %s interrupted.", jobQueue.get().getJobId());
-            this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
+            if (!jobQueue.get().isBackfillRun()) {
+                this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
+            }
             JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);
             this.bulkAction.runEnded(jobQueue.get().getJobQueueId(), before, JobStatus.Interrupt, RunEnd.OPERATOR);
             this.bulkAction.saveJobAuditLogs(jobQueue.get().getJobQueueId(), interruptMessage);
