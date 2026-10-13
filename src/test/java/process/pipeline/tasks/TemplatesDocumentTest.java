@@ -42,4 +42,14 @@ class TemplatesDocumentTest {
             .isEqualTo("Invoice [] run 88001 {{documnet.total}}");
         assertThat(context.documentReads).isZero();
     }
+
+    /** UX review 2026-10-12 (MIG-364 leftover): a run started by hand counts 0 documents and names none. */
+    @Test
+    void aRunStartedByHandCountsNoDocuments() {
+        TaskContext context = new TaskContext(Collections.emptyMap(), null);
+        Map<String, Object> values = Templates.ofRun(context, null);
+        assertThat(Templates.fill("AP notice: {{document_count}} approved invoice(s) [{{document_ids}}] in run {{run}}.", values))
+            .isEqualTo("AP notice: 0 approved invoice(s) [] in run 88001.");
+        assertThat(context.documentReads).isZero();
+    }
 }

@@ -1,11 +1,13 @@
 package process.model.service.impl;
 
+import process.pipeline.review.RunReaders;
 import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
 import process.util.BusinessTime;
 import process.util.CronSchedule;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -135,6 +137,14 @@ public class SourceJobServiceImpl implements SourceJobService {
      */
     private boolean isOwnedByCaller(SourceJob sourceJob) {
         return JobOwnership.isVisibleToCaller(sourceJob);
+    }
+
+    /** UX review 2026-10-12 (R2): a run's reviewers read its log too (RunReaders); absent in hand-built tests. */
+    private RunReaders runReaders;
+
+    @Autowired(required = false)
+    public void setRunReaders(RunReaders runReaders) {
+        this.runReaders = runReaders;
     }
 
     private boolean isOwnedByCaller(SourceTask sourceTask) {
@@ -783,7 +793,10 @@ public class SourceJobServiceImpl implements SourceJobService {
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
 
         Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
-        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())
+        // A run's reviewer reads its log as well (RunReaders: the run's internal review names them), but not the job's setup.
+        boolean asReviewer = sourceJobOpt.isPresent() && !this.isOwnedByCaller(sourceJobOpt.get()) && this.runReaders != null
+            && this.runReaders.readable(jobQueueId).filter(read -> jobId.equals(read.job.getJobId())).isPresent();
+        if (!sourceJobOpt.isPresent() || (!this.isOwnedByCaller(sourceJobOpt.get()) && !asReviewer)
             || Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
         }
@@ -799,6 +812,11 @@ public class SourceJobServiceImpl implements SourceJobService {
             this.jobAuditLogRepository.findAllByJobQueueIdV1(jobQueueId)));
         SourceJobDto sourceJobDto = mapSourceJobToDto(sourceJobOpt.get());
         schedulerRepository.findSchedulerByJobId(jobId).ifPresent(s -> sourceJobDto.setScheduler(getSchedulerDto(s)));
+        if (asReviewer && sourceJobDto.getTaskDetail() != null) {
+            // The reviewer reads the run, not how its pipeline is set up: no payload, no tag list.
+            sourceJobDto.getTaskDetail().setTaskPayload(null);
+            sourceJobDto.getTaskDetail().setXmlTagsInfo(null);
+        }
         payload.put("sourceJob", sourceJobDto);
         payload.put("sourceJobQueue", getSourceJobQueueDto(jobQueueOpt.get()));
         return new ResponseDto(SUCCESS, String.format("SourceJob audit log found with %d.", jobQueueId), payload);

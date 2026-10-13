@@ -155,7 +155,7 @@ public class LocalIdentity implements IdentityPort {
     static Person toPerson(AppUser user) {
         return new Person(user.getAppUserId(), user.getTenantId(), user.getUsername(), user.getFullName(),
             user.getUserRole() == null ? null : user.getUserRole().name(), user.getStatus() == null ? null : user.getStatus().name(),
-            user.getAvatarBucket(), user.getAvatarKey());
+            user.getAvatarBucket(), user.getAvatarKey(), user.getPageAccessProfileId());
     }
 
     static Workspace toWorkspace(Tenant tenant) {

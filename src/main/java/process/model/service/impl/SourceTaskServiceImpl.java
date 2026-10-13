@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.model.projection.SourceTaskTypeProjection;
 import process.identity.WorkspaceNames;
 import process.settings.ConfigReferences;
 import org.apache.poi.ss.usermodel.Row;
@@ -19,6 +20,7 @@ import process.model.enums.NotificationType;
 import process.model.enums.Status;
 import process.model.pojo.SourceTaskPayload;
 import process.util.XmlOutTagInfoUtil;
+import java.util.Comparator;
 import java.util.List;
 import process.model.pojo.TaskReference;
 import process.model.pojo.SourceTaskType;
@@ -179,6 +181,24 @@ public class SourceTaskServiceImpl implements SourceTaskService {
         return Optional.of("Configuration references cannot be checked right now; the task was not saved.");
     }
 
+    /** UX review 2026-10-12 (P3): the payload of a pipeline whose work is its steps -- what the demo's pipelines carry. */
+    static final String EMPTY_PAYLOAD = "<data></data>";
+
+    /**
+     * UX review 2026-10-12 (P3): the event source a new pipeline gets when none is picked -- the workspace's own active topic
+     * that most pipelines already use (the lowest id on a tie); empty when the workspace has none.
+     */
+    Optional<Long> defaultTopicFor(Long tenantId) {
+        if (tenantId == null) {
+            return Optional.empty();
+        }
+        return this.sourceTaskTypeRepository.fetchAllSourceTaskTypeForTenant(tenantId).stream()
+            .filter(topic -> Status.Active.equals(topic.getStatus()))
+            .sorted(Comparator.comparing((SourceTaskTypeProjection topic) -> topic.getTotalTaskLink() == null ? 0L
+                : topic.getTotalTaskLink()).reversed().thenComparing(SourceTaskTypeProjection::getSourceTaskTypeId))
+            .map(SourceTaskTypeProjection::getSourceTaskTypeId).findFirst();
+    }
+
     private static String idText(Long id) {
         return id == null ? null : String.valueOf(id);
     }
@@ -254,13 +274,26 @@ public class SourceTaskServiceImpl implements SourceTaskService {
     public ResponseDto addSourceTask(SourceTaskDto sourceTaskDto) throws Exception {
         if (ProcessUtil.isNull(sourceTaskDto.getTaskName())) {
             return new ResponseDto(ERROR, "SourceTask taskName missing.");
-        } else if (ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
-            return new ResponseDto(ERROR, "SourceTask taskPayload missing.");
-        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType())) {
-            return new ResponseDto(ERROR, "SourceTask sourceTaskType missing.");
-        } else if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
-            return new ResponseDto(ERROR, "SourceTask sourceTaskTypeId missing.");
-        } else if (Status.Delete.equals(sourceTaskDto.getTaskStatus())) {
+        }
+        // UX review 2026-10-12 (P3): a new pipeline starts from what it does, not from Kafka. The event source -- the topic
+        // and the legacy XML payload -- is "Advanced" and optional: no payload is the empty one a step pipeline carries, no
+        // topic the workspace's own (defaultTopicFor). Both still go through every check below when given.
+        if (ProcessUtil.isNull(sourceTaskDto.getTaskPayload())) {
+            sourceTaskDto.setTaskPayload(EMPTY_PAYLOAD);
+        }
+        if (ProcessUtil.isNull(sourceTaskDto.getSourceTaskType()) || ProcessUtil.isNull(sourceTaskDto.getSourceTaskType().getSourceTaskTypeId())) {
+            Long tenantForTopic = TenantContext.isPlatformAdmin() ? sourceTaskDto.getTenantId() : TenantContext.getTenantId();
+            Optional<Long> topic = this.defaultTopicFor(tenantForTopic);
+            if (!topic.isPresent()) {
+                return new ResponseDto(ERROR, "This workspace has no event source yet: add a topic under Kafka & Topics, or pick one "
+                    + "under Advanced: event source.");
+            }
+            SourceTaskTypeDto chosen = ProcessUtil.isNull(sourceTaskDto.getSourceTaskType()) ? new SourceTaskTypeDto()
+                : sourceTaskDto.getSourceTaskType();
+            chosen.setSourceTaskTypeId(topic.get());
+            sourceTaskDto.setSourceTaskType(chosen);
+        }
+        if (Status.Delete.equals(sourceTaskDto.getTaskStatus())) {
             // Delete is the tombstone deleteSourceTask writes, not a state to create in: a task
             // saved that way is invisible to every list and picker the moment it exists, and the
             // caller is told it was saved.

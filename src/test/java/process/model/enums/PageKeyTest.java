@@ -26,8 +26,17 @@ public class PageKeyTest {
         assertThat(PageKey.pagesGating("/report.json/fetchReports")).containsExactly(PageKey.REPORTS);
         assertThat(PageKey.pagesGating("/message.json/fetchLogs")).containsExactlyInAnyOrder(PageKey.QUEUE, PageKey.REPORTS);
         assertThat(PageKey.pagesGating("/sourceTask.json/list")).containsExactlyInAnyOrder(PageKey.JOBS, PageKey.TASKS);
+        // UX review 2026-10-12: Saved Analyses reads boards; their writes are Edit dashboards' (or the Studio's).
         assertThat(PageKey.pagesGating("/analyticsWorkspace.json/list"))
-            .containsExactlyInAnyOrder(PageKey.ANALYTICS, PageKey.ANALYTICS_DASHBOARDS);
+            .containsExactlyInAnyOrder(PageKey.ANALYTICS, PageKey.DASHBOARDS_EDIT);
+        assertThat(PageKey.pagesGating("/analyticsWorkspace.json/fetchDashboardById"))
+            .containsExactlyInAnyOrder(PageKey.ANALYTICS, PageKey.ANALYTICS_DASHBOARDS, PageKey.DASHBOARDS_EDIT);
+        assertThat(PageKey.pagesGating("/analyticsWorkspace.json/pinChart"))
+            .containsExactlyInAnyOrder(PageKey.ANALYTICS, PageKey.DASHBOARDS_EDIT);
+        // UX review 2026-10-12 (R2): a run's reads open to the Queue too; running it does not.
+        assertThat(PageKey.pagesGating("/sourceJob.json/stepExecutions")).containsExactlyInAnyOrder(PageKey.JOBS, PageKey.QUEUE);
+        assertThat(PageKey.pagesGating("/sourceJob.json/review/waiting")).containsExactlyInAnyOrder(PageKey.JOBS, PageKey.QUEUE);
+        assertThat(PageKey.pagesGating("/sourceJob.json/runSourceJob")).containsExactly(PageKey.JOBS);
         // Wave 5 Forms (lite): building and filling in is the page 'forms'; what they collected is 'form-submissions'.
         assertThat(PageKey.pagesGating("/form.json/submit")).containsExactly(PageKey.FORMS);
         assertThat(PageKey.pagesGating("/formSubmission.json/export")).containsExactly(PageKey.FORM_SUBMISSIONS);

@@ -362,7 +362,7 @@ public class HttpIdentity implements IdentityPort {
     static Person toPerson(Map<?, ?> row) {
         return new Person(longOf(row.get("appUserId")), longOf(row.get("tenantId")), textOf(row.get("username")),
             textOf(row.get("fullName")), textOf(row.get("userRole")), textOf(row.get("status")),
-            textOf(row.get("avatarBucket")), textOf(row.get("avatarKey")));
+            textOf(row.get("avatarBucket")), textOf(row.get("avatarKey")), longOf(row.get("pageAccessProfileId")));
     }
 
     static Workspace toWorkspace(Map<?, ?> row) {

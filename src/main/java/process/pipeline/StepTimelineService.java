@@ -13,6 +13,7 @@ import process.model.repository.SourceJobRepository;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.RowSource;
 import process.pipeline.data.RowCollector;
+import process.pipeline.review.RunReaders;
 import process.pipeline.review.RunReviews;
 import process.util.BusinessTime;
 import process.util.UserNameResolver;
@@ -121,6 +122,14 @@ public class StepTimelineService {
         this.reviews = reviews;
     }
 
+    /** UX review 2026-10-12 (R2): who besides a run's owner reads it -- its reviewers; absent in hand-built tests. */
+    private RunReaders readers;
+
+    @Autowired(required = false)
+    public void useReaders(RunReaders readers) {
+        this.readers = readers;
+    }
+
     /** MIG-345: retrying a failed run (from its failed step, or from the start), and the attempts someone asked for. */
     private RunRetries retries;
     private RunAttemptStore attempts;
@@ -148,7 +157,7 @@ public class StepTimelineService {
     /** The timeline of one attempt of a run: the latest when none is named. */
     @Transactional(readOnly = true)
     public ResponseDto timeline(Long jobQueueId, Integer attempt) {
-        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        Optional<RunOwnership.Owned> owned = this.readable(jobQueueId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
@@ -285,7 +294,7 @@ public class StepTimelineService {
      */
     @Transactional(readOnly = true)
     public ResponseDto outputs(Long jobQueueId, Integer attempt) {
-        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        Optional<RunOwnership.Owned> owned = this.readable(jobQueueId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
@@ -511,8 +520,17 @@ public class StepTimelineService {
         read.put("review", review);
     }
 
+    /** The run of a READ -- a step's log, a dataset -- when the caller may read it: its owner or one of its reviewers. */
     private Optional<JobQueue> owned(Long jobQueueId) {
-        return RunOwnership.owned(this.runs, this.jobs, jobQueueId).map(owned -> owned.run);
+        return this.readable(jobQueueId).map(owned -> owned.run);
+    }
+
+    /**
+     * UX review 2026-10-12 (R2): the run reads -- timeline, manifest, a step's log, a dataset -- are open to the run's
+     * reviewers as well as its owner (RunReaders); retrying stays the owner's (RunOwnership.owned).
+     */
+    private Optional<RunOwnership.Owned> readable(Long jobQueueId) {
+        return this.readers != null ? this.readers.readable(jobQueueId) : RunOwnership.owned(this.runs, this.jobs, jobQueueId);
     }
 
     /** A legacy run as its one step: the run's own status, times and status line; its log is the run's. */

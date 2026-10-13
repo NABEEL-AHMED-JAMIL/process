@@ -133,6 +133,8 @@ public interface IdentityPort {
         private final String status;
         private final String avatarBucket;
         private final String avatarKey;
+        /** UX review 2026-10-12: the person's access profile (their group), for "runs I review"; null for none. */
+        private final Long pageAccessProfileId;
 
         public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status) {
             this(appUserId, tenantId, username, fullName, userRole, status, null, null);
@@ -140,6 +142,11 @@ public interface IdentityPort {
 
         public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status,
             String avatarBucket, String avatarKey) {
+            this(appUserId, tenantId, username, fullName, userRole, status, avatarBucket, avatarKey, null);
+        }
+
+        public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status,
+            String avatarBucket, String avatarKey, Long pageAccessProfileId) {
             this.appUserId = appUserId;
             this.tenantId = tenantId;
             this.username = username;
@@ -148,6 +155,7 @@ public interface IdentityPort {
             this.status = status;
             this.avatarBucket = avatarBucket;
             this.avatarKey = avatarKey;
+            this.pageAccessProfileId = pageAccessProfileId;
         }
 
         public Long getAppUserId() { return this.appUserId; }
@@ -167,6 +175,8 @@ public interface IdentityPort {
         public String getAvatarBucket() { return this.avatarBucket; }
 
         public String getAvatarKey() { return this.avatarKey; }
+
+        public Long getPageAccessProfileId() { return this.pageAccessProfileId; }
 
         public boolean isDeleted() { return "Delete".equals(this.status); }
 

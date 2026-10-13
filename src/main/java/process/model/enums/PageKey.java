@@ -35,8 +35,14 @@ public enum PageKey {
         "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/aiPrompt.json", "/fileChat.json"),
     TASKS("tasks", "Source Tasks", "Operations", "/operations/tasks",
         "/sourceTask.json"),
+    // UX review 2026-10-12 (R2): a reviewer holding the Queue was refused the run they were sent to review. The run's
+    // READS open to this page too -- its log, steps, a step's log, outputs, datasets, its review and the runs waiting for
+    // review, and its AI answers -- and Core answers them only for a run the caller owns or reviews (RunReaders).
+    // Deciding a review stays an administrator's (Core's @PreAuthorize) or the Task inbox's; a viewer holds neither page.
     QUEUE("queue", "Queue", "Operations", "/operations/queue",
-        "/message.json"),
+        "/message.json",
+        "/sourceJob.json/findSourceJobAuditLog", "/sourceJob.json/stepExecutions", "/sourceJob.json/stepLogs",
+        "/sourceJob.json/runOutputs", "/sourceJob.json/runDataset", "/sourceJob.json/review", "/aiPrompt.json/runsForJob"),
     REPORTS("reports", "Reports", "Operations", "/operations/reports",
         "/report.json", "/message.json"),
     OBJECTS("objects", "Browse files", "Object Browser", "/objects/files",
@@ -44,9 +50,17 @@ public enum PageKey {
     ANALYTICS("analytics", "Analytics Studio", "Object Browser", "/objects/analytics",
         "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
         "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
+    // UX review 2026-10-12: Saved Analyses READS the boards -- the lists, a board, its tiles' saved queries and datasets, and
+    // running a tile's query (analytics.json). Saving, pinning and deleting a board, a tile, a saved query or a dataset, and
+    // writing back, are Edit dashboards' (DASHBOARDS_EDIT) or Analytics Studio's: a viewer holding Saved Analyses alone was
+    // able to save tiles and could call pinChart directly. The first two of these lines are what the page always held.
     ANALYTICS_DASHBOARDS("analytics-dashboards", "Saved Analyses", "Object Browser", "/objects/analytics/dashboards",
-        "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
-        "/analyticsBenchmark.json", "/analyticsWorkspace.json"),
+        "/analytics.json", "/analyticsBenchmark.json/fetchRecentResults",
+        "/analyticsDataset.json/fetchAllDatasets", "/analyticsDataset.json/fetchDatasetById",
+        "/analyticsLibrary.json/fetchAllQueries", "/analyticsLibrary.json/fetchQueryById", "/analyticsLibrary.json/fetchRecentRuns",
+        "/analyticsExport.json/download",
+        "/analyticsWorkspace.json/fetchAllAnalyses", "/analyticsWorkspace.json/fetchAnalysisById",
+        "/analyticsWorkspace.json/fetchAllDashboards", "/analyticsWorkspace.json/fetchDashboardById"),
     TOOLS_CONVERTER("tools-converter", "Document Converter", "Tools", "/tools/converter",
         "/documentConverter.json"),
     TOOLS_TRANSCRIPT("tools-transcript", "Audio Transcript", "Tools", "/tools/transcript",
@@ -64,7 +78,12 @@ public enum PageKey {
     // /form.json/fetch, so a reviewer holding Submissions alone was refused the whole page. Those two READS open to it as
     // well; building, saving, a form's status, sharing and filling in stay All forms'.
     FORM_SUBMISSIONS("form-submissions", "Submissions", "Forms", "/forms/submissions",
-        "/formSubmission.json", "/form.json/list", "/form.json/fetch");
+        "/formSubmission.json", "/form.json/list", "/form.json/fetch"),
+    // UX review 2026-10-12: Saved Analyses' writes, split from the page that reads them -- identity-service's PageKey says
+    // the same (these prefixes are analytics-service's; Core keeps the catalogue in step).
+    DASHBOARDS_EDIT("dashboards-edit", "Edit dashboards", "Object Browser", "/objects/analytics/dashboards",
+        "/analytics.json", "/analyticsDataset.json", "/analyticsLibrary.json", "/analyticsExport.json",
+        "/analyticsBenchmark.json", "/analyticsWorkspace.json");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is

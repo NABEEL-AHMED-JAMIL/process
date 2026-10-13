@@ -24,7 +24,8 @@ import java.util.regex.Pattern;
  * a batch of inbox files; a row's are its columns, {{column}}. MIG-364: for a run an approved document started,
  * {{document_count}} and {{document_ids}} (the documents' ids joined by commas), and the first document's values as
  * {{document.<field>}} (and {{document.id}}, {{document.file_name}}, {{document.approval}}, ...) -- read from Document
- * Intelligence only when a template names one; in a run no document started, {{document.<field>}} is empty. An unknown
+ * Intelligence only when a template names one; in a run no document started, {{document.<field>}} and {{document_ids}} are
+ * empty and {{document_count}} is 0. An unknown
  * placeholder is left as written, so a mistake shows in the result instead of vanishing.
  */
 final class Templates {
@@ -60,6 +61,10 @@ final class Templates {
             // A pipeline that runs both ways (a document's approval, Run now) says nothing where a document would be.
             values.put(DOCUMENT_VALUES, (Supplier<Map<String, Object>>) Collections::emptyMap);
             values.put(NO_DOCUMENT, Boolean.TRUE);
+            // MIG-364 leftover (UX review 2026-10-12): a run started by hand read "{{document_count}}" in its notice. No
+            // document is 0 documents and no ids, as {{document.<field>}} is empty.
+            values.put("document_count", 0);
+            values.put("document_ids", "");
         } else {
             values.put("document_count", documents.size());
             StringBuilder ids = new StringBuilder();

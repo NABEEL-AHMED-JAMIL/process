@@ -100,8 +100,9 @@ class InternalPageAccessRestApiTest {
     @Test
     void aTenantUserWithThePageAndAnyoneWhoIsNotATenantUserPass() {
         tenantUser(PageKey.ANALYTICS_DASHBOARDS);
-        // Either analytics page opens all six analytics prefixes.
-        assertThat(ask("/analyticsLibrary.json/listQueries")).containsEntry("allowed", true);
+        // UX review 2026-10-12: Saved Analyses reads the library; saving to it is Edit dashboards' or the Studio's.
+        assertThat(ask("/analyticsLibrary.json/fetchAllQueries")).containsEntry("allowed", true);
+        assertThat(ask("/analyticsLibrary.json/saveQuery")).containsEntry("allowed", false);
         TenantContext.set(1001L, "TENANT_ADMIN", 9L, "admin@a.example");
         assertThat(ask("/documentConverter.json/convert")).containsEntry("allowed", true);
     }

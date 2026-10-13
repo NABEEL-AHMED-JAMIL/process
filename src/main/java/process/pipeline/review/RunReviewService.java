@@ -84,10 +84,23 @@ public class RunReviewService {
         this.events = events;
     }
 
+    /** UX review 2026-10-12 (R2): the run's reviewers read its review and find it waiting; absent in hand-built tests. */
+    private RunReaders readers;
+
+    @Autowired(required = false)
+    public void setReaders(RunReaders readers) {
+        this.readers = readers;
+    }
+
+    /** A run the caller may read -- its owner's, or one they review (RunReaders); deciding asks RunOwnership.owned itself. */
+    private Optional<RunOwnership.Owned> readable(Long jobQueueId) {
+        return this.readers != null ? this.readers.readable(jobQueueId) : RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+    }
+
     /** The run's review: its status, required parties and decisions, and whether the caller may decide now. */
     @Transactional(readOnly = true)
     public ResponseDto review(Long jobQueueId) {
-        Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        Optional<RunOwnership.Owned> owned = this.readable(jobQueueId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
@@ -122,7 +135,7 @@ public class RunReviewService {
         List<Map<String, Object>> waiting = new ArrayList<>();
         boolean more = false;
         for (Long jobQueueId : this.store.undecidedReviewedRuns(tenantId, WAITING_READ)) {
-            Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+            Optional<RunOwnership.Owned> owned = this.readable(jobQueueId);
             if (!owned.isPresent()) {
                 continue;
             }
