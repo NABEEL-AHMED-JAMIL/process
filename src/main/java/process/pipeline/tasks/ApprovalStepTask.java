@@ -1,6 +1,7 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
+import process.util.AuditText;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.PipelineDefinition;
 import process.pipeline.StepContext;
@@ -104,7 +105,7 @@ public class ApprovalStepTask extends RegisteredTask {
             ask.reviewersValue = Configs.text(who, "value", null);
         }
         ask.expiresAfterHours = Configs.integer(config, "expiresAfterHours", DEFAULT_HOURS);
-        context.log("Asking for approval: " + ask.title + (ask.title.matches(".*[.?!]$") ? "" : "."));
+        context.log("Asking for approval: " + AuditText.sentence(ask.title));
         return StepResult.awaiting(ask, size);
     }
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
+import process.util.AuditText;
 import process.ai.ModelProfiles;
 import process.ai.PayloadXml;
 import process.model.dto.ResponseDto;
@@ -411,9 +412,7 @@ public class StepEngine {
 
     /** A line ending in one full stop: "Approved by Ana: checked." rather than "checked..". */
     static String sentence(String text) {
-        String trimmed = text.trim();
-        char last = trimmed.isEmpty() ? '.' : trimmed.charAt(trimmed.length() - 1);
-        return last == '.' || last == '?' || last == '!' ? trimmed : trimmed + ".";
+        return AuditText.sentence(text);
     }
 
     /** What went wrong, in the words of the exception that said it: its own message, else its cause's, else its type. */

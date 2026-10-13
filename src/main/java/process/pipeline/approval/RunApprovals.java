@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import process.util.AuditText;
+import process.pipeline.review.RunReviewService;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.impl.TransactionServiceImpl;
@@ -89,8 +91,7 @@ public class RunApprovals {
                     : RunApprovalStore.REJECTED, reviewerUserId, reviewerName, said, instanceId, taskId, Instant.now(), bulkId);
                 row.ifPresent(a -> this.audit.saveJobAuditLogs(a.jobQueueId, String.format("Approval request %d at step <%s>: %s by %s in the "
                     + "Task inbox (request %d, task %d)%s%s", a.runApprovalId, a.stepKey, approved ? "approved" : "rejected", a.decider(),
-                    instanceId, taskId, said == null ? "." : ": " + (said.matches(".*[.?!]$") ? said : said + "."),
-                    bulkId == null ? "" : " Bulk decision " + bulkId + ".")));
+                    instanceId, taskId, said == null ? "." : ": " + AuditText.sentence(said), RunReviewService.bulkSuffix(bulkId))));
                 return row;
             });
             if (decided == null || !decided.isPresent()) {

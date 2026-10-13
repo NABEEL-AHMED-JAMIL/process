@@ -1,5 +1,6 @@
 package process.model.service.impl;
 
+import process.util.AuditText;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,9 @@ public class TransactionServiceImpl {
      * job and the run as two separate values has to use the overload that takes both, so the
      * pairing is checked rather than assumed.
      */
-    public void saveJobAuditLogs(Long jobQueueId, String logsDetail) {
+    public void saveJobAuditLogs(Long jobQueueId, String line) {
+        // Every audit line passes here: one full stop per sentence, whoever built it (risk #83).
+        String logsDetail = AuditText.oneFullStop(line);
         Timestamp now = new Timestamp(System.currentTimeMillis());
         String externalId = UUID.randomUUID().toString();
         if (this.openSearchAuditLogClient.index(externalId, jobQueueId, logsDetail, now)) {
@@ -97,7 +100,7 @@ public class TransactionServiceImpl {
         Timestamp now = new Timestamp(System.currentTimeMillis());
         List<Object[]> entries = new ArrayList<>();
         for (String detail : logDetails) {
-            entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, detail, now });
+            entries.add(new Object[]{ UUID.randomUUID().toString(), jobQueueId, AuditText.oneFullStop(detail), now });
         }
         Long tenantId = null;
         for (Object[] rejected : this.openSearchAuditLogClient.indexAllReturningFailures(entries)) {

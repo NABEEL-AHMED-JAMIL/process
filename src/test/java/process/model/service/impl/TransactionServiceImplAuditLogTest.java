@@ -105,6 +105,30 @@ public class TransactionServiceImplAuditLogTest {
         verify(this.jobAuditLogRepository, times(2)).save(any(JobAuditLogs.class));
     }
 
+    /**
+     * Risk #83 (2026-10-12): a sentence that already ended in a full stop got another where a line was built from someone's
+     * words ("Comment: Checked.."). Every audit line passes here, so here is where it is made one -- OpenSearch and the
+     * database, single lines and batches.
+     */
+    @Test
+    void everyAuditLineEndsEachSentenceInOneFullStop() {
+        when(this.openSearchAuditLogClient.index(anyString(), anyLong(), anyString(), any(Timestamp.class))).thenReturn(false);
+        when(this.openSearchAuditLogClient.indexAllReturningFailures(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        this.service.saveJobAuditLogs(QUEUE_ID, "Result review: internal APPROVED by Ana (attempt 1). Comment: Checked.. "
+            + "The run's results are now APPROVED. Bulk decision b-1234567.");
+        this.service.saveJobAuditLogs(QUEUE_ID, Arrays.asList("Reason: Wrong totals?.", "Waiting... still waiting.", "Done!."));
+
+        ArgumentCaptor<JobAuditLogs> saved = ArgumentCaptor.forClass(JobAuditLogs.class);
+        verify(this.jobAuditLogRepository, times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(JobAuditLogs::getLogsDetail).containsExactly(
+            "Result review: internal APPROVED by Ana (attempt 1). Comment: Checked. The run's results are now APPROVED. "
+                + "Bulk decision b-1234567.",
+            "Reason: Wrong totals?", "Waiting... still waiting.", "Done!");
+        verify(this.openSearchAuditLogClient).index(anyString(), eq(QUEUE_ID), eq("Result review: internal APPROVED by Ana "
+            + "(attempt 1). Comment: Checked. The run's results are now APPROVED. Bulk decision b-1234567."), any(Timestamp.class));
+    }
+
     @Test
     void aLineIsWrittenWhenTheQueueBelongsToTheNamedJob() {
         when(this.jobQueueRepository.findById(QUEUE_ID)).thenReturn(Optional.of(queueOf(QUEUE_ID, JOB_ID)));

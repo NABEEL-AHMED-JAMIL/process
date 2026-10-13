@@ -460,8 +460,8 @@ public class RunReviewService {
             String.format("/pipelines/schedules/%d/runs/%d/logs", owned.job.getJobId(), owned.run.getJobQueueId())};
     }
 
-    /** The audit line's end for a decision that was part of a bulk decision; "" for a single one. */
-    static String bulkSuffix(String bulkId) {
+    /** The audit line's end for a decision that was part of a bulk decision; "" for a single one. The Task inbox's too. */
+    public static String bulkSuffix(String bulkId) {
         return bulkId == null ? "" : " Bulk decision " + bulkId + ".";
     }
 
