@@ -81,6 +81,10 @@ class ManagementModeMatrixTest {
         String read = "a read sent as a POST: it changes nothing";
         CUSTOMERS_IN_EITHER_MODE.put("RunReviewRestApi.decide", "review: the customer approves or rejects a run's output (MIG-237)");
         CUSTOMERS_IN_EITHER_MODE.put("ReportRestApi.export", "download");
+        CUSTOMERS_IN_EITHER_MODE.put("RunReviewBulkRestApi.bulkDecide", "review: the customer approves or rejects runs' output, each "
+            + "run as RunReviewRestApi.decide (bulk review 2026-10-12)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunReviewBulkRestApi.savePolicy", "review: the customer's own rule for reviewing runs -- whether "
+            + "they may be approved in bulk; builds and runs nothing (bulk review 2026-10-12)");
         // Wave 5 Forms (lite): filling in a form the workspace was given is data entry, not building -- even when the form
         // starts a job, as Run now and the inbox upload do for an existing schedule.
         CUSTOMERS_IN_EITHER_MODE.put("CustomerPipelinesRestApi.startRun", "MIG-332: the customer API starting a run, as Run now (owner"

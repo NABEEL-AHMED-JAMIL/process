@@ -33,7 +33,8 @@ import org.springframework.beans.factory.annotation.Value;
  *   <li>{@code retry.maxAttempts} 1 to 10, {@code retry.delaySeconds} 0 to 3600, {@code timeoutSeconds} 1 to 86400,
  *       {@code onError} fail, continue or skip_rest.</li>
  *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError;
- *       review.required (MIG-237) each of internal and customer at most once; sensitivity public, internal or sensitive
+ *       review.required (MIG-237) each of internal and customer at most once; review.individual (bulk review) true or
+ *       false -- a boolean, which reading the definition already holds it to; sensitivity public, internal or sensitive
  *       (MIG-243); inputContract (MIG-332) a contract by id or by name, not both.</li>
  * </ul>
  */

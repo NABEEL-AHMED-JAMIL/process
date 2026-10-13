@@ -68,20 +68,29 @@ public class RunApprovals {
         }
     }
 
-    /**
-     * The Task inbox's decision on request {@code approvalId} of workspace {@code tenantId} (no one is signed in: run as that
-     * workspace). Approved continues the run; rejected fails it with the reviewer's comment.
-     */
+    /** {@link #decideFromInbox(long, long, boolean, Long, String, String, long, long, String)} for a single decision (no bulkId). */
     public Outcome decideFromInbox(long tenantId, long approvalId, boolean approved, Long reviewerUserId, String reviewerName, String comment,
                                    long instanceId, long taskId) {
+        return this.decideFromInbox(tenantId, approvalId, approved, reviewerUserId, reviewerName, comment, instanceId, taskId, null);
+    }
+
+    /**
+     * The Task inbox's decision on request {@code approvalId} of workspace {@code tenantId} (no one is signed in: run as that
+     * workspace). Approved continues the run; rejected fails it with the reviewer's comment. {@code bulkId} (bulk review): the
+     * bulk decision in the Task inbox it was part of -- recorded on the request and named at the end of the audit line -- or
+     * null for a single decision.
+     */
+    public Outcome decideFromInbox(long tenantId, long approvalId, boolean approved, Long reviewerUserId, String reviewerName, String comment,
+                                   long instanceId, long taskId, String bulkId) {
         return RowSecurity.forTenant(tenantId, () -> {
             String said = comment == null || comment.trim().isEmpty() ? null : comment.trim();
             Optional<RunApprovalStore.Approval> decided = this.transactions.execute(status -> {
                 Optional<RunApprovalStore.Approval> row = this.store.decide(approvalId, approved ? RunApprovalStore.APPROVED
-                    : RunApprovalStore.REJECTED, reviewerUserId, reviewerName, said, instanceId, taskId, Instant.now());
+                    : RunApprovalStore.REJECTED, reviewerUserId, reviewerName, said, instanceId, taskId, Instant.now(), bulkId);
                 row.ifPresent(a -> this.audit.saveJobAuditLogs(a.jobQueueId, String.format("Approval request %d at step <%s>: %s by %s in the "
-                    + "Task inbox (request %d, task %d)%s", a.runApprovalId, a.stepKey, approved ? "approved" : "rejected", a.decider(),
-                    instanceId, taskId, said == null ? "." : ": " + (said.matches(".*[.?!]$") ? said : said + "."))));
+                    + "Task inbox (request %d, task %d)%s%s", a.runApprovalId, a.stepKey, approved ? "approved" : "rejected", a.decider(),
+                    instanceId, taskId, said == null ? "." : ": " + (said.matches(".*[.?!]$") ? said : said + "."),
+                    bulkId == null ? "" : " Bulk decision " + bulkId + ".")));
                 return row;
             });
             if (decided == null || !decided.isPresent()) {
@@ -135,7 +144,7 @@ public class RunApprovals {
     private Optional<RunApprovalStore.Approval> close(RunApprovalStore.Approval approval, String status, String comment) {
         return this.transactions.execute(tx -> {
             Optional<RunApprovalStore.Approval> row = this.store.decide(approval.runApprovalId, status, null, null, comment, null, null,
-                Instant.now());
+                Instant.now(), null);
             row.ifPresent(a -> {
                 this.events.closed(a.tenantId, a.runApprovalId, a.jobQueueId, status);
                 this.audit.saveJobAuditLogs(a.jobQueueId, String.format("Approval request %d at step <%s>: %s (%s); its Task inbox task is "

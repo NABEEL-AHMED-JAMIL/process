@@ -44,6 +44,7 @@ import process.api.PipelineConfigRestApi;
 import process.api.PipelineRestApi;
 import process.api.PipelineDefinitionRestApi;
 import process.api.RunReviewRestApi;
+import process.api.RunReviewBulkRestApi;
 import process.api.StepTimelineRestApi;
 import process.pipeline.JdbcStepStore;
 import process.pipeline.FileAccessLog;
@@ -52,6 +53,9 @@ import process.pipeline.StepTimelineService;
 import process.pipeline.RunRetries;
 import process.pipeline.JdbcRunAttemptStore;
 import process.pipeline.review.JdbcRunReviewStore;
+import process.pipeline.review.JdbcReviewPolicyStore;
+import process.pipeline.review.ReviewPolicy;
+import process.pipeline.review.RunReviewBulk;
 import process.pipeline.review.RunReviewService;
 import process.pipeline.review.RunReviews;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -408,6 +412,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final StepTimelineRestApi stepTimeline;
     /** MIG-237: a run's two-party result review, the console's half. */
     final RunReviewRestApi runReview;
+    /** Bulk review: many runs' review at once, and the workspace's review policy. */
+    final RunReviewBulkRestApi runReviewBulk;
     /** Where the run datasets the probes download live (Wave 4): a scratch directory, as FileDatasetStore keeps them. */
     final FileDatasetStore runDatasets;
     final KafkaConnectionProfileRestApi kafkaProfiles;
@@ -499,7 +505,11 @@ final class CoreProbeFixture implements AutoCloseable {
             new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(stepTasks), stepTasks, this.bulkAction, this.db.appJdbc(),
             this.jpa.transactions()), new JdbcRunAttemptStore(this.db.appJdbc()));
         this.stepTimeline = new StepTimelineRestApi(timelineService, new FileAccessLog(this.db.appJdbc()));
-        this.runReview = new RunReviewRestApi(new RunReviewService(runRows, jobRows, runReviews, reviewRows, jobs, transactions));
+        RunReviewService reviewService = new RunReviewService(runRows, jobRows, runReviews, reviewRows, jobs, transactions);
+        this.runReview = new RunReviewRestApi(reviewService);
+        ReviewPolicy reviewPolicy = new ReviewPolicy(new JdbcReviewPolicyStore(this.db.appJdbc()));
+        this.runReviewBulk = new RunReviewBulkRestApi(new RunReviewBulk(reviewService, reviewPolicy, this.jpa.transactionManager()),
+            reviewPolicy);
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);

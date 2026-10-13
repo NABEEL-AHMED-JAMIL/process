@@ -81,6 +81,18 @@ public class RunReviews {
             .orElseGet(() -> PipelineDefinition.Reviewers.of(PipelineDefinition.Reviewers.ROLE, PipelineDefinition.Reviewers.ADMINS));
     }
 
+    /**
+     * Bulk review (2026-10-12): whether the run's pipeline requires individual review (settings.review.individual) -- its
+     * internal review and its Approval steps' requests are then never decided in bulk -- by the same rule as the parties
+     * (the version the run follows). A run with no readable definition does not.
+     */
+    public boolean individual(JobQueue run, SourceJob job) {
+        return this.definitionOf(run, job, this.steps.pinnedDefinition(run.getJobQueueId()), this.definitions::byId)
+            .map(d -> d.effectiveSettings().getReview())
+            .map(PipelineDefinition.Review::requiresIndividualReview)
+            .orElse(false);
+    }
+
     /** The definition the run follows: the one it is pinned to, else its pipeline's latest as of the run; empty for none. */
     private Optional<PipelineDefinition> definitionOf(JobQueue run, SourceJob job, Optional<Long> pinned,
         Function<Long, Optional<PipelineDefinitionStore.Stored>> byId) {
@@ -168,6 +180,7 @@ public class RunReviews {
         out.put("reviewerUserId", d.reviewerUserId);
         out.put("reviewer", d.reviewerName);
         out.put("decidedAt", d.decidedAt == null ? null : BusinessTime.wallClockOf(d.decidedAt));
+        out.put("bulkId", d.bulkId);
         return out;
     }
 }

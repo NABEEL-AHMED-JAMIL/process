@@ -89,12 +89,13 @@ public class RunReviewTaskListener {
         Long reviewer = decided.path("actedBy").isIntegralNumber() ? decided.get("actedBy").asLong() : null;
         String comment = decided.path("comment").isTextual() ? decided.get("comment").asText() : null;
         long taskId = decided.path("taskId").asLong(0);
+        String bulkId = bulkIdOf(decided);
         String name = reviewer == null ? null : this.names.namesFor(Collections.singleton(reviewer)).get(reviewer);
         // The decision and its audit line commit inside the workspace's scope: row security checks them as that workspace.
         ResponseDto recorded = RowSecurity.forTenant(tenantId, () -> this.transactions.execute(status -> this.reviews.decideFromInbox(tenantId,
-            run, decision, reviewer, name, comment, instanceId, taskId)));
-        logger.info("Run {} of workspace {}: the Task inbox's {} (request {}, task {}, by {}): {}", run, tenantId, decision, instanceId,
-            taskId, reviewer, recorded.getMessage());
+            run, decision, reviewer, name, comment, instanceId, taskId, bulkId)));
+        logger.info("Run {} of workspace {}: the Task inbox's {} (request {}, task {}, by {}{}): {}", run, tenantId, decision, instanceId,
+            taskId, reviewer, bulkId == null ? "" : ", bulk " + bulkId, recorded.getMessage());
     }
 
     /**
@@ -120,11 +121,25 @@ public class RunReviewTaskListener {
         Long reviewer = decided.path("actedBy").isIntegralNumber() ? decided.get("actedBy").asLong() : null;
         String comment = decided.path("comment").isTextual() ? decided.get("comment").asText() : null;
         long taskId = decided.path("taskId").asLong(0);
+        String bulkId = bulkIdOf(decided);
         String name = reviewer == null ? null : this.names.namesFor(Collections.singleton(reviewer)).get(reviewer);
         RunApprovals.Outcome outcome = this.approvals.decideFromInbox(tenantId, approvalId, "Approved".equals(state),
-            reviewer, name, comment, instanceId, taskId);
+            reviewer, name, comment, instanceId, taskId, bulkId);
         logger.info("Approval request {} of workspace {}: the Task inbox's {} (request {}, task {}, by {}): {}", approvalId, tenantId, state,
             instanceId, taskId, reviewer, outcome);
+    }
+
+    /**
+     * Bulk review: the bulk decision the task was decided in -- the decision's bulkId, absent or null for a single decision.
+     * One that is not a bulk id's shape (^[A-Za-z0-9-]{8,64}$) is not recorded.
+     */
+    static String bulkIdOf(JsonNode decided) {
+        String bulkId = decided.path("bulkId").isTextual() ? decided.get("bulkId").asText() : null;
+        if (bulkId != null && !RunReviewBulk.BULK_ID.matcher(bulkId).matches()) {
+            logger.warn("Skipped a malformed bulkId on a {} event's decision; recorded as a single decision.", INSTANCE_CHANGED);
+            return null;
+        }
+        return bulkId;
     }
 
     /** The run a request is about, or null for one that is not a run's review. */

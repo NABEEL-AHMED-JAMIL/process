@@ -107,7 +107,9 @@ public class RunReviewService {
         JobQueue run = owned.get().run;
         Map<String, Object> review = this.head(run);
         review.putAll(this.reviews.summary(run, owned.get().job));
-        Optional<String> refusal = this.whyNot(owned.get(), ReviewParty.INTERNAL);
+        Optional<String> refusal = this.whyNot(owned.get(), ReviewParty.INTERNAL).map(refused -> refused.message);
+        // Bulk review: whether the run's pipeline requires individual review (never part of a bulk decision).
+        review.put("individual", this.reviews.individual(run, owned.get().job));
         Map<String, Object> you = new LinkedHashMap<>();
         you.put("party", ReviewParties.ofCaller().map(PipelineDefinition.Review::wordOf).orElse(null));
         you.put("canDecide", !refusal.isPresent());
@@ -163,6 +165,7 @@ public class RunReviewService {
             row.put("finishedAt", owned.get().run.getEndTime());
             row.put("required", summary.get("required"));
             row.put("decisions", summary.get("decisions"));
+            row.put("individual", this.reviews.individual(owned.get().run, owned.get().job));
             waiting.add(row);
         }
         Map<String, Object> data = new LinkedHashMap<>();
@@ -221,12 +224,12 @@ public class RunReviewService {
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
         }
-        Optional<String> refused = this.whyNot(owned.get(), party);
+        Optional<RunReviewRules.Refusal> refused = this.whyNot(owned.get(), party);
         if (refused.isPresent()) {
-            return new ResponseDto(ERROR, refused.get());
+            return new ResponseDto(ERROR, refused.get().message);
         }
         Recorded recorded = this.record(owned.get(), party, decision.get(), comment, reason, TenantContext.getAppUserId(),
-            TenantContext.getUsername(), null);
+            TenantContext.getUsername(), null, null);
         if (recorded.refusal != null) {
             return new ResponseDto(ERROR, recorded.refusal);
         }
@@ -265,10 +268,11 @@ public class RunReviewService {
      * Records {@code party}'s decision on the run -- the one way a decision is written, whoever asked: the run's status row
      * held for the transaction and asked again (the other party may have decided meanwhile), the decision, the status after
      * it, the results settled once decided, a line in the run's audit log ({@code via} says where, when not the console's
-     * or the API's own endpoint), and the customer's run.review.decided.
+     * or the API's own endpoint; and " Bulk decision <bulkId>." for a decision that was part of one), and the customer's
+     * run.review.decided.
      */
     private Recorded record(RunOwnership.Owned owned, ReviewParty party, ReviewDecision decision, String comment, String reason,
-        Long reviewerUserId, String reviewerName, String via) {
+        Long reviewerUserId, String reviewerName, String via, String bulkId) {
         JobQueue run = owned.run;
         RunReviewStore.Status held = this.store.lockPending(run.getJobQueueId(), this.reviews.required(run, owned.job));
         Map<ReviewParty, ReviewDecision> decided = this.reviews.decisionsByParty(this.store.decisionsOf(run.getJobQueueId()));
@@ -287,6 +291,7 @@ public class RunReviewService {
         record.reviewerUserId = reviewerUserId;
         record.reviewerName = reviewerName;
         record.decidedAt = now;
+        record.bulkId = bulkId;
         this.store.record(record);
         decided.put(party, decision);
         RunReviewStatus status = RunReviewRules.statusOf(held.required, decided);
@@ -294,7 +299,8 @@ public class RunReviewService {
         if (status.isDecided()) {
             this.store.settleResults(run.getJobQueueId(), status);
         }
-        this.transactions.saveJobAuditLogs(run.getJobQueueId(), auditLine(record, status) + (via == null ? "" : " " + via));
+        this.transactions.saveJobAuditLogs(run.getJobQueueId(), auditLine(record, status) + (via == null ? "" : " " + via)
+            + bulkSuffix(bulkId));
         if (this.events != null && run.getTenantId() != null) {
             // MIG-333: the customer's webhooks hear of every decision, either party's, with the review's status after it.
             this.events.reviewDecided(run.getTenantId(), run.getJobQueueId());
@@ -308,10 +314,12 @@ public class RunReviewService {
      * that person's internal decision, with their comment (a rejection's reason too). No caller is signed in: run as the
      * run's workspace (RowSecurity.forTenant). Refused, and nothing recorded, when the run is not this workspace's, not
      * completed, needs no internal review, or the internal review is already decided (the console got there first).
+     * {@code bulkId} (bulk review): the bulk decision in the Task inbox the task was decided in, recorded with the decision
+     * and named at the end of its audit line; null for a single decision.
      */
     @Transactional
     public ResponseDto decideFromInbox(long tenantId, long jobQueueId, ReviewDecision decision, Long reviewerUserId,
-        String reviewerName, String comment, long instanceId, long taskId) {
+        String reviewerName, String comment, long instanceId, long taskId, String bulkId) {
         Optional<RunOwnership.Owned> owned = RunOwnership.ofWorkspace(this.runs, this.jobs, jobQueueId, tenantId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
@@ -329,7 +337,7 @@ public class RunReviewService {
         }
         String reason = decision == ReviewDecision.REJECTED ? (said != null ? said : "Rejected in the Task inbox") : null;
         Recorded recorded = this.record(owned.get(), ReviewParty.INTERNAL, decision, said, reason, reviewerUserId, reviewerName,
-            String.format("Decided in the Task inbox (request %d, task %d).", instanceId, taskId));
+            String.format("Decided in the Task inbox (request %d, task %d).", instanceId, taskId), bulkId);
         if (recorded.refusal != null) {
             return new ResponseDto(ERROR, recorded.refusal);
         }
@@ -337,17 +345,124 @@ public class RunReviewService {
             this.head(owned.get().run));
     }
 
-    /** Why this caller may not record {@code party}'s review of this run now; empty when they may. */
-    private Optional<String> whyNot(RunOwnership.Owned owned, ReviewParty party) {
+    /** {@link #decideFromInbox(long, long, ReviewDecision, Long, String, String, long, long, String)} for a single decision (no bulkId). */
+    @Transactional
+    public ResponseDto decideFromInbox(long tenantId, long jobQueueId, ReviewDecision decision, Long reviewerUserId,
+        String reviewerName, String comment, long instanceId, long taskId) {
+        return this.decideFromInbox(tenantId, jobQueueId, decision, reviewerUserId, reviewerName, comment, instanceId, taskId, null);
+    }
+
+    /**
+     * Why this caller may not record {@code party}'s review of this run now, with its kind; empty when they may. The one
+     * check of a single decision and of each run of a bulk one.
+     */
+    private Optional<RunReviewRules.Refusal> whyNot(RunOwnership.Owned owned, ReviewParty party) {
         Optional<String> caller = ReviewParties.refusal(party);
         if (caller.isPresent()) {
-            return caller;
+            return Optional.of(new RunReviewRules.Refusal(RunReviewRules.Refusal.NOT_YOURS, caller.get()));
         }
         if (owned.run.getJobStatus() != JobStatus.Completed) {
-            return Optional.of(String.format("Only a completed run's results can be reviewed; this run is %s.", owned.run.getJobStatus()));
+            return Optional.of(new RunReviewRules.Refusal(RunReviewRules.Refusal.NOT_COMPLETED,
+                String.format("Only a completed run's results can be reviewed; this run is %s.", owned.run.getJobStatus())));
         }
         Set<ReviewParty> required = this.reviews.required(owned.run, owned.job);
-        return RunReviewRules.refusal(required, this.reviews.decisionsByParty(this.store.decisionsOf(owned.run.getJobQueueId())), party);
+        return RunReviewRules.refused(required, this.reviews.decisionsByParty(this.store.decisionsOf(owned.run.getJobQueueId())), party);
+    }
+
+    // ---- bulk review (2026-10-12) -------------------------------------------------------------------------------------
+
+    /** What one run of a bulk decision came to: done, or skipped with a reason code (RunReviewRules.Refusal's). */
+    public static final class BulkOutcome {
+        public final long id;
+        public final boolean done;
+        public final String reason;
+        public final String message;
+        public final String label;
+        public final String group;
+        public final String link;
+
+        BulkOutcome(long id, boolean done, String reason, String message, String label, String group, String link) {
+            this.id = id;
+            this.done = done;
+            this.reason = reason;
+            this.message = message;
+            this.label = label;
+            this.group = group;
+            this.link = link;
+        }
+
+        /** Not found, or not the caller's: nothing about the run is named, whether it exists elsewhere or not at all. */
+        static BulkOutcome notFound(long id) {
+            return new BulkOutcome(id, false, RunReviewRules.Refusal.NOT_FOUND, "Not found.", null, null, null);
+        }
+    }
+
+    /**
+     * One run of a bulk decision (POST sourceJob.json/review/bulkDecide), as the caller, in the caller's transaction (one per
+     * run: RunReviewBulk). Checked by exactly a single console decision's rules -- the caller's run (RunOwnership.owned),
+     * the caller's party and role, a completed run, a review this party still owes ({@link #whyNot}) -- then the bulk rules:
+     * the pipeline does not require individual review, and an approval is allowed in bulk by the workspace's policy
+     * ({@code bulkApproveAllowed}). Recorded the single decision's way ({@link #record}: the same rows, audit line and
+     * events), the run_review_decision row and the audit line naming {@code bulkId}. A rejection's {@code comment} is its
+     * reason; no re-run. The run's internal decision already recorded with this bulkId is done again, and nothing more is
+     * written. {@code dryRun}: the same checks, nothing written.
+     */
+    public BulkOutcome decideInBulk(long jobQueueId, ReviewDecision decision, String comment, String bulkId, boolean dryRun,
+        boolean bulkApproveAllowed) {
+        Optional<RunOwnership.Owned> found = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
+        if (!found.isPresent()) {
+            return BulkOutcome.notFound(jobQueueId);
+        }
+        RunOwnership.Owned owned = found.get();
+        String[] about = about(owned);
+        String label = about[0];
+        String group = about[1];
+        String link = about[2];
+        boolean again = this.store.decisionsOf(jobQueueId).stream()
+            .anyMatch(d -> d.party == ReviewParty.INTERNAL && bulkId.equals(d.bulkId));
+        if (again) {
+            return new BulkOutcome(jobQueueId, true, null, "Already recorded in this bulk decision.", label, group, link);
+        }
+        Optional<RunReviewRules.Refusal> refused = this.whyNot(owned, ReviewParty.INTERNAL);
+        if (!refused.isPresent() && this.reviews.individual(owned.run, owned.job)) {
+            refused = Optional.of(new RunReviewRules.Refusal(RunReviewRules.Refusal.INDIVIDUAL_REVIEW,
+                "Its pipeline requires individual review: decide this run on its own."));
+        }
+        if (!refused.isPresent() && decision == ReviewDecision.APPROVED && !bulkApproveAllowed) {
+            refused = Optional.of(new RunReviewRules.Refusal(RunReviewRules.Refusal.BULK_OFF,
+                "This workspace does not allow bulk approve of pipeline runs: approve it on its own."));
+        }
+        if (refused.isPresent()) {
+            return new BulkOutcome(jobQueueId, false, refused.get().code, refused.get().message, label, group, link);
+        }
+        String word = decision == ReviewDecision.APPROVED ? "approved" : "rejected";
+        if (dryRun) {
+            return new BulkOutcome(jobQueueId, true, null, "Would be " + word + ".", label, group, link);
+        }
+        Recorded recorded = this.record(owned, ReviewParty.INTERNAL, decision, decision == ReviewDecision.REJECTED ? null : comment,
+            decision == ReviewDecision.REJECTED ? comment : null, TenantContext.getAppUserId(), TenantContext.getUsername(), null, bulkId);
+        if (recorded.refusal != null) {
+            // The other party, or another reviewer, decided while this ran: the review is decided, nothing was recorded.
+            return new BulkOutcome(jobQueueId, false, RunReviewRules.Refusal.ALREADY_DECIDED, recorded.refusal, label, group, link);
+        }
+        return new BulkOutcome(jobQueueId, true, null, Character.toUpperCase(word.charAt(0)) + word.substring(1) + ".", label, group, link);
+    }
+
+    /** The run's label, group and link for a bulk answer's failed item, when the caller may see it; null otherwise. */
+    public String[] describe(long jobQueueId) {
+        return RunOwnership.owned(this.runs, this.jobs, jobQueueId).map(RunReviewService::about).orElse(null);
+    }
+
+    /** A run as a bulk answer names it: its label ("Run #8301 \u00b7 Readmission stats"), its group (the job) and its page. */
+    private static String[] about(RunOwnership.Owned owned) {
+        String group = owned.job.getJobName() == null ? "Job " + owned.job.getJobId() : owned.job.getJobName();
+        return new String[] {String.format("Run #%d \u00b7 %s", owned.run.getJobQueueId(), group), group,
+            String.format("/pipelines/schedules/%d/runs/%d/logs", owned.job.getJobId(), owned.run.getJobQueueId())};
+    }
+
+    /** The audit line's end for a decision that was part of a bulk decision; "" for a single one. */
+    static String bulkSuffix(String bulkId) {
+        return bulkId == null ? "" : " Bulk decision " + bulkId + ".";
     }
 
     /**

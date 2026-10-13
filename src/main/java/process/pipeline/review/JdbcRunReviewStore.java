@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 public class JdbcRunReviewStore implements RunReviewStore {
 
     private static final String DECISION_COLUMNS = "run_review_decision_id, job_queue_id, attempt, party, decision, comment, reason, "
-        + "reviewer_user_id, reviewer_name, decided_at";
+        + "reviewer_user_id, reviewer_name, decided_at, bulk_id";
     private static final String STATUS_COLUMNS = "job_queue_id, required_parties, status, decided_at, rerun_job_queue_id";
 
     private final JdbcTemplate jdbc;
@@ -94,9 +94,9 @@ public class JdbcRunReviewStore implements RunReviewStore {
     @Override
     public long record(Decision d) {
         return this.jdbc.queryForObject("INSERT INTO run_review_decision (job_queue_id, attempt, party, decision, comment, reason, "
-            + "reviewer_user_id, reviewer_name, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING run_review_decision_id",
+            + "reviewer_user_id, reviewer_name, decided_at, bulk_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING run_review_decision_id",
             Long.class, d.jobQueueId, d.attempt, d.party.name(), d.decision.name(), d.comment, d.reason, d.reviewerUserId,
-            d.reviewerName, Timestamp.from(d.decidedAt));
+            d.reviewerName, Timestamp.from(d.decidedAt), d.bulkId);
     }
 
     @Override
@@ -146,6 +146,7 @@ public class JdbcRunReviewStore implements RunReviewStore {
         d.reviewerUserId = (Long) rs.getObject("reviewer_user_id");
         d.reviewerName = rs.getString("reviewer_name");
         d.decidedAt = instant(rs, "decided_at");
+        d.bulkId = rs.getString("bulk_id");
         return d;
     }
 

@@ -8,6 +8,7 @@ import process.api.DocumentTriggerRestApi;
 import process.api.InboxTriggerRestApi;
 import process.api.PipelineDefinitionRestApi;
 import process.api.RunReviewRestApi;
+import process.api.RunReviewBulkRestApi;
 import process.api.StepTimelineRestApi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -58,6 +59,7 @@ import process.identity.InternalTenantDirectoryRestApi;
 import process.lineage.InternalLineageRestApi;
 import process.identity.InternalTenantFactsRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
+import process.workflow.InternalReviewEligibilityRestApi;
 import process.identity.InternalUserDirectoryRestApi;
 import process.slo.InternalSloRestApi;
 import process.slo.ReliabilityRestApi;
@@ -114,7 +116,7 @@ class CoreProbeCoverageTest {
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, DocumentTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
-        RunReviewRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
+        RunReviewRestApi.class, RunReviewBulkRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
         // MIG-345: the retry of a run, an API client's
@@ -132,7 +134,8 @@ class CoreProbeCoverageTest {
         InternalKafkaPublishRestApi.class, InternalNotificationRelayRestApi.class, InternalPageAccessRestApi.class,
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
-        InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class);
+        InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class,
+        InternalReviewEligibilityRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -182,6 +185,9 @@ class CoreProbeCoverageTest {
             + " (InternalKafkaPublishRestApiTest.withoutTheServiceTokenNothingIsPublished)");
         NOTHING_TO_AIM.put("POST internal/workflows/run", service + "; the job runs as that workspace through Run now's own rules"
             + " (InternalWorkflowRunRestApiTest.withoutTheInternalTokenNothingRuns)");
+        NOTHING_TO_AIM.put("POST internal/review/bulkEligibility", service + "; answered as that workspace (RowSecurity.forTenant), "
+            + "another workspace's subject is not-found and names nothing (InternalReviewEligibilityRestApiTest."
+            + "withoutTheInternalTokenNothingIsAnswered, eachSubjectIsAnsweredByItsPipelinesFlagAsTheWorkspace)");
         NOTHING_TO_AIM.put("POST internal/notifications/notice", service
             + " (InternalNotificationRelayRestApiTest.withoutTheServiceTokenNothingIsRelayed)");
         NOTHING_TO_AIM.put("POST internal/notifications/mail", service

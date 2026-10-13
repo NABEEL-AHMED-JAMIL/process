@@ -29,6 +29,8 @@ public interface RunReviewStore {
         public Long reviewerUserId;
         public String reviewerName;
         public Instant decidedAt;
+        /** Bulk review (V209): the bulk decision this decision was part of; null for a single decision. */
+        public String bulkId;
     }
 
     /** A run's review status as last decided, the parties it was decided against, and the run a rejection queued. */

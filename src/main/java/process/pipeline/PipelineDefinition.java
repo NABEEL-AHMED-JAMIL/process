@@ -390,7 +390,7 @@ public class PipelineDefinition {
      * a review starts PENDING and is approved only by every party named here.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"required", "reviewers"})
+    @JsonPropertyOrder({"required", "reviewers", "individual"})
     public static class Review {
 
         /** The words a party is written as, in the order they are listed. */
@@ -402,6 +402,12 @@ public class PipelineDefinition {
          * access profile, by id). Absent: the workspace's administrators, as before.
          */
         private Reviewers reviewers;
+        /**
+         * Bulk review (2026-10-12): true when this pipeline's runs are decided one by one only -- its run's internal review
+         * and its Approval steps' requests are never part of a bulk approve or reject. Absent or false: bulk decisions are
+         * allowed, as the workspace's review policy says.
+         */
+        private Boolean individual;
 
         public static Review of(List<String> required) {
             Review review = new Review();
@@ -429,6 +435,16 @@ public class PipelineDefinition {
         public Reviewers getReviewers() { return reviewers; }
 
         public void setReviewers(Reviewers reviewers) { this.reviewers = reviewers; }
+
+        public Boolean getIndividual() { return individual; }
+
+        public void setIndividual(Boolean individual) { this.individual = individual; }
+
+        /** Whether this pipeline's runs and approvals are decided one by one only (never in bulk). */
+        @JsonIgnore
+        public boolean requiresIndividualReview() {
+            return Boolean.TRUE.equals(this.individual);
+        }
 
         /** The reviewers in effect: the ones set, else the workspace's administrators. */
         @JsonIgnore

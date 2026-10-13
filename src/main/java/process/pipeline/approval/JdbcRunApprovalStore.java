@@ -22,7 +22,7 @@ public class JdbcRunApprovalStore implements RunApprovalStore {
 
     private static final String COLUMNS = "run_approval_id, tenant_id, job_queue_id, attempt, step_execution_id, step_index, step_key, "
         + "status, title, reviewers_kind, reviewers_value, records_in, requested_at, expires_at, decided_at, decided_by_user_id, "
-        + "decided_by_name, comment, workflow_instance_id, workflow_task_id";
+        + "decided_by_name, comment, workflow_instance_id, workflow_task_id, bulk_id";
 
     private final JdbcTemplate jdbc;
 
@@ -46,11 +46,12 @@ public class JdbcRunApprovalStore implements RunApprovalStore {
 
     @Override
     public Optional<Approval> decide(long runApprovalId, String status, Long userId, String name, String comment, Long instanceId,
-                                     Long taskId, Instant at) {
+                                     Long taskId, Instant at, String bulkId) {
         return this.jdbc.query("UPDATE run_approval SET status = ?, decided_at = ?, decided_by_user_id = ?, decided_by_name = ?, comment = ?, "
-                + "workflow_instance_id = COALESCE(?, workflow_instance_id), workflow_task_id = COALESCE(?, workflow_task_id), "
+                + "workflow_instance_id = COALESCE(?, workflow_instance_id), workflow_task_id = COALESCE(?, workflow_task_id), bulk_id = ?, "
                 + "date_updated = now() WHERE run_approval_id = ? AND status = 'PENDING' RETURNING " + COLUMNS, JdbcRunApprovalStore::row,
-            status, Timestamp.from(at), userId, cut(name, 255), cut(comment, 2000), instanceId, taskId, runApprovalId).stream().findFirst();
+            status, Timestamp.from(at), userId, cut(name, 255), cut(comment, 2000), instanceId, taskId, cut(bulkId, 64), runApprovalId)
+            .stream().findFirst();
     }
 
     @Override
@@ -102,6 +103,7 @@ public class JdbcRunApprovalStore implements RunApprovalStore {
         a.comment = rs.getString("comment");
         a.workflowInstanceId = (Long) rs.getObject("workflow_instance_id");
         a.workflowTaskId = (Long) rs.getObject("workflow_task_id");
+        a.bulkId = rs.getString("bulk_id");
         return a;
     }
 

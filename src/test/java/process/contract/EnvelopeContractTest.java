@@ -84,6 +84,8 @@ class EnvelopeContractTest extends EnvelopeContract {
             + "thread; the engine unwraps it into the step's error and never lets it out (MIG-230)");
         internal.put(declared("process.forms.PublicForms$Refused"), "caught in PublicFormRestApi: a share link's refusal answered "
             + "with its own status and sentence, nothing else (MIG-278)");
+        internal.put(declared("process.pipeline.review.RunReviewBulk$Refused"), "caught in RunReviewBulkRestApi.bulkDecide: a bulk "
+            + "decision refused as a whole, answered with its own status (400 or 429) and sentence in the envelope (bulk review)");
         internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
         internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
             + "field (Wave 5 Forms lite)");

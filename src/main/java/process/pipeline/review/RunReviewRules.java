@@ -44,23 +44,53 @@ public final class RunReviewRules {
 
     /** Why this party may not record a decision now, in words a person reads; empty when it may. */
     public static Optional<String> refusal(Set<ReviewParty> required, Map<ReviewParty, ReviewDecision> decisions, ReviewParty party) {
+        return refused(required, decisions, party).map(refused -> refused.message);
+    }
+
+    /**
+     * {@link #refusal} with its kind, as bulk review's skip reasons name it: {@link Refusal#NO_REVIEW} when the pipeline asks
+     * for no review (or none by this party), {@link Refusal#ALREADY_DECIDED} when the review or this party's part of it is
+     * already decided.
+     */
+    public static Optional<Refusal> refused(Set<ReviewParty> required, Map<ReviewParty, ReviewDecision> decisions, ReviewParty party) {
         if (required.isEmpty()) {
-            return Optional.of("This run's pipeline asks for no review of its results.");
+            return Optional.of(new Refusal(Refusal.NO_REVIEW, "This run's pipeline asks for no review of its results."));
         }
         String word = PipelineDefinition.Review.wordOf(party);
         if (!required.contains(party)) {
-            return Optional.of(String.format("This run's pipeline does not ask for %s %s review.", article(word), word));
+            return Optional.of(new Refusal(Refusal.NO_REVIEW, String.format("This run's pipeline does not ask for %s %s review.",
+                article(word), word)));
         }
         RunReviewStatus status = statusOf(required, decisions);
         if (status.isDecided()) {
-            return Optional.of(String.format("This run's results are already %s.", status.name().toLowerCase(Locale.ROOT)));
+            return Optional.of(new Refusal(Refusal.ALREADY_DECIDED, String.format("This run's results are already %s.",
+                status.name().toLowerCase(Locale.ROOT))));
         }
         ReviewDecision earlier = decisions.get(party);
         if (earlier != null) {
-            return Optional.of(String.format("The %s review of this run is already recorded: %s.", word,
-                earlier.name().toLowerCase(Locale.ROOT)));
+            return Optional.of(new Refusal(Refusal.ALREADY_DECIDED, String.format("The %s review of this run is already recorded: %s.",
+                word, earlier.name().toLowerCase(Locale.ROOT))));
         }
         return Optional.empty();
+    }
+
+    /** Why a decision is refused: its kind (bulk review's skip reason code) and the words a person reads. */
+    public static final class Refusal {
+        public static final String NOT_FOUND = "not-found";
+        public static final String NOT_YOURS = "not-yours";
+        public static final String NOT_COMPLETED = "not-completed";
+        public static final String NO_REVIEW = "no-review";
+        public static final String ALREADY_DECIDED = "already-decided";
+        public static final String INDIVIDUAL_REVIEW = "individual-review";
+        public static final String BULK_OFF = "bulk-off";
+
+        public final String code;
+        public final String message;
+
+        public Refusal(String code, String message) {
+            this.code = code;
+            this.message = message;
+        }
     }
 
     private static String article(String word) {

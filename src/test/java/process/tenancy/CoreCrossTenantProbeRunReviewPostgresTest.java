@@ -5,7 +5,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.pipeline.review.RunReviewBulkRequest;
 import process.pipeline.review.RunReviewRequest;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static process.tenancy.CoreProbeFixture.A_PIPELINE;
@@ -165,5 +169,77 @@ class CoreCrossTenantProbeRunReviewPostgresTest {
         assertThat(sql.queryForObject("SELECT count(*) FROM job_audit_logs WHERE job_queue_id = ? AND log_detail LIKE "
             + "'Result review: internal APPROVED by alice@acme.example%'", Long.class, A_RUN)).isEqualTo(1);
         assertThat(fx.leaks).isEmpty();
+    }
+
+    private static RunReviewBulkRequest bulk(String decision, String bulkId, boolean dryRun, Long... runs) {
+        RunReviewBulkRequest request = new RunReviewBulkRequest();
+        request.setJobQueueIds(Arrays.asList(runs));
+        request.setDecision(decision);
+        request.setComment("probe bulk");
+        request.setBulkId(bulkId);
+        request.setDryRun(dryRun);
+        return request;
+    }
+
+    /**
+     * Bulk review: POST sourceJob.json/review/bulkDecide decides only runs the caller could decide one by one -- another
+     * workspace's run is "not-found" and nothing of it is named, a tenant user decides nothing -- and the decision of A's
+     * own run carries its bulk_id in the row and the audit line. The review policy is the caller's workspace's own.
+     */
+    @Test
+    void aBulkDecisionDecidesOnlyTheCallersRunsAndThePolicyIsTheWorkspacesOwn() {
+        String before = fx.foreignRows();
+        JdbcTemplate sql = fx.db.jdbc();
+        try {
+            for (Long none : NO_WORKSPACE) {
+                assertThat(fx.probe("POST sourceJob.json/review/bulkDecide", tenantlessUser(none),
+                    () -> fx.runReviewBulk.bulkDecide(bulk("APPROVED", "probe-none-0001", false, A_RUN)))).contains(REFUSED);
+                assertThat(fx.probe("GET sourceJob.json/review/policy", tenantlessUser(none), () -> fx.runReviewBulk.policy()))
+                    .contains(REFUSED);
+                assertThat(fx.probe("POST sourceJob.json/review/policy", tenantlessUser(none),
+                    () -> fx.runReviewBulk.savePolicy(Collections.singletonMap("bulkApproveRuns", false)))).contains(REFUSED);
+            }
+            assertThat(fx.probe("POST sourceJob.json/review/bulkDecide", USER_OF_A,
+                () -> fx.runReviewBulk.bulkDecide(bulk("APPROVED", "probe-user-0001", false, A_RUN, COLLEAGUE_RUN, B_RUN))))
+                .contains(SUCCEEDED).contains("\"reason\":\"not-yours\"").contains("\"reason\":\"not-found\"")
+                .doesNotContain("\"done\":[{");
+            assertThat(fx.probe("POST sourceJob.json/review/bulkDecide(dry run)", ADMIN_OF_A,
+                () -> fx.runReviewBulk.bulkDecide(bulk("APPROVED", "probe-bulk-0001", true, COLLEAGUE_RUN, B_RUN, B_RUN_NAMING_USER_A))))
+                .contains(SUCCEEDED).contains("1 would be approved, 2 skipped.");
+            assertThat(sql.queryForObject("SELECT count(*) FROM run_review_decision WHERE job_queue_id = ?", Long.class, COLLEAGUE_RUN))
+                .as("a dry run writes nothing").isZero();
+            assertThat(fx.probe("POST sourceJob.json/review/bulkDecide", ADMIN_OF_A,
+                () -> fx.runReviewBulk.bulkDecide(bulk("APPROVED", "probe-bulk-0001", false, COLLEAGUE_RUN, B_RUN, B_RUN_NAMING_USER_A))))
+                .contains(SUCCEEDED).contains("1 approved, 2 skipped.").contains("\"reason\":\"not-found\"");
+            assertThat(sql.queryForObject("SELECT bulk_id FROM run_review_decision WHERE job_queue_id = ?", String.class, COLLEAGUE_RUN))
+                .isEqualTo("probe-bulk-0001");
+            assertThat(sql.queryForObject("SELECT tenant_id FROM run_review_decision WHERE job_queue_id = ?", Long.class, COLLEAGUE_RUN))
+                .isEqualTo(A);
+            assertThat(sql.queryForObject("SELECT count(*) FROM job_audit_logs WHERE job_queue_id = ? AND log_detail LIKE "
+                + "'Result review: internal APPROVED by alice@acme.example%Bulk decision probe-bulk-0001.'", Long.class, COLLEAGUE_RUN))
+                .isEqualTo(1);
+            assertThat(fx.probe("POST sourceJob.json/review/bulkDecide(again)", ADMIN_OF_A,
+                () -> fx.runReviewBulk.bulkDecide(bulk("APPROVED", "probe-bulk-0001", false, COLLEAGUE_RUN))))
+                .contains("Already recorded in this bulk decision.");
+
+            assertThat(fx.probe("GET sourceJob.json/review/policy", USER_OF_A, () -> fx.runReviewBulk.policy()))
+                .contains(SUCCEEDED).contains("\"bulkApproveRuns\":true").contains("\"saved\":false");
+            assertThat(fx.probe("POST sourceJob.json/review/policy", ADMIN_OF_A,
+                () -> fx.runReviewBulk.savePolicy(Collections.singletonMap("bulkApproveRuns", false))))
+                .contains(SUCCEEDED).contains("\"bulkApproveRuns\":false");
+            assertThat(fx.probe("GET sourceJob.json/review/policy(as C)", ADMIN_OF_C, () -> fx.runReviewBulk.policy()))
+                .contains(SUCCEEDED).contains("\"bulkApproveRuns\":true").contains("\"saved\":false");
+            assertThat(sql.queryForList("SELECT tenant_id FROM review_policy", Long.class)).containsExactly(A);
+            assertThat(fx.leaks).isEmpty();
+            assertThat(sql.queryForObject("SELECT count(*) FROM run_review_decision WHERE job_queue_id IN (?, ?)", Long.class, B_RUN,
+                B_RUN_NAMING_USER_A)).isZero();
+        } finally {
+            // The other probes of this class read COLLEAGUE_RUN undecided and no policy saved.
+            sql.update("DELETE FROM run_review_decision WHERE job_queue_id = ?", COLLEAGUE_RUN);
+            sql.update("DELETE FROM run_review WHERE job_queue_id = ?", COLLEAGUE_RUN);
+            sql.update("DELETE FROM job_audit_logs WHERE job_queue_id = ? AND log_detail LIKE 'Result review:%'", COLLEAGUE_RUN);
+            sql.update("DELETE FROM review_policy");
+        }
+        assertThat(fx.foreignRows()).isEqualTo(before);
     }
 }

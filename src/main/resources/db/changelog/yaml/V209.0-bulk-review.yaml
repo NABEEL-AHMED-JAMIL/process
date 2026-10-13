@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 209.0-bulk-review
+      author: nabeel.amd93
+      description: "Bulk review (2026-10-12): run_review_decision.bulk_id and run_approval.bulk_id name the bulk decision a row was part of; review_policy holds a workspace's 'Allow bulk approve' for pipeline runs (on unless an administrator turns it off)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V209.0-bulk-review/V209__bulk_review.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V209.0-bulk-review/V209__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
