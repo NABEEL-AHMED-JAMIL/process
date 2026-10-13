@@ -135,6 +135,19 @@ class RunFacetsTest {
         assertThat(slotPart).contains("UPPER(r.status) in ('FAILED')").contains("r.tdi in (1932)").contains("r.trig in ('manual')");
     }
 
+    /** The builders run as JPA native queries, whose parser takes ":name" for a parameter: no "::" casts outside quotes. */
+    @Test
+    void theNewQueriesHaveNoColonCastsJpaWouldTakeForParameters() {
+        TenantContext.set(2960L, "TENANT_ADMIN", 4640L, "admin@riverside.test");
+        MessageQSearchDto asked = search("2026-10-07", "2026-10-13");
+        asked.setTriggers(new HashSet<>(Collections.singletonList("file")));
+        QueryService queries = new QueryService();
+        for (String sql : Arrays.asList(queries.runFacets(asked, RunFacets.HOUR), queries.fetchJobQLog(asked, false),
+            queries.fetchJobQLog(asked, true), queries.lastRunsOfTasks(Arrays.asList(1L, 2L)))) {
+            assertThat(sql.replaceAll("'[^']*'", "''")).as(sql).doesNotContain("::");
+        }
+    }
+
     @Test
     void fetchLogsNarrowsByPipelineAndTriggerAndNamesThemOnEachRow() {
         TenantContext.set(2960L, "TENANT_ADMIN", 4640L, "admin@riverside.test");

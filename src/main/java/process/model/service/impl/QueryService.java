@@ -730,8 +730,9 @@ public class QueryService {
      * job_queue_id, job_id, job_status, at (the start, else when the run was made).
      */
     public String lastRunsOfTasks(Collection<Long> taskDetailIds) {
-        return "select t.id, x.job_queue_id, x.job_id, x.job_status, x.at from (select unnest(array[" + this.idList(taskDetailIds)
-            + "]::bigint[]) as id) t \n"
+        // cast(... as bigint[]), never "::": the query runs through JPA, whose parser reads ":name" as a parameter.
+        return "select t.id, x.job_queue_id, x.job_id, x.job_status, x.at from (select unnest(cast(array[" + this.idList(taskDetailIds)
+            + "] as bigint[])) as id) t \n"
             + "join lateral (select q.job_queue_id, q.job_id, q.job_status, coalesce(q.start_time, q.date_created) as at \n"
             + "  from source_job sj join lateral (select jq.job_queue_id, jq.job_id, jq.job_status, jq.start_time, jq.date_created "
             + "from job_queue jq where jq.job_id = sj.job_id and UPPER(jq.status) <> 'DELETE' order by jq.job_queue_id desc limit 1) q on true \n"

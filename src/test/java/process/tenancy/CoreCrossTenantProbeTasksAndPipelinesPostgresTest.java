@@ -114,8 +114,9 @@ class CoreCrossTenantProbeTasksAndPipelinesPostgresTest {
 
         // ---- /sourceTask.json: the three reads a tenant user reaches, as the user and as the admin
         for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
-            fx.probe("POST sourceTask.json/listSourceTask", caller,
-                () -> fx.sourceTasks.listSourceTask(1L, 50L, null, null, null, null, null));
+            // UX review 2026-10-13: each row carries its summary (steps, outputs, review, newest run) -- the caller's own.
+            assertThat(fx.probe("POST sourceTask.json/listSourceTask", caller,
+                () -> fx.sourceTasks.listSourceTask(1L, 50L, null, null, null, null, null))).contains(SUCCEEDED).contains("\"stepCount\"");
             assertThat(fx.probe("GET sourceTask.json/fetchSourceTaskWithSourceTaskId", caller,
                 () -> fx.sourceTasks.fetchSourceTaskWithSourceTaskId(B_TASK))).contains(REFUSED);
             fx.probe("POST sourceTask.json/fetchAllLinkJobsWithSourceTaskId", caller,

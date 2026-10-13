@@ -64,6 +64,7 @@ import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.PipelineReads;
+import process.pipeline.PipelineSummaries;
 import process.pipeline.StepReferences;
 import process.pipeline.StepTasks;
 import process.pipeline.registry.JdbcTaskOverrideStore;
@@ -487,6 +488,8 @@ final class CoreProbeFixture implements AutoCloseable {
         // Wired as the application wires them: without these the task service falls back to weaker checks.
         ReflectionTestUtils.setField(tasks, "taskReferenceRepository", referenceRows);
         ReflectionTestUtils.setField(tasks, "taskConfigRules", new TaskConfigRules(configRows));
+        // UX review 2026-10-13: the Pipelines list's per-row summary, through the same JPA executor as the list.
+        tasks.useSummaries(new PipelineSummaries(new PipelineDefinitionStore(this.db.appJdbc()), Definitions.builtInTasks(), queries));
         this.sourceTasks = new SourceTaskRestApi(tasks);
 
         this.pipelines = new PipelineRestApi(new PipelineServiceImpl(pipelineRows, this.identity, names, typeRows));
