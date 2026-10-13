@@ -42,6 +42,7 @@ logs/
 
 
 # The .env rule above matches only a file named exactly ".env". A backup copy slipped past it
-# once already (.env.bak.<timestamp>) and was committed with real credentials.
-.env.bak.*
+# once already (.env.bak.<timestamp>) and was committed with real credentials; it was untracked on 2026-10-12
+# (risk register #1) and stays in the history until the owner decides on rotation and a history rewrite.
+.env.bak*
 .env.*.bak
