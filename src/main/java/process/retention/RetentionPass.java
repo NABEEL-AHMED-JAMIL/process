@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -285,7 +286,7 @@ public class RetentionPass {
     /** For the console's preview: each class as a pass would see it now (no record is written). */
     public Map<DataClass, RetentionStore.ClassResult> preview(long tenantId, Map<DataClass, Integer> days, Map<DataClass, RetentionStore.Rule> rules,
         RetentionStore.Platform platform, Holds holds) {
-        Map<DataClass, RetentionStore.ClassResult> out = new java.util.EnumMap<>(DataClass.class);
+        Map<DataClass, RetentionStore.ClassResult> out = new EnumMap<>(DataClass.class);
         Instant now = this.clock.instant();
         for (DataClass dataClass : ORDER) {
             RetentionStore.ClassResult result = new RetentionStore.ClassResult();

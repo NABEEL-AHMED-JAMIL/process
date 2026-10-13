@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import process.retention.DataClass;
 
 /**
  * MIG-355: what one rule finds, from what the pass read -- pure functions, no database, so each kind's rule is tested on
@@ -216,7 +217,7 @@ public final class RuleChecks {
     }
 
     private static String label(String dataClass) {
-        return process.retention.DataClass.of(dataClass).map(c -> c.label().toLowerCase(java.util.Locale.ROOT)).orElse(dataClass);
+        return DataClass.of(dataClass).map(c -> c.label().toLowerCase(Locale.ROOT)).orElse(dataClass);
     }
 
     // ------------------------------------------------------------------------------------------------------ platform

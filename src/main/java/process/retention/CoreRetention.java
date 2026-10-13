@@ -14,6 +14,7 @@ import process.util.OpenSearchAuditLogClient;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -312,8 +313,8 @@ public class CoreRetention {
         if (value instanceof Timestamp) {
             return ((Timestamp) value).toInstant();
         }
-        if (value instanceof java.time.OffsetDateTime) {
-            return ((java.time.OffsetDateTime) value).toInstant();
+        if (value instanceof OffsetDateTime) {
+            return ((OffsetDateTime) value).toInstant();
         }
         return null;
     }

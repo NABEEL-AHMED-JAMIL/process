@@ -86,6 +86,14 @@ import process.monitoring.AlertDelivery;
 import process.monitoring.AlertEngine;
 import process.monitoring.AlertIncidents;
 import process.monitoring.AlertRestApi;
+import process.retention.CoreRetention;
+import process.retention.Holds;
+import process.retention.RemoteRetention;
+import process.retention.RetentionPass;
+import process.retention.RetentionRestApi;
+import process.retention.RetentionService;
+import process.retention.RetentionStore;
+import process.retention.RetentionTarget;
 import process.monitoring.AlertRules;
 import process.monitoring.BulkRetry;
 import process.monitoring.FailedRuns;
@@ -158,6 +166,9 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -430,6 +441,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final FailedRunsRestApi failedRuns;
     /** MIG-355: a workspace's alert rules and alerts (the evaluator's health reads are a stand-in: no platform rule is probed). */
     final AlertRestApi alerts;
+    /** MIG-354: a workspace's data retention -- the policy, holds, preview, confirmations, Run now and the history. */
+    final RetentionRestApi retention;
     /** Where the run datasets the probes download live (Wave 4): a scratch directory, as FileDatasetStore keeps them. */
     final FileDatasetStore runDatasets;
     final KafkaConnectionProfileRestApi kafkaProfiles;
@@ -537,6 +550,24 @@ final class CoreProbeFixture implements AutoCloseable {
         this.alerts = new AlertRestApi(alertRules, alertIncidents, new AlertEngine(alertRules, alertIncidents, new WorkspaceSignals(this.db.appJdbc()),
             mock(HealthCollector.class), new AlertDelivery(this.notifications, this.identity, this.db.appJdbc(), "http://localhost:4400"),
             this.db.appJdbc(), this.jpa.transactionManager()));
+        // MIG-354: the other services' classes are a stand-in that holds nothing; Core's own run against the real rows.
+        RemoteRetention remoteRetention = mock(RemoteRetention.class);
+        RetentionTarget nothingElsewhere = new RetentionTarget() {
+            @Override
+            public Tally preview(long tenantId, Instant cutoff, Holds holds) {
+                return Tally.of(0, null, null, 0);
+            }
+
+            @Override
+            public Batch purge(long tenantId, Instant cutoff, Holds holds, int limit, long passId) {
+                return Batch.of(0, 0, false);
+            }
+        };
+        when(remoteRetention.target(any())).thenReturn(nothingElsewhere);
+        RetentionStore retentionStore = new RetentionStore(this.db.appJdbc());
+        this.retention = new RetentionRestApi(new RetentionService(retentionStore, new RetentionPass(retentionStore,
+            new CoreRetention(this.db.appJdbc(), this.runDatasets, new OpenSearchAuditLogClient(), remoteRetention, this.jpa.transactionManager(),
+                Clock.systemUTC()), remoteRetention, Clock.systemUTC(), Duration.ofMinutes(5))));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);

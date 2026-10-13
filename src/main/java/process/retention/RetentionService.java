@@ -10,11 +10,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -156,7 +158,7 @@ public class RetentionService implements DisposableBean {
         for (Map.Entry<DataClass, Integer> entry : days.entrySet()) {
             RetentionStore.Rule rule = before.rules.get(entry.getKey());
             Integer was = rule == null ? null : rule.keepDays;
-            if (java.util.Objects.equals(was, entry.getValue())) {
+            if (Objects.equals(was, entry.getValue())) {
                 continue;
             }
             this.store.saveDays(tenantId, entry.getKey(), entry.getValue(), by);
@@ -398,7 +400,7 @@ public class RetentionService implements DisposableBean {
 
     static DataClass dataClass(Object value) {
         return DataClass.of(value == null ? null : String.valueOf(value))
-            .orElseThrow(() -> new Refused(HttpStatus.BAD_REQUEST, "dataClass is one of " + java.util.Arrays.toString(DataClass.values()) + "."));
+            .orElseThrow(() -> new Refused(HttpStatus.BAD_REQUEST, "dataClass is one of " + Arrays.toString(DataClass.values()) + "."));
     }
 
     static String reason(Object value, String missing) {

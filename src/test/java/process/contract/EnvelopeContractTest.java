@@ -96,6 +96,13 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.billing.BillingPort$BillingUnavailable"), "caught in Backfills (MIG-347: a backfill's cost "
             + "estimate and billed amount are said to be unavailable) and WorkspaceZones (the business zone until billing answers); "
             + "never reaches the console's edge");
+        internal.put(declared("process.retention.RetentionService$Refused"), "caught in RetentionRestApi (MIG-354): a retention policy, "
+            + "hold, confirmation or pass refused as a whole, answered with its own status (400, 404, 409, 429 or 502) and sentence in "
+            + "the envelope");
+        internal.put(declared("process.retention.RetentionTarget$Unavailable"), "caught in RetentionPass (MIG-354): a class whose service "
+            + "offers no retention yet is recorded UNAVAILABLE in the pass; never reaches a controller");
+        internal.put(declared("process.retention.RetentionPass$TooManyHeld"), "caught in RetentionPass (MIG-354): a class the holds keep "
+            + "whole this pass is recorded HELD; never reaches a controller");
         internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
         internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
             + "field (Wave 5 Forms lite)");

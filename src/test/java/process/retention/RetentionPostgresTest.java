@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,7 +70,7 @@ class RetentionPostgresTest {
     private RetentionStore store;
     private RetentionPass pass;
     private RetentionService service;
-    private final List<String[]> formObjectsDeleted = new java.util.ArrayList<>();
+    private final List<String[]> formObjectsDeleted = new ArrayList<>();
 
     @BeforeAll
     static void build() throws Exception {

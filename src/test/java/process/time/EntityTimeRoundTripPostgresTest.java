@@ -86,7 +86,10 @@ class EntityTimeRoundTripPostgresTest {
             // V163 (the workspace pause), born timestamptz too.
             {"scheduler", "900301", "paused_since", "2026-11-01T07:30:00.000001Z"},
             // V211 (MIG-347): the period a run is for -- a scheduled slot, a backfill period -- born timestamptz.
-            {"job_queue", "900102", "run_slot_at", "2026-11-01T07:30:00Z"}};
+            {"job_queue", "900102", "run_slot_at", "2026-11-01T07:30:00Z"},
+            // V212 (MIG-354): when retention removed a run's outputs and logs, born timestamptz; read-only through JPA.
+            {"job_queue", "900101", "outputs_removed_at", "2026-11-01T07:30:00Z"},
+            {"job_queue", "900101", "logs_removed_at", "2026-03-08T08:30:00Z"}};
         for (String[] row : born) {
             sql.update(String.format("UPDATE public.%s SET %s = ?::timestamptz WHERE %s", row[0], row[2],
                 TimestamptzMigrationPostgresTest.whereKey(sql, row[0], row[1])), row[3]);

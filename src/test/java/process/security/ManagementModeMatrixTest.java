@@ -114,6 +114,18 @@ class ManagementModeMatrixTest {
             + "slow runs and waiting reviews; nothing is built or run (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.delete", "removing one of the workspace's own alert rules (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.resolve", "marking one of the workspace's own alerts resolved (MIG-355)");
+        // MIG-354: how long the customer's own data is kept is the customer's record-keeping, whoever builds the pipelines.
+        String retention = "the workspace's own data retention (MIG-354): how long its records are kept, legal holds over them, and "
+            + "the passes that remove them; nothing is built or run";
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.save", retention);
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.preview", "a read: what a retention pass would remove now (POST for the days to try, "
+            + "MIG-354)");
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.confirm", retention);
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.run", retention);
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.placeHold", retention);
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.releaseHold", retention);
+        CUSTOMERS_IN_EITHER_MODE.put("RetentionRestApi.savePlatform", "platform administrators only: the platform's retention minimums "
+            + "(MIG-354)");
         CUSTOMERS_IN_EITHER_MODE.put("CustomerRunRetryRestApi.retry", "MIG-345: the customer API retrying a failed run, as the console's "
             + "retry and Run now");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");

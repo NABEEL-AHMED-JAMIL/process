@@ -66,6 +66,7 @@ import process.identity.InternalUserDirectoryRestApi;
 import process.slo.InternalSloRestApi;
 import process.slo.ReliabilityRestApi;
 import process.monitoring.AlertRestApi;
+import process.retention.RetentionRestApi;
 import process.monitoring.FailedRunsRestApi;
 import process.monitoring.HealthRestApi;
 import process.storage.InternalStorageDirectoryRestApi;
@@ -124,6 +125,8 @@ class CoreProbeCoverageTest {
         RunReviewRestApi.class, RunReviewBulkRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
         // MIG-355: Runs › Failed and the bulk retry; a workspace's alert rules and alerts; the platform's health (platform only)
         FailedRunsRestApi.class, AlertRestApi.class, HealthRestApi.class,
+        // MIG-354: a workspace's data retention (policy, holds, preview, confirmations, Run now, history); the platform's minimums
+        RetentionRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
         // MIG-345: the retry of a run, an API client's

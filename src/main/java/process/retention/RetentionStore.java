@@ -462,9 +462,10 @@ public class RetentionStore {
         if (have != null && have > 0) {
             return false;
         }
+        // recipient_roles is left to its default: the workspace's administrators (V210).
         return this.jdbc.update("INSERT INTO alert_rule (tenant_id, kind, name, enabled, severity, threshold, window_minutes, notify_bell, "
-            + "notify_email, notify_webhook, recipient_roles, created_by) VALUES (?, 'RETENTION', 'Retention needs attention', true, 'WARNING', "
-            + "1, 60, true, true, false, 'TENANT_ADMIN', ?)", ps -> {
+            + "notify_email, notify_webhook, created_by) VALUES (?, 'RETENTION', 'Retention needs attention', true, 'WARNING', "
+            + "1, 60, true, true, false, ?)", ps -> {
                 ps.setLong(1, tenantId);
                 setLong(ps, 2, by);
             }) == 1;

@@ -150,7 +150,7 @@ class AlertRulesTest {
     @Test
     void theKindsTheConsoleOffersAreTheScopes() {
         assertThat(AlertRestApi.kinds(false)).extracting(k -> k.get("kind")).containsExactly("RUN_FAILED", "SCHEDULE_MISSED", "RUN_SLOW",
-            "REVIEW_WAITING");
+            "REVIEW_WAITING", "RETENTION");
         assertThat(AlertRestApi.kinds(true)).hasSize(6).allMatch(k -> String.valueOf(k.get("runbook")).startsWith("docs/runbooks/alerts.md#"));
     }
 }
