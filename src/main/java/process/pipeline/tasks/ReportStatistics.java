@@ -274,7 +274,7 @@ final class ReportStatistics {
     static final class Histogram {
         static final int BINS = 10;
         static final int BAR = 40;
-        static final List<String> HEADER = Arrays.asList("from", "to", "rows", "share", "");
+        static final List<String> HEADER = Arrays.asList("from", "to", "rows", "share", "distribution");
 
         final String column;
         private final BigDecimal min;
