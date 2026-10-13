@@ -411,6 +411,11 @@ public class StepTimelineService {
 
     /** MIG-345: retries the failed run -- {@code from} "start" runs it again from the start, else from its failed step. */
     public ResponseDto retry(Long jobQueueId, String from) {
+        return this.retry(jobQueueId, from, null);
+    }
+
+    /** MIG-355: the same retry as part of a bulk retry: its audit line names the bulk retry ({@code bulkId}, null for none). */
+    public ResponseDto retry(Long jobQueueId, String from, String bulkId) {
         Optional<RunOwnership.Owned> owned = RunOwnership.owned(this.runs, this.jobs, jobQueueId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
@@ -419,8 +424,8 @@ public class StepTimelineService {
             return new ResponseDto(ERROR, "Retrying a run is not available here.");
         }
         boolean restart = "start".equals(from);
-        RunRetries.Outcome outcome = this.retries.retry(owned.get().run, owned.get().job, restart,
-            RunRetries.Actor.person(TenantContext.getAppUserId(), isAdmin()));
+        RunRetries.Actor actor = RunRetries.Actor.person(TenantContext.getAppUserId(), isAdmin());
+        RunRetries.Outcome outcome = this.retries.retry(owned.get().run, owned.get().job, restart, bulkId == null ? actor : actor.inBulk(bulkId));
         Map<String, Object> view = this.planView(outcome.plan);
         view.put("mode", outcome.mode);
         view.put("refusalKind", outcome.refusalKind);

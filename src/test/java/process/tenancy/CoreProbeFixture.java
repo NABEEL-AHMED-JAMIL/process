@@ -82,6 +82,16 @@ import process.engine.BulkAction;
 import process.engine.ProducerBulkEngine;
 import process.filechat.FileIndexLock;
 import process.identity.IdentityPort;
+import process.monitoring.AlertDelivery;
+import process.monitoring.AlertEngine;
+import process.monitoring.AlertIncidents;
+import process.monitoring.AlertRestApi;
+import process.monitoring.AlertRules;
+import process.monitoring.BulkRetry;
+import process.monitoring.FailedRuns;
+import process.monitoring.FailedRunsRestApi;
+import process.monitoring.HealthCollector;
+import process.monitoring.WorkspaceSignals;
 import process.identity.TestIdentity;
 import process.media.MediaPort;
 import process.model.dto.AiAgentRuntimeConfigDto;
@@ -416,6 +426,10 @@ final class CoreProbeFixture implements AutoCloseable {
     final RunReviewRestApi runReview;
     /** Bulk review: many runs' review at once, and the workspace's review policy. */
     final RunReviewBulkRestApi runReviewBulk;
+    /** MIG-355: Runs › Failed and the bulk retry. */
+    final FailedRunsRestApi failedRuns;
+    /** MIG-355: a workspace's alert rules and alerts (the evaluator's health reads are a stand-in: no platform rule is probed). */
+    final AlertRestApi alerts;
     /** Where the run datasets the probes download live (Wave 4): a scratch directory, as FileDatasetStore keeps them. */
     final FileDatasetStore runDatasets;
     final KafkaConnectionProfileRestApi kafkaProfiles;
@@ -517,6 +531,12 @@ final class CoreProbeFixture implements AutoCloseable {
         ReviewPolicy reviewPolicy = new ReviewPolicy(new JdbcReviewPolicyStore(this.db.appJdbc()));
         this.runReviewBulk = new RunReviewBulkRestApi(new RunReviewBulk(reviewService, reviewPolicy, this.jpa.transactionManager()),
             reviewPolicy);
+        this.failedRuns = new FailedRunsRestApi(new FailedRuns(this.db.appJdbc(), this.identity), new BulkRetry(timelineService));
+        AlertRules alertRules = new AlertRules(this.db.appJdbc());
+        AlertIncidents alertIncidents = new AlertIncidents(this.db.appJdbc());
+        this.alerts = new AlertRestApi(alertRules, alertIncidents, new AlertEngine(alertRules, alertIncidents, new WorkspaceSignals(this.db.appJdbc()),
+            mock(HealthCollector.class), new AlertDelivery(this.notifications, this.identity, this.db.appJdbc(), "http://localhost:4400"),
+            this.db.appJdbc(), this.jpa.transactionManager()));
 
         KafkaSecretServiceImpl secrets = new KafkaSecretServiceImpl(this.trustedStorage, this.identity, this.encryption, CONFIG_BUCKET);
         ReflectionTestUtils.setField(secrets, "maxFileSizeKb", 512);

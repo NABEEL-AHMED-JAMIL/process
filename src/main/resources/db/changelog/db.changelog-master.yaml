@@ -236,3 +236,6 @@ databaseChangeLog:
   # V209: bulk review -- run_review_decision.bulk_id, run_approval.bulk_id, review_policy (a workspace's "Allow bulk approve" for runs).
   - include:
       file: db/changelog/yaml/V209.0-bulk-review.yaml
+  # V210: MIG-355 -- monitoring that alerts: alert_rule, alert_incident, service_health_sample, platform_probe, api_event_out kind 'alert', partial indexes for the rules.
+  - include:
+      file: db/changelog/yaml/V210.0-monitoring.yaml

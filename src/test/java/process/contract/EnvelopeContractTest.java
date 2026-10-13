@@ -87,6 +87,9 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.pipeline.review.RunReviewBulk$Refused"), "caught in RunReviewBulkRestApi (bulkDecide and the "
             + "review policy): a bulk decision or a policy read or save refused as a whole, answered with its own status (400 or 429) "
             + "and sentence in the envelope (bulk review)");
+        internal.put(declared("process.monitoring.AlertRules$Refused"), "caught in AlertRestApi and FailedRunsRestApi (MIG-355): an alert "
+            + "rule, an alert, a failed-runs search or a bulk retry refused as a whole, answered with its own status (400, 404 or 429) and "
+            + "sentence in the envelope");
         internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
         internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
             + "field (Wave 5 Forms lite)");

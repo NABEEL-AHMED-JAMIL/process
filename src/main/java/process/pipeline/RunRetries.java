@@ -90,20 +90,28 @@ public class RunRetries {
         final Long userId;
         final String clientId;
         final boolean admin;
+        /** MIG-355: the bulk retry this one is part of; the audit line ends " Bulk retry <bulkId>." */
+        final String bulkId;
 
-        private Actor(String via, Long userId, String clientId, boolean admin) {
+        private Actor(String via, Long userId, String clientId, boolean admin, String bulkId) {
             this.via = via;
             this.userId = userId;
             this.clientId = clientId;
             this.admin = admin;
+            this.bulkId = bulkId;
         }
 
         public static Actor person(Long userId, boolean admin) {
-            return new Actor(RunAttemptStore.VIA_CONSOLE, userId, null, admin);
+            return new Actor(RunAttemptStore.VIA_CONSOLE, userId, null, admin, null);
         }
 
         public static Actor client(String clientId) {
-            return new Actor(RunAttemptStore.VIA_API, null, clientId, true);
+            return new Actor(RunAttemptStore.VIA_API, null, clientId, true, null);
+        }
+
+        /** The same person, retrying as part of a bulk retry. */
+        public Actor inBulk(String bulkId) {
+            return new Actor(this.via, this.userId, this.clientId, this.admin, bulkId);
         }
     }
 
@@ -470,10 +478,11 @@ public class RunRetries {
         attempt.requestedByClientId = actor.clientId;
         attempt.requestedAt = Instant.now();
         String who = RunAttemptStore.VIA_API.equals(actor.via) ? "API client " + actor.clientId : "user " + actor.userId;
-        String line = restart
+        String said = restart
             ? String.format("Attempt %d queued by %s: run again from the start (attempt %d failed).", attempt.attempt, who, plan.attempt)
             : String.format("Attempt %d queued by %s: retry from step %d <%s>, reusing %d step(s) of attempt %d.", attempt.attempt, who,
                 plan.fromIndex + 1, plan.fromKey, plan.reused.size(), plan.attempt);
+        String line = actor.bulkId == null ? said : said + " Bulk retry " + actor.bulkId + ".";
         String refused;
         try {
             refused = this.transaction.execute(status -> {

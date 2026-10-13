@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 210.0-monitoring
+      author: nabeel.amd93
+      description: "MIG-355: monitoring that alerts -- alert_rule (a workspace's rules, and the platform's with no workspace), alert_incident (one open alert per rule and subject; resolved ones kept 30 days), service_health_sample (each service's health a minute, kept 24 hours), platform_probe (the latest Kafka lag, disk and billing reconciliation readings), api_event_out kind 'alert' for webhooks, and the partial indexes the rules' queries use"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V210.0-monitoring/V210__monitoring.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V210.0-monitoring/V210__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

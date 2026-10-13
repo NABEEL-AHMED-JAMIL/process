@@ -22,6 +22,9 @@ public final class CustomerEventTypes {
     public static final String REVIEW_DECIDED = "run.review.decided";
     public static final String SUBMISSION_RECEIVED = "form.submission.received";
     public static final String FILE_AVAILABLE = "file.available";
+    /** MIG-355: a workspace's alert rule fired, and its alert resolved (a rule with the webhook channel). */
+    public static final String ALERT_OPENED = "alert.opened";
+    public static final String ALERT_RESOLVED = "alert.resolved";
 
     /** The payload's own version: what {version, subject, data} means. A type's data changes additively within it. */
     public static final int PAYLOAD_VERSION = 1;

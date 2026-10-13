@@ -50,6 +50,25 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");
+        // MIG-355: monitoring that alerts -- the evaluator reads across workspaces (rules, the signals, open alerts) and writes each
+        // workspace's alerts as that workspace; the platform's alerts have no workspace.
+        paths.put("AlertRules: in code #1",
+            "the alert evaluator (MIG-355) reads every workspace's enabled alert rules and the platform's; each workspace's alerts are then"
+                + " written as that workspace");
+        paths.put("AlertEngine: in code #1",
+            "the alert evaluator (MIG-355) reads the open alerts of every enabled rule; each rule's are then written as its own workspace");
+        paths.put("AlertEngine: in code #2",
+            "the alert evaluator (MIG-355) writes the platform's own alerts (tenant_id NULL)");
+        paths.put("AlertEngine: in code #3",
+            "the alert evaluator (MIG-355) resolves the open alerts of every workspace's rules that were turned off");
+        paths.put("WorkspaceSignals: in code #1",
+            "the alert evaluator (MIG-355) reads when the failing pipelines of every workspace with a failed-run rule last completed a run"
+                + " (ids and times)");
+        paths.put("WorkspaceSignals: in code #2",
+            "the alert evaluator (MIG-355) reads every workspace with a rule of this kind (ids, times and names); each workspace's alerts are"
+                + " then written as that workspace");
+        paths.put("MonitoringCycle: in code #1",
+            "the alert retention (MIG-355) removes every workspace's alerts resolved more than 30 days ago");
         paths.put("RunStartMarkerMonitor.measure",
             "a platform gauge over every workspace's runs");
         paths.put("AuditLogSyncCron.syncAuditLogsFromOpenSearch",

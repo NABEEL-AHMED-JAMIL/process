@@ -28,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -106,6 +107,9 @@ public class CustomerEventRelay {
         Instant endedAt;
         Integer attempt;
         Instant occurredAt;
+        /** MIG-355: kind 'alert' -- the alert, and whether it opened or resolved. */
+        Long alertIncidentId;
+        String alertEvent;
     }
 
     /** One event to send: its type, what it is about, and its data in the customer API's shapes. */
@@ -158,7 +162,7 @@ public class CustomerEventRelay {
         List<Pending> pending = RowSecurity.acrossTenants("the customer event relay (MIG-333) reads every workspace's"
             + " unpublished api_event_out rows (ids and kinds, in order); each is built, published and stamped as its own workspace",
             () -> this.jdbc.query("SELECT out_id, tenant_id, kind, job_queue_id, job_id, run_output_id, submission_id, job_status, "
-            + "status_message, run_created_at, started_at, ended_at, attempt, occurred_at "
+            + "status_message, run_created_at, started_at, ended_at, attempt, occurred_at, alert_incident_id, alert_event "
             + "FROM api_event_out WHERE published_at IS NULL ORDER BY out_id LIMIT " + BATCH, CustomerEventRelay::pending));
         int sent = 0;
         for (Pending row : pending) {
@@ -223,6 +227,9 @@ public class CustomerEventRelay {
                 break;
             case "submission":
                 this.submission(row, events);
+                break;
+            case "alert":
+                this.alert(row, events);
                 break;
             default:
                 logger.warn("Customer event {} has a kind this Core does not know ({}); nothing is sent.", row.outId, row.kind);
@@ -393,6 +400,51 @@ public class CustomerEventRelay {
         return review;
     }
 
+    /**
+     * MIG-355: alert.opened or alert.resolved -- the alert as it stands, its state the event's own (a quick open-and-resolve
+     * still sends "open" first). Nothing when the alert is gone (its rule was removed before the relay got to it).
+     */
+    private void alert(Pending row, List<Event> events) {
+        if (row.alertIncidentId == null) {
+            return;
+        }
+        List<Map<String, Object>> found = this.jdbc.query("SELECT i.alert_incident_id, i.alert_rule_id, r.name, i.kind, i.severity, i.subject, "
+            + "i.job_id, i.job_queue_id, i.title, i.detail, i.occurrences, i.first_seen_at, i.last_seen_at, i.resolved_at, i.resolved_how "
+            + "FROM alert_incident i JOIN alert_rule r ON r.alert_rule_id = i.alert_rule_id WHERE i.alert_incident_id = ? AND i.tenant_id = ?",
+            (rs, n) -> {
+                boolean resolved = "resolved".equals(row.alertEvent);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("alertId", String.valueOf(rs.getLong("alert_incident_id")));
+                data.put("ruleId", String.valueOf(rs.getLong("alert_rule_id")));
+                data.put("ruleName", rs.getString("name"));
+                data.put("kind", rs.getString("kind").toLowerCase(Locale.ROOT));
+                data.put("severity", rs.getString("severity").toLowerCase(Locale.ROOT));
+                data.put("state", resolved ? "resolved" : "open");
+                data.put("subject", rs.getString("subject"));
+                Object job = rs.getObject("job_id");
+                Object run = rs.getObject("job_queue_id");
+                data.put("pipelineId", job == null ? null : String.valueOf(job));
+                data.put("runId", run == null ? null : String.valueOf(run));
+                data.put("title", rs.getString("title"));
+                data.put("detail", rs.getString("detail"));
+                data.put("occurrences", rs.getInt("occurrences"));
+                data.put("firstSeenAt", utc(rs.getObject("first_seen_at", OffsetDateTime.class)));
+                data.put("lastSeenAt", utc(rs.getObject("last_seen_at", OffsetDateTime.class)));
+                String how = rs.getString("resolved_how");
+                data.put("resolvedAt", resolved ? utc(rs.getObject("resolved_at", OffsetDateTime.class)) : null);
+                data.put("resolvedHow", resolved && how != null ? how.toLowerCase(Locale.ROOT) : null);
+                return data;
+            }, row.alertIncidentId, row.tenantId);
+        if (!found.isEmpty()) {
+            events.add(new Event("resolved".equals(row.alertEvent) ? CustomerEventTypes.ALERT_RESOLVED : CustomerEventTypes.ALERT_OPENED,
+                "alert:" + row.alertIncidentId, found.get(0)));
+        }
+    }
+
+    private static String utc(OffsetDateTime at) {
+        return at == null ? null : at.toInstant().toString();
+    }
+
     static String subjectOfRun(long jobQueueId) {
         return "run:" + jobQueueId;
     }
@@ -414,6 +466,8 @@ public class CustomerEventRelay {
         row.attempt = (Integer) rs.getObject("attempt");
         Instant occurred = instant(rs.getObject("occurred_at", OffsetDateTime.class));
         row.occurredAt = occurred == null ? Instant.now() : occurred;
+        row.alertIncidentId = (Long) rs.getObject("alert_incident_id");
+        row.alertEvent = rs.getString("alert_event");
         return row;
     }
 

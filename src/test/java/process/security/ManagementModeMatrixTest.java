@@ -105,6 +105,15 @@ class ManagementModeMatrixTest {
         // MIG-345: retrying a failed run is running an existing schedule's run again, as Run now (owner 2026-09-29).
         CUSTOMERS_IN_EITHER_MODE.put("StepTimelineRestApi.retryRun", "retrying a failed run, from its failed step or the start: Run "
             + "now's rule (MIG-345)");
+        // MIG-355: many failed runs retried at once, each by the single retry's rules; and Runs › Failed is a read (POST for its filters).
+        CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.bulkRetry", "retrying failed runs, each as the single retry: Run now's rule (MIG-355)");
+        CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.failedRuns", "a read: the failed runs, their facets and error patterns (POST for its "
+            + "filters, MIG-355)");
+        // MIG-355: a workspace's alert rules say who hears of what; they build and run nothing.
+        CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.save", "the workspace's own alert rules: who is told of failed runs, missed schedules, "
+            + "slow runs and waiting reviews; nothing is built or run (MIG-355)");
+        CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.delete", "removing one of the workspace's own alert rules (MIG-355)");
+        CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.resolve", "marking one of the workspace's own alerts resolved (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("CustomerRunRetryRestApi.retry", "MIG-345: the customer API retrying a failed run, as the console's "
             + "retry and Run now");
         CUSTOMERS_IN_EITHER_MODE.put("AiModelChoiceRestApi.runWith", "running an existing schedule once with other inputs (Run with)");

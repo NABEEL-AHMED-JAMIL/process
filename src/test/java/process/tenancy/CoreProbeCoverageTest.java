@@ -63,6 +63,9 @@ import process.workflow.InternalReviewEligibilityRestApi;
 import process.identity.InternalUserDirectoryRestApi;
 import process.slo.InternalSloRestApi;
 import process.slo.ReliabilityRestApi;
+import process.monitoring.AlertRestApi;
+import process.monitoring.FailedRunsRestApi;
+import process.monitoring.HealthRestApi;
 import process.storage.InternalStorageDirectoryRestApi;
 
 import java.io.IOException;
@@ -117,6 +120,8 @@ class CoreProbeCoverageTest {
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, DocumentTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
         RunReviewRestApi.class, RunReviewBulkRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
+        // MIG-355: Runs › Failed and the bulk retry; a workspace's alert rules and alerts; the platform's health (platform only)
+        FailedRunsRestApi.class, AlertRestApi.class, HealthRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
         // MIG-345: the retry of a run, an API client's

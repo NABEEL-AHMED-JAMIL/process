@@ -6,5 +6,7 @@ package process.model.enums;
 public enum NotificationType {
     JOB_COMPLETED, JOB_FAILED, JOB_SKIPPED, TASK_ASSIGNED, BATCH_DONE,
     KAFKA_TEST_FAILED, USER_ADDED, FILE_SHARE_SENT, FILE_SHARE_FAILED, FILE_SHARED_WITH_YOU,
-    PAGE_ACCESS_REQUESTED, PAGE_ACCESS_CHANGED;
+    PAGE_ACCESS_REQUESTED, PAGE_ACCESS_CHANGED,
+    // MIG-355: an alert rule fired or resolved; notifications-service files it as ALERT (since e729611).
+    ALERT;
 }
