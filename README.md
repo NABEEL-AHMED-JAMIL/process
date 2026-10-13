@@ -2,11 +2,13 @@
 
 **Running the platform:** every service, its settings and its secrets are started from [etl-platform](https://github.com/NABEEL-AHMED-JAMIL/etl-platform) (`../etl-platform`): `scripts/up.sh`, `scripts/deploy.sh <service>`, `scripts/verify.sh`. This repository's own `docker-compose.yml` still works for standalone development, but once the service runs from etl-platform its `.env` here no longer configures the running container -- change `etl-platform/config/` or `etl-platform/secrets/` instead.
 
-The server behind the ETL Console ("Core"). It began as a Kafka-backed **scheduler engine**, and that is still its core: 47 REST controllers (15 of them `/internal`, 6 the customer API) cover pipelines and the step engine, schedules, runs and their review, forms, inbox triggers, reports and the customer API's runs, events and reads. Identity, storage, media and documents, and analytics have moved out to their own services (MIG-108, MIG-70, MIG-48, MIG-128), beside ai-, billing-, integration- and workflow-service; Core reaches them over HTTP and Kafka.
+The server behind the ETL Console ("Core"). It began as a Kafka-backed **scheduler engine**, and that is still its core: 51 REST controllers (16 of them `/internal`, 7 the customer API; as of 2026-10-12) cover pipelines and the step engine, schedules, runs and their review, forms, inbox triggers, reports and the customer API's runs, events and reads. Identity, storage, media and documents, and analytics have moved out to their own services (MIG-108, MIG-70, MIG-48, MIG-128), beside ai-, billing-, integration- and workflow-service; Core reaches them over HTTP and Kafka.
 
 Its frontend is the Angular 22 console in [`../scheduler1`](../scheduler1) (`next-app`, served on :4400 by etl-platform). The older Angular 8 console was retired on 2026-09-24.
 
-> **As of 2026-10-07** (branch `media-extraction`, platform-commons 1.16.0): the step engine streams big files and spills to disk (ADR-026 phase 1, MIG-344); Read API, Aggregate, Compute, Send Notification and Measure image gained the features listed under [Pipeline steps](#pipeline-steps-as-of-2026-10-07); the customer API's runs, pipelines, events, files, reviews and view links are served here ([The customer API in Core](#the-customer-api-in-core-mig-332333334335-adr-025)). Architecture records: `../etl-platform/docs/adr/ADR-026-big-data-step-engine.md`, `ADR-025-customer-api.md`.
+> **As of 2026-10-12** (branch `media-extraction`): a failed run retries from its failed step (MIG-345); the append, approval, send_webhook, sort, limit and read_documents steps, and a "When a document is approved" job trigger (MIG-346, MIG-365, MIG-364); render_pdf streams (ADR-027); reviewers read the run they review; runs are approved or rejected in bulk ([Run review and bulk review](#run-review-and-bulk-review-2026-10-12)). Migrations V205–V209.
+
+> **As of 2026-10-07** (branch `media-extraction`, platform-commons 1.16.0): the step engine streams big files and spills to disk (ADR-026 phase 1, MIG-344); Read API, Aggregate, Compute, Send Notification and Measure image gained the features listed under [Pipeline steps](#pipeline-steps-as-of-2026-10-12); the customer API's runs, pipelines, events, files, reviews and view links are served here ([The customer API in Core](#the-customer-api-in-core-mig-332333334335-adr-025)). Architecture records: `../etl-platform/docs/adr/ADR-026-big-data-step-engine.md`, `ADR-025-customer-api.md`.
 
 > The planning and per-feature scope for the current phase is in [`../.ai/`](../.ai/). Start with [`../.ai/project.md`](../.ai/project.md), and see [`../.ai/discovery/backend.md`](../.ai/discovery/backend.md) for the full endpoint and service inventory.
 
@@ -39,7 +41,7 @@ Concurrency comes from Spring's own scheduling pool, sized by `spring.task.sched
 |---|---|
 | **Java 17 / Spring Boot 2.7.18** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204) |
 | **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
-| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V205.0 as of 2026-10-12 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
+| **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V209.0 as of 2026-10-12 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
 | **Redis** | Caching, token revocations shared with Identity, locks and one-time secrets |
 | **storage-service** | Object storage (MinIO, S3, Azure Blob, per connection) is storage-service's; a pipeline's bucket steps go through its trusted contract (`TrustedBucketStore`). Document conversion left with media-service (MIG-48) |
 | **DuckDB 1.1.3** | Reads Parquet for the step engine (`ParquetRows`) |
@@ -96,11 +98,13 @@ POST /api/v1/sourceTask.json/uploadSourceTask
 
 (These replace the `bulk.json` endpoints named in earlier versions of this file; that controller no longer exists.)
 
+Since 2026-10-12 a template drop-down list longer than Excel's 255 characters is written down a column of a hidden sheet (`_lists`) and named as a range, so the job template downloads for a workspace with many tasks (`BulkExcel.fillDropDownValue`).
+
 ## Tests
 
 | Suite | Command | Count |
 |---|---|---|
-| Unit and Postgres | `mvn -o test` | about 2,702 as of 2026-10-12 (the 92 `*PostgresTest` classes need NOTIFICATIONS_TEST_DB_*) |
+| Unit and Postgres | `mvn -o test` | 2,776 green at MIG-364 on 2026-10-12, about 60 more test methods since (bulk review, run readers, billing directory); the 95 `*PostgresTest` classes need NOTIFICATIONS_TEST_DB_* |
 | End-to-end, over real HTTP | `./run-e2e.sh` (`*E2EIT`, `HarnessSmokeIT`) | 13 |
 | Kafka security matrix, real broker | `./run-kafka-matrix.sh` | 17 |
 
@@ -157,9 +161,9 @@ Deployed 2026-10-07. A step pipeline's steps no longer hold their whole input in
 
 Not yet (phase 2): streaming transform, enrich and join; tenant-scoped dataset keys and the shared file area; per-step memory columns; admission by budget; disk quotas.
 
-## Pipeline steps (as of 2026-10-07)
+## Pipeline steps (as of 2026-10-12)
 
-All generic: no knowledge of any customer's data shape in code.
+All generic: no knowledge of any customer's data shape in code. A pipeline may have up to `process.pipeline.max-steps` steps (100 by default, at most 500; it was a fixed 50 until MIG-365).
 
 - **Read API.** `rowsPath` fans out with `[]` or `[*]` (`entry[].resource`); optional `fields` (path/target, as in Enrich) make named columns from nested answers (`code.coding[0].code`). One field path may fan out over one list (`reaction[].pt`): a row per value, the other columns repeated, an empty list one row with that column empty; two different lists are refused at save time (`FieldPaths`, shared with Enrich, which fans out per input row). Request variables take `{{column}}` from the first row of the step's input, under the run's own placeholders. The request runs through integration-service, so its paging is the request's own, including `NEXT_URL` and `OFFSET`.
 - **Placeholders.** A run started for a file (inbox arrival, form submission, API run) has `{{input_key}}` (the file's key in the workspace's storage) and `{{input_name}}` (its last part) wherever placeholders are filled; read_s3's prefix then lists exactly that object (`Templates`).
@@ -169,6 +173,72 @@ All generic: no knowledge of any customer's data shape in code.
 - **Measure image** is generic (`MeasureImageStepTask`): a `target` says what to measure -- `contrast` (default for a new step: the largest region outside the ruler that differs markedly from the photo's border) or `red_region` (a red region on a lighter background). `red_on_skin`, the earlier name, is still read and measures exactly as before; a save writes `red_region`.
 - **Run with a different model** now covers step-engine AI steps (b6a284b): `StepReferences` reads which steps name a prompt or an API request from the Task Registry's schema formats; `AiModelChoiceService` lists those AI steps, and the ai_prompt step sends the run's model (Run with..., else the schedule's) to ai-service. Prompts' and API collections' Used by count step-engine pipelines (`PipelineUsage`; `POST /internal/pipelines/apiRequestUsers` for integration-service).
 - **Schedule preview** is `GET /api/v1/sourceJob.json/schedulePreview` (the timetable in the query): an unsaved timetable's next runs by the scheduler's own rules, a read, so a managed-service session's audit no longer records every preview.
+
+Added on 2026-10-12:
+
+- **Append** (`append`, MIG-346): stacks 2 to 20 earlier steps' outputs by column name (`columns: all` or `common`, an optional `sourceColumn`). A value of another kind is converted to its column's kind (`types`, `coerce`); one that cannot be fails the step with the row, step and column. Streamed.
+- **Approval** (`approval`, MIG-346): pauses the run until its reviewers decide in the Task inbox. The engine writes `run_approval` (V206) and `run-approval.requested` in one transaction; workflow-service's built-in `pipeline-step-approval` workflow makes the task (the step's reviewers, else the pipeline's review reviewers, else the administrators). Approved, the same attempt continues from the next step; rejected, or nobody deciding within `expiresAfterHours` (72 by default, at most 720), the run fails. `RunApprovalSweep` expires and cancels requests. A retry from the approval step asks again; one from a later step reuses the approval.
+- **Send webhook** (`send_webhook`, MIG-346): the rows (`send: rows`, `maxRows` 500 by default, at most 5,000; more fails the step, nothing is cut) or a summary to one of the workspace's registered webhooks that takes `run.step.sent`, through integration-service's `/internal/pipelines/webhooks/send` (signed, retried, SSRF-guarded, logged and metered there). One delivery per run, attempt and step; waits up to 60 seconds for the first try. Off unless `process.pipeline.integration.webhooks` (etl-platform sets it on).
+- **Sort** (`sort`, MIG-365): a stable external merge sort inside the run's memory budget; sorted runs spill to the try's scratch and merge 64 at a time. Numbers as numbers (CSV text too) before text.
+- **Limit / top N** (`limit`, MIG-365): `rows`, `offset`; without `by` it stops reading its input once it has the rows; with `by` it holds only offset + rows in a bounded heap, or sorts on disk past the budget.
+- **read_file / read_s3 `columns`** (MIG-365): only the named columns become values (CSV by index, Parquet projected by DuckDB, JSON rows cut).
+- **Compute formulas** (MIG-365, MIG-346): `floor`, `ceil`, `mod`, `date_add`, `date_diff`, `date_trunc`, and `json_get`, `json_array_length`, `json_keys`.
+- **Read documents** (`read_documents`, MIG-364): a Document Intelligence type's approved dataset through ai-service's trusted read (`/internal/ai/documents/dataset`), 500 rows a page, streamed. All, since the last completed run (`run_document_read`, V207), and/or an approval date range; by status also the review queue's and the rejected ones. `columns` and `tableRows`. With no type it reads the documents whose approval started the run. Billed by ai-service as a trusted read.
+- **"When a document is approved" trigger** (MIG-364, V207): Core consumes `platform.document.approved.v1` (group `process-document-trigger`, as the event's workspace). Each approval starts each job whose enabled trigger names the type, once per document and version; a busy job or a paused workspace makes it wait (`batchSize` 1 to 50, `DocumentQueueSweep` every 2 s); a job switched off records it Skipped. Templates get `{{document_count}}`, `{{document_ids}}` and the first document's `{{document.<field>}}` (0 and empty in a run no document started). Console API under `sourceJob.json` (jobs page, `JobOwnership`; save and delete are builder actions): `GET /documentTrigger?jobId=`, `POST /documentTrigger/save {jobId, documentTypeId, enabled, batchSize}`, `DELETE /documentTrigger?jobId=`, `GET /documentApprovals?jobId=&limit=` (50 by default; Started, Waiting with the place in line, Skipped with why).
+- **render_pdf streams** (ADR-027): a table prints its first `maxRows` rows (5,000 by default, at most 50,000) and says how many more; with `attachFullData` (on) the full input is kept beside the PDF as `<file>-data.csv` and recorded as a run output. `kind: statistics` profiles every row (exact distinct and counts up to 10,000 a column, then HyperLogLog and Misra-Gries estimates, marked); a histogram is ten bins in a second pass. The report goes to media-service's `/internal/media/render/table` as NDJSON lines and the PDF streams back into the run's file area with its page count (no base64, no 20 MB body). `sections` (MIG-346): up to 20 tables in one report, each with its title, note, columns and `maxRows`.
+- **Retry a failed run** (MIG-345, V205): see [Run review and bulk review](#run-review-and-bulk-review-2026-10-12).
+- **settings.review.individual** on a pipeline definition (bulk review, 2026-10-12): `true` means the run's internal review and its Approval steps' requests are never decided in bulk. Absent or false: bulk decisions are allowed as the workspace's review policy says. Read per the definition version the run follows.
+
+## Run review and bulk review (2026-10-12)
+
+Paths as the gateway sees them. All of them are `TENANT_USER` and up at the class level and gated by Core's own page check (`PageKey`): a tenant user needs the Source Jobs page, or the Queue page for the run reads below (an administrator holds every page). A run that is not the caller's is the envelope's "not found". Envelope refusals come back as HTTP 200 with `status: ERROR` and a message, unless a status is named. Per-role statuses are in etl-platform's `api-check/expectations.tsv`.
+
+**Reading a run (UX review, step 2).** `RunReaders` opens a run's reads -- its log, timeline (`GET sourceJob.json/stepExecutions`), a step's log, outputs, datasets, review and the runs waiting for review -- to its reviewers besides its owner: a tenant user of the run's workspace whom the pipeline names for its internal review (by group, read from Identity and kept a minute, or by role), on a run that needs that review. The Queue page now opens these reads. Viewers, other workspaces and a run needing no internal review read nothing; the reviewer's log answer leaves out the task's payload. `stepExecutions` gives each step its definition's `name`; `GET sourceJob.json/review` adds `reviewers {kind, value}` (whose Task inbox the internal review waits in) and `individual`; `GET sourceJob.json/review/waiting` rows add `individual`.
+
+**Retry a failed run (MIG-345, V205).**
+
+- `GET /api/v1/sourceJob.json/retryPlan?jobQueueId=` -- what a retry would do: `{jobQueueId, jobId, attempt, nextAttempt, resumable, refusalKind, refusal, fromIndex, fromKey, fromName, definitionVersion, ranVersion, reused[{index, key, name, task, rowsOut, expiresAt, inputFiles}], inputFiles, inputsChecked, restartable, restartRefusal}`.
+- `POST /api/v1/sourceJob.json/retryRun {jobQueueId, from}` -- `from: failed_step` (the default) resumes from the failed step and reuses the outputs before it; `from: start` runs every step again and is a workspace administrator's. Not a builder action (a managed workspace's customers retry, as they Run now). Refused in the envelope with `refusalKind`: `run-not-failed`, `run-in-flight`, `pipeline-inactive`, `workspace-paused`, `pipeline-changed`, `input-changed`, `outputs-expired`, `not-resumable` (also at 20 attempts). Reused steps meter nothing; `pipeline.runs` stays one per run.
+- Customer API: `POST /v1/runs/{runId}/retry` (below).
+
+**Bulk review** (owner 2026-10-12, "can we give a bulk review?"; V209).
+
+- `POST /api/v1/sourceJob.json/review/bulkDecide` -- `TENANT_ADMIN` only (a tenant user is 403). Body `{jobQueueIds, decision, comment, bulkId, dryRun}`; `decision` is `APPROVED` or `REJECTED` (`approve`/`reject` also read).
+  - At most 100 distinct runs (duplicates collapsed first); none or more is a 400. One comment for every run, at most 500 characters; a rejection's comment is required (it is the reason).
+  - `bulkId`: the client's, `^[A-Za-z0-9-]{8,64}$`, else the server makes one. The same bulkId and run again is done once ("Already recorded in this bulk decision."). `dryRun: true` makes the same checks and writes nothing and sends no event; the console's confirm panel asks it first.
+  - At most 20 bulk requests a rolling minute per caller, dry runs included, counted on this instance: a 429 "Too many bulk decisions in a minute". A request refused as a whole (400, 429) does nothing.
+  - Each run is checked and recorded by the single decision's path (`RunReviewService.decideInBulk`), each in its own transaction, so one failure never takes another back.
+  - Answer: `data {bulkId, action, dryRun, requested, done[], skipped[], failed[]}`; each item `{id, label, group, link}`, plus `message`, and `reason` for a skipped one: `not-found`, `not-yours`, `not-completed`, `no-review`, `already-decided`, `individual-review` (the pipeline's `settings.review.individual`), `bulk-off` (the workspace's policy is off; approve only). A failed item says "Could not be recorded: ..." without the database's words.
+  - The audit line ends " Bulk decision <bulkId>."; `run_review_decision.bulk_id` is set; the same `run.review.decided` events go out. Review decisions are not metered.
+- `GET /api/v1/sourceJob.json/review/policy` -- any member: `{bulkApproveRuns, saved, updatedBy, updatedByName, updatedAt}`; on when never saved.
+- `POST /api/v1/sourceJob.json/review/policy {bulkApproveRuns}` -- `TENANT_ADMIN`; logged with who changed it. Not a boolean is an envelope refusal. Off, every bulk approve is skipped `bulk-off`; bulk reject stays allowed.
+- The Task inbox's bulk decisions (workflow-service's `POST taskInbox.json/bulkAct`) come back on `platform.workflow.instance-changed.v1` with `decision.bulkId`; the listener writes it to `run_review_decision.bulk_id` or `run_approval.bulk_id`, with the same audit suffix.
+
+## Internal endpoints added on 2026-10-12
+
+Service to service, with the shared `X-Internal-Token` (401 without it); the gateway never exposes `/internal`. The platform-wide list is in `../etl-platform/docs/architecture.md`.
+
+- `POST /api/v1/internal/review/bulkEligibility {tenantId, action, subjects}` -- workflow-service asks, before its bulkAct, whether each subject (`pipeline-run:N`, `pipeline-approval:N`) may be decided in bulk, as that workspace. At most 500 subjects. Answer per subject: `{allowed: true, group}` or `{allowed: false, reason, message}` with `individual-review`, `bulk-off` or `not-found`.
+- `POST /api/v1/internal/runs/{id}/readable` -- ai-service's `aiPrompt.json/runsForJob` asks with the caller's own bearer token beside the service token whether that caller may read the run (`RunReaders`). Answers `{readable}` only; no caller is false.
+- `POST /api/v1/internal/billingDirectory/runs {tenantId, jobQueueIds}` -- billing-service names runs for Cost & usage: each of the workspace's runs among the ids (at most 10,000) with its schedule, pipeline, start and status, under row-level security.
+
+## Settings and migrations of 2026-10-12
+
+| Setting | Default | |
+|---|---|---|
+| `process.pipeline.max-steps` (`PROCESS_PIPELINE_MAX_STEPS`) | 100 (1 to 500) | the step cap (MIG-365); etl-platform sets 100 |
+| `process.pipeline.integration.webhooks` (`PROCESS_PIPELINE_INTEGRATION_WEBHOOKS`) | false | the send_webhook step (MIG-346); etl-platform sets true |
+| `process.approvals.sweep-ms`, `process.approvals.initial-delay-ms` | 60000, 30000 | `RunApprovalSweep` |
+| `documents.events.listen` | true | the document-approved listener (MIG-364) |
+| `documents.queue.poll-ms`, `documents.queue.initial-delay-ms` | 2000, 20000 | `DocumentQueueSweep` |
+
+| Changeset | |
+|---|---|
+| V205 run retry | `run_attempt`, `run_input_file`, `step_execution.reused_from` (MIG-345) |
+| V206 run approval | `run_approval` (MIG-346) |
+| V207 document trigger | `job_document_trigger`, `document_approval`, `run_document_read` (MIG-364) |
+| V208 run output per file | `run_output` one row per step execution and file, with `page_count` (ADR-027) |
+| V209 bulk review | `run_review_decision.bulk_id`, `run_approval.bulk_id`, `review_policy` (row-level security) |
 
 ## The customer API in Core (MIG-332/333/334/335, ADR-025)
 
@@ -180,6 +250,7 @@ The gateway rewrites `/v1/x` to `/api/v1/customer/x` on the owning service; unde
 | `POST /v1/events` | `CustomerEventsRestApi` | an event in; answers `{eventId, started, workflows, notStarted}` |
 | `GET /v1/runs`, `/{id}`, `/{id}/steps`, `/{id}/outputs` | `CustomerRunsRestApi` | runs however started, filtered and keyset-paged; the latest attempt's steps; the manifest of made and given files |
 | `GET`, `POST /v1/runs/{id}/review` | `CustomerRunsRestApi` | the customer's review through `RunReviewService.decide` (the console's rules); a rejection with `rerun` starts an API run again |
+| `POST /v1/runs/{id}/retry` | `CustomerRunRetryRestApi` | MIG-345 (2026-10-12): body `{from}` (`failed_step` or `start`), scope `runs:write`, `Idempotency-Key` required; 202 with the Run and Location, 409 problem whose type is the refusal kind |
 | `POST /v1/runs/{id}/view-links` | `CustomerRunsRestApi` | a signed 15-minute link to the console's read-only `/embed/runs/{token}` (`customer.embed.console-url`) |
 | `GET /v1/embed/runs/{token}`, `/frame` | `CustomerEmbedRestApi` | the view's signed read and its frame check (the client's frame allow-list is Identity's) |
 | `GET /v1/files/{id}`, `/meta`, `/content?token=` | `CustomerFilesRestApi`, `CustomerFileLinkRestApi` | a 302 to a 5-minute signed link on the API itself, never a bucket URL; every read logged in `file_access_log` |
