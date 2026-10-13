@@ -3,6 +3,7 @@ package process.util.excel;
 import java.util.List;
 import com.google.gson.Gson;
 import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.ss.util.CellReference;
 import org.springframework.stereotype.Component;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
@@ -123,15 +124,50 @@ public class BulkExcel {
         return this.cellFormatter.get().formatCellValue(currentCell).trim();
     }
 
+    /** Excel's limit on an in-cell list, separators included: a longer list must live in cells. */
+    static final int EXPLICIT_LIST_LIMIT = 255;
+
+    /** The hidden sheet a long drop-down list is kept on, one column per list. */
+    static final String LIST_SHEET = "_lists";
+
     public void fillDropDownValue(XSSFSheet sheet, Integer firstRow, Integer lastRow, Integer col, String[] dropList) {
         XSSFDataValidationHelper dataValidationHelper = new XSSFDataValidationHelper(sheet);
-        XSSFDataValidationConstraint dataValidationConstraint = (XSSFDataValidationConstraint)
-            dataValidationHelper.createExplicitListConstraint(dropList);
+        // A list longer than Excel's 255 characters (a workspace with many tasks, a platform administrator's every
+        // workspace's) made POI refuse the whole template ("must be less than or equal to 255 characters"): such a list
+        // goes on a hidden sheet, and the drop-down names its range.
+        XSSFDataValidationConstraint dataValidationConstraint = (XSSFDataValidationConstraint) (explicitLength(dropList) <= EXPLICIT_LIST_LIMIT
+            ? dataValidationHelper.createExplicitListConstraint(dropList)
+            : dataValidationHelper.createFormulaListConstraint(listRange(sheet.getWorkbook(), dropList)));
         CellRangeAddressList rangeAddressList = new CellRangeAddressList(firstRow, lastRow, col, col);
         XSSFDataValidation dataValidation = (XSSFDataValidation)
             dataValidationHelper.createValidation(dataValidationConstraint, rangeAddressList);
         dataValidation.setShowErrorBox(false);
         sheet.addValidationData(dataValidation);
+    }
+
+    static int explicitLength(String[] values) {
+        int length = Math.max(0, values.length - 1);
+        for (String value : values) {
+            length += value == null ? 0 : value.length();
+        }
+        return length;
+    }
+
+    /** Writes the values down a new column of the hidden list sheet and answers its absolute range. */
+    static String listRange(XSSFWorkbook workbook, String[] values) {
+        XSSFSheet lists = workbook.getSheet(LIST_SHEET);
+        if (lists == null) {
+            lists = workbook.createSheet(LIST_SHEET);
+            workbook.setSheetHidden(workbook.getSheetIndex(lists), true);
+        }
+        Row first = lists.getRow(0);
+        int column = first == null || first.getLastCellNum() < 0 ? 0 : first.getLastCellNum();
+        for (int i = 0; i < values.length; i++) {
+            Row row = lists.getRow(i) == null ? lists.createRow(i) : lists.getRow(i);
+            row.createCell(column).setCellValue(values[i] == null ? "" : values[i]);
+        }
+        String letter = CellReference.convertNumToColString(column);
+        return String.format("'%s'!$%s$1:$%s$%d", LIST_SHEET, letter, letter, Math.max(1, values.length));
     }
 
     @Override
