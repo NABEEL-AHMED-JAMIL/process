@@ -260,6 +260,37 @@ public class WorkspaceSignals {
             }, Timestamp.from(before), array, Timestamp.from(before), array));
     }
 
+    /** MIG-354: a workspace's retention trouble -- a class whose latest result PAUSED or FAILED, or a last pass that FAILED. */
+    public static final class RetentionTrouble {
+        public long tenantId;
+        /** The class (RUN_OUTPUTS, ...) or null for the pass as a whole. */
+        public String dataClass;
+        public String state;
+        public String note;
+        public long passId;
+        public Instant at;
+    }
+
+    /** MIG-354: each workspace's latest retention result per class, and its latest pass, where they need attention. */
+    public List<RetentionTrouble> retention(Collection<Long> tenants) {
+        return this.across(tenants, (array) -> this.jdbc.query("SELECT c.tenant_id, c.data_class, c.state, c.note, c.retention_pass_id, "
+            + "c.started_at FROM (SELECT DISTINCT ON (tenant_id, data_class) tenant_id, data_class, state, note, retention_pass_id, started_at "
+            + "FROM retention_pass_class WHERE tenant_id = ANY (?) ORDER BY tenant_id, data_class, started_at DESC) c "
+            + "WHERE c.state IN ('PAUSED', 'FAILED') "
+            + "UNION ALL SELECT p.tenant_id, NULL, p.state, p.note, p.retention_pass_id, p.started_at FROM (SELECT DISTINCT ON (tenant_id) "
+            + "tenant_id, state, note, retention_pass_id, started_at FROM retention_pass WHERE tenant_id = ANY (?) AND state <> 'RUNNING' "
+            + "ORDER BY tenant_id, started_at DESC) p WHERE p.state = 'FAILED' LIMIT " + MAX_ROWS, (rs, i) -> {
+                RetentionTrouble t = new RetentionTrouble();
+                t.tenantId = rs.getLong(1);
+                t.dataClass = rs.getString(2);
+                t.state = rs.getString(3);
+                t.note = rs.getString(4);
+                t.passId = rs.getLong(5);
+                t.at = instant(rs, 6);
+                return t;
+            }, array, array));
+    }
+
     /** Runs one query across workspaces, with the workspaces as a bigint[] argument. */
     private <T> T across(Collection<Long> tenants, Function<Object, T> query) {
         return RowSecurity.acrossTenants("the alert evaluator (MIG-355) reads every workspace with a rule of this kind (ids, times and names); "

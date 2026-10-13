@@ -62,6 +62,10 @@ class RowSecurityContractTest extends RowSecurityContract {
                 + " touches a pending one, and nothing else");
         // MIG-355: monitoring that alerts -- the evaluator reads across workspaces (rules, the signals, open alerts) and writes each
         // workspace's alerts as that workspace; the platform's alerts have no workspace.
+        // MIG-354: the retention scheduler reads which workspaces turned retention on; each pass then runs as its workspace.
+        paths.put("RetentionScheduler: in code #1",
+            "the retention scheduler (MIG-354) reads which workspaces turned retention on (ids only); each workspace's pass then runs as"
+                + " that workspace");
         paths.put("AlertRules: in code #1",
             "the alert evaluator (MIG-355) reads every workspace's enabled alert rules and the platform's; each workspace's alerts are then"
                 + " written as that workspace");

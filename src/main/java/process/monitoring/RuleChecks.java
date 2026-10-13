@@ -187,6 +187,38 @@ public final class RuleChecks {
         return out;
     }
 
+    /**
+     * RETENTION (MIG-354): a retention class whose latest result paused (over the share a pass removes without asking) or
+     * failed, and a last pass that failed with no class to name. One alert per class ("retention:RUN_LOGS"); it clears
+     * when a later pass of the class ends otherwise.
+     */
+    public static List<Finding> retention(AlertRule rule, List<WorkspaceSignals.RetentionTrouble> trouble) {
+        List<Finding> out = new ArrayList<>();
+        boolean classes = false;
+        for (WorkspaceSignals.RetentionTrouble t : trouble) {
+            if (t.tenantId == rule.tenantId && t.dataClass != null) {
+                classes = true;
+            }
+        }
+        for (WorkspaceSignals.RetentionTrouble t : trouble) {
+            if (t.tenantId != rule.tenantId || (t.dataClass == null && classes)) {
+                continue;
+            }
+            String what = t.dataClass == null ? "The retention pass" : "Retention of " + label(t.dataClass);
+            boolean paused = "PAUSED".equals(t.state);
+            String title = paused ? what + " is waiting for an administrator's confirmation" : what + " failed (pass " + t.passId + ")";
+            String detail = t.note == null || t.note.trim().isEmpty() ? (paused ? "Nothing was removed." : "The next pass tries again.")
+                : oneLine(t.note, 400);
+            out.add(new Finding("retention:" + (t.dataClass == null ? "pass" : t.dataClass), title, detail,
+                "/administration/data-policies#retention", null, null, null));
+        }
+        return out;
+    }
+
+    private static String label(String dataClass) {
+        return process.retention.DataClass.of(dataClass).map(c -> c.label().toLowerCase(java.util.Locale.ROOT)).orElse(dataClass);
+    }
+
     // ------------------------------------------------------------------------------------------------------ platform
 
     /** One minute of one service, as the evaluator reads it back. */

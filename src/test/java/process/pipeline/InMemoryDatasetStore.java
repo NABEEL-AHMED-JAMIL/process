@@ -29,6 +29,14 @@ public class InMemoryDatasetStore implements DatasetStore {
         return dataset;
     }
 
+    /** MIG-354: every dataset and file under datasets/{run}/. */
+    @Override
+    public synchronized void deleteRun(long jobQueueId) {
+        String prefix = "datasets/" + jobQueueId + "/";
+        this.stored.keySet().removeIf(key -> key.startsWith(prefix));
+        this.files.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
     @Override
     public synchronized void writeFile(String storageKey, byte[] content) {
         this.files.put(storageKey, content);

@@ -21,6 +21,7 @@ import process.model.projection.OpenSearchJobAuditLogProjection;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -251,6 +252,36 @@ public class OpenSearchAuditLogClient {
         query.put("sort", Collections.singletonList(sortAsc("dateCreated")));
         query.put("query", Collections.singletonMap("range", Collections.singletonMap("dateCreated", range)));
         return search(query);
+    }
+
+    /**
+     * MIG-354: removes every line of these runs from the index (the retention policy's run logs). The number removed; 0
+     * when the index is not configured or does not exist yet. Any other failure is thrown, so the caller keeps the runs'
+     * database lines and tries the batch again rather than leaving the index's copy behind.
+     */
+    public long deleteByJobQueueIds(Collection<Long> jobQueueIds) {
+        if (!isEnabled() || jobQueueIds == null || jobQueueIds.isEmpty()) {
+            return 0;
+        }
+        Map<String, Object> query = Collections.singletonMap("query",
+            Collections.singletonMap("terms", Collections.singletonMap("jobQueueId", new ArrayList<>(jobQueueIds))));
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        try {
+            String response = this.restTemplate.postForObject(this.baseUrl + "/" + INDEX_NAME + "/_delete_by_query?conflicts=proceed",
+                new HttpEntity<>(query, headers), String.class);
+            JsonNode root = this.objectMapper.readTree(response == null ? "{}" : response);
+            if (root.path("failures").isArray() && root.path("failures").size() > 0) {
+                throw new IllegalStateException("OpenSearch could not remove every line: " + root.path("failures").get(0).toString());
+            }
+            return root.path("deleted").asLong(0);
+        } catch (HttpClientErrorException.NotFound noIndex) {
+            return 0;
+        } catch (IllegalStateException failed) {
+            throw failed;
+        } catch (Exception failed) {
+            throw new IllegalStateException("OpenSearch could not remove the runs' log lines: " + failed.getMessage(), failed);
+        }
     }
 
     private Map<String, Object> sortAsc(String field) {

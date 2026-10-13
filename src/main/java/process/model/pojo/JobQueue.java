@@ -174,6 +174,18 @@ public class JobQueue {
      * is in flight, and on runs that ended before V174. What the SLO report classifies a stored run by
      * (process.slo.RunSlo). Not on the wire.
      */
+    /**
+     * MIG-354: when the workspace's retention policy removed this run's outputs, and its log lines (V212). Written only
+     * by the retention pass, in SQL: never inserted or updated through this entity, so a run saved here never clears them.
+     */
+    @JsonIgnore
+    @Column(name = "outputs_removed_at", columnDefinition = "TIMESTAMP WITH TIME ZONE", insertable = false, updatable = false)
+    private LocalDateTime outputsRemovedAt;
+
+    @JsonIgnore
+    @Column(name = "logs_removed_at", columnDefinition = "TIMESTAMP WITH TIME ZONE", insertable = false, updatable = false)
+    private LocalDateTime logsRemovedAt;
+
     @JsonIgnore
     @Column(name = "end_reason", length = 16)
     @Enumerated(EnumType.STRING)
@@ -415,6 +427,10 @@ public class JobQueue {
     public String getDispatchPayload() { return dispatchPayload; }
 
     public void setDispatchPayload(String dispatchPayload) { this.dispatchPayload = dispatchPayload; }
+
+    public LocalDateTime getOutputsRemovedAt() { return outputsRemovedAt; }
+
+    public LocalDateTime getLogsRemovedAt() { return logsRemovedAt; }
 
     public RunEnd getEndReason() { return endReason; }
 

@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * MIG-355: what an alert rule watches. The first four are a workspace's (its administrators make them, its people hear of
+ * MIG-355: what an alert rule watches. The first five are a workspace's (its administrators make them, its people hear of
  * them); the other six are the platform's (tenant_id NULL, platform administrators). Each names its runbook entry
  * (etl-platform docs/runbooks/alerts.md#anchor) and says in one line what to do -- the line the bell, the mail and the
  * console show beside the alert.
@@ -18,6 +18,8 @@ import java.util.Optional;
  *   the last 30 days (at least five completed runs to know "usual"). Clears when the run ends or leaves the window.</li>
  *   <li>{@link #REVIEW_WAITING}: a run's review, or an Approval step's request, still waiting after windowMinutes. Clears
  *   once decided.</li>
+ *   <li>{@link #RETENTION} (MIG-354): the workspace's last retention pass failed, or one of its classes failed or paused
+ *   for an administrator's confirmation. Clears when a later pass of that class is done (or the policy no longer covers it).</li>
  *   <li>{@link #SERVICE_UNHEALTHY}: a service not UP (or not answering) for threshold minutes in a row.</li>
  *   <li>{@link #SERVICE_RESTARTED}: a service's JVM started again (its process start time moved) within windowMinutes.</li>
  *   <li>{@link #MEMORY_HIGH}: a service's heap after garbage collection at or over threshold percent (or its heap in use
@@ -37,6 +39,9 @@ public enum AlertKind {
         "Open the run and its step timeline: the slow step is the one to look at (a bigger input, a slow API or database, or a busy service). Stop it if it is stuck."),
     REVIEW_WAITING(false, "A review is waiting too long", "review-waiting",
         "Remind the reviewers, or decide it yourself in the Review inbox; a run waiting for review holds its results back."),
+    RETENTION(false, "Retention needs attention", "retention",
+        "Open Administration › Data policies › Retention: a class that paused shows how many items would go -- preview, then confirm "
+            + "or change its days; a class that failed shows why, and the next pass tries again."),
     SERVICE_UNHEALTHY(true, "A service is unhealthy", "service-unhealthy",
         "Check the service's container (health, restarts, logs) and what it depends on (Postgres, Kafka, Redis); redeploy or restart it with etl-platform's scripts."),
     SERVICE_RESTARTED(true, "A service restarted", "service-restarted",

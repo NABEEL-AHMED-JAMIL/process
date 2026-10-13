@@ -844,6 +844,11 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
         payload.put("sourceJob", sourceJobDto);
         payload.put("sourceJobQueue", getSourceJobQueueDto(jobQueueOpt.get()));
+        // MIG-354: what the workspace's retention policy removed of this run, and when (null: still kept).
+        Map<String, Object> retention = new HashMap<>();
+        retention.put("outputsRemovedAt", jobQueueOpt.get().getOutputsRemovedAt());
+        retention.put("logsRemovedAt", jobQueueOpt.get().getLogsRemovedAt());
+        payload.put("retention", retention);
         return new ResponseDto(SUCCESS, String.format("SourceJob audit log found with %d.", jobQueueId), payload);
     }
 

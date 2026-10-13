@@ -104,6 +104,7 @@ public class AlertEngine {
         List<WorkspaceSignals.Timed> slowCandidates = Collections.emptyList();
         Map<Long, WorkspaceSignals.Usual> usual = Collections.emptyMap();
         List<WorkspaceSignals.Waiting> waiting = Collections.emptyList();
+        List<WorkspaceSignals.RetentionTrouble> retention = Collections.emptyList();
         Map<String, List<RuleChecks.Sample>> recent;
         Map<String, RuleChecks.Probe> probes;
         Map<String, List<DeployWindow>> planned = Collections.emptyMap();
@@ -228,6 +229,8 @@ public class AlertEngine {
                 return Optional.of(RuleChecks.runSlow(rule, reads.slowCandidates, reads.usual, now));
             case REVIEW_WAITING:
                 return Optional.of(RuleChecks.reviewWaiting(rule, reads.waiting, now));
+            case RETENTION:
+                return Optional.of(RuleChecks.retention(rule, reads.retention));
             case SERVICE_UNHEALTHY:
                 return reads.samplesFresh ? Optional.of(RuleChecks.serviceUnhealthy(rule, reads.recent, reads.planned)) : Optional.empty();
             case SERVICE_RESTARTED:
@@ -289,6 +292,9 @@ public class AlertEngine {
                 }
             }
             reads.waiting = this.signals.waiting(tenants.get(AlertKind.REVIEW_WAITING), now.minus(Duration.ofMinutes(shortest)));
+        }
+        if (tenants.containsKey(AlertKind.RETENTION)) {
+            reads.retention = this.signals.retention(tenants.get(AlertKind.RETENTION));
         }
         if (platform) {
             reads.recent = this.health.recent(now);

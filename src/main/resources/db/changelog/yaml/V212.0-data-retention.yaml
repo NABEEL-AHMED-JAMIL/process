@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 212.0-data-retention
+      author: nabeel.amd93
+      description: "MIG-354: data retention per workspace -- retention_platform (the audit floor, the share a pass may remove before it asks), retention_policy (off until an administrator turns it on), retention_rule (days per class, NULL forever), legal_hold, retention_pass and retention_pass_class (what each pass did), retention_audit; job_queue.outputs_removed_at / logs_removed_at; alert kind RETENTION; two indexes"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V212.0-data-retention/V212__data_retention.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V212.0-data-retention/V212__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+  - changeSet:
+      id: 212.1-retention-run-indexes
+      author: nabeel.amd93
+      description: "MIG-354: job_queue's partial indexes for the retention pass (a workspace's runs whose outputs, or logs, are still there, oldest first); concurrently"
+      # A concurrent build that fails leaves an INVALID index behind, which IF NOT EXISTS would then mistake for done,
+      # so an invalid one is dropped first (as V200 does).
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_retention_outputs' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_retention_outputs;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                    WHERE c.relname = 'idx_job_queue_retention_logs' AND NOT i.indisvalid) THEN
+                  DROP INDEX public.idx_job_queue_retention_logs;
+                END IF;
+              END $$;
+        - sqlFile:
+            path: ../changelog-sets/V212.1-retention-run-indexes/V212_1__retention_run_indexes.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V212.1-retention-run-indexes/V212_1__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true

@@ -297,6 +297,21 @@ public class FileDatasetStore implements DatasetStore {
         this.pruneEmpty(file.getParent());
     }
 
+    /** MIG-354: the run's whole folder, datasets/{run}/ (the retention policy removed its outputs). */
+    @Override
+    public void deleteRun(long jobQueueId) throws IOException {
+        if (jobQueueId <= 0) {
+            throw new IllegalArgumentException("Not a run: " + jobQueueId);
+        }
+        Path run = this.resolve("datasets/" + jobQueueId);
+        if (Files.isDirectory(run)) {
+            Streams.deleteTree(run);
+            if (Files.exists(run)) {
+                throw new IOException("Run " + jobQueueId + "'s datasets could not all be removed; the next pass tries again.");
+            }
+        }
+    }
+
     /**
      * What a crash leaves (MIG-214): partial files older than {@code olderThan} -- a write in progress is younger -- and
      * empty folders, when they are that old or this sweep emptied them. Returns the partial files removed.

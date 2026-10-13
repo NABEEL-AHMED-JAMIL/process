@@ -37,6 +37,13 @@ public interface DatasetStore {
         throw new UnsupportedOperationException("This dataset store keeps no files.");
     }
 
+    /**
+     * MIG-354: removes everything the engine keeps for one run -- datasets/{run}/, every attempt, step and file -- when the
+     * workspace's retention policy removes the run's outputs. Nothing when there is none.
+     */
+    default void deleteRun(long jobQueueId) throws Exception {
+    }
+
     /** What a crash left behind (MIG-214): stale partial files and empty folders. Returns the partial files removed. */
     default int sweepLeftovers(Duration olderThan) throws Exception {
         return 0;
