@@ -159,6 +159,20 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "where exists (select 1 from job_queue q where q.job_id = j.id)", nativeQuery = true)
     List<Number> findJobIdsWithRuns(@Param("jobIds") String jobIds);
 
+    /**
+     * Billing's names for runs it has costs for (UX review 2026-10-12, BL1): each of these runs that belongs to the
+     * workspace, with its schedule (source_job) and pipeline (source_task) and when it started -- else when it was
+     * skipped, else when it was queued. {job_queue_id, job_id, job_name, task_detail_id, task_name, started_at,
+     * job_status}. The ids travel as ONE array parameter ({@link #idArray}); the workspace is both the filter and, under
+     * row-level security, the only one the session sees.
+     */
+    @Query(value = "select q.job_queue_id, q.job_id, j.job_name, j.task_detail_id, t.task_name, "
+        + "coalesce(q.start_time, q.skip_time, q.date_created) as started_at, q.job_status "
+        + "from unnest(cast(:ids as bigint[])) as r(id) join job_queue q on q.job_queue_id = r.id "
+        + "join source_job j on j.job_id = q.job_id left join source_task t on t.task_detail_id = j.task_detail_id "
+        + "where q.tenant_id = :tenantId order by q.job_queue_id", nativeQuery = true)
+    List<Object[]> findRunNames(@Param("tenantId") long tenantId, @Param("ids") String ids);
+
     /** Ids as a Postgres array literal, '{1,2,3}', for a cast(:ids as bigint[]) parameter. */
     static String idArray(Collection<Long> ids) {
         return ids.stream().filter(Objects::nonNull).map(String::valueOf).collect(Collectors.joining(",", "{", "}"));

@@ -169,6 +169,9 @@ class CoreProbeCoverageTest {
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";
         NOTHING_TO_AIM.put("POST internal/billingDirectory/usageFacts", service
             + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered)");
+        NOTHING_TO_AIM.put("POST internal/billingDirectory/runs", service
+            + "; the workspace it names is the only one row security shows the lookup, and the query filters by it too"
+            + " (InternalBillingDirectoryRestApiTest.withoutTheServiceTokenNothingIsAnswered, runsAreNamedForTheWorkspaceBillingNamesInOneQuery)");
         NOTHING_TO_AIM.put("POST internal/identity/events", service
             + " (InternalIdentityEventsRestApiPostgresTest.withoutTheServiceTokenNothingIsWritten)");
         NOTHING_TO_AIM.put("GET sourceJob.json/schedulePreview", "a timetable in the query, stepped by the scheduler's rules on a "
