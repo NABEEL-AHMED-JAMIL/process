@@ -35,6 +35,8 @@ import process.identity.IdentityPort;
 import process.notifications.NotificationPort;
 import process.security.TenantContext;
 import java.util.Optional;
+import org.assertj.core.api.Assertions;
+import java.util.function.Supplier;
 
 /**
  * MIG-355 end to end on etl_job as the changelog builds it, through the application's pool (process_app, row security):
@@ -241,6 +243,40 @@ class MonitoringPostgresTest {
         assertThat(((NotificationCreated) this.notices.get(this.notices.size() - 1)[1]).getTitle()).startsWith("Resolved: ");
         assertThat(login.queryForList("SELECT alert_event FROM api_event_out WHERE kind = 'alert' ORDER BY out_id", String.class))
             .containsExactly("opened", "resolved");
+    }
+
+    @Test
+    void aMutedRuleKeepsItsAlertButTellsNobodyUntilTheMuteEnds() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        ruleOf(A, ADMIN_A, AlertKind.RUN_FAILED, 1, false, true);
+        long ruleId = login.queryForObject("SELECT alert_rule_id FROM alert_rule WHERE tenant_id = ?", Long.class, A);
+        assertThat(as(A, ADMIN_A, () -> this.rules.mute(ruleId, A, 30, ADMIN_A))).isTrue();
+        assertThat(as(B, ADMIN_B, () -> this.rules.mute(ruleId, B, 30, ADMIN_B))).as("another workspace's rule").isFalse();
+        run(JOB_A, "Failed", now.minusSeconds(60), "Step 1 <x> failed: boom (synthetic).");
+
+        AlertEngine.Pass muted = this.engine.evaluate(now);
+
+        assertThat(muted.opened).isEqualTo(1);
+        assertThat(this.notices).isEmpty();
+        assertThat(login.queryForObject("SELECT count(*) FROM api_event_out WHERE kind = 'alert'", Integer.class)).isZero();
+        assertThat(as(A, ADMIN_A, () -> this.rules.firing(A)).get(ruleId)[1]).isEqualTo(1L);
+        assertThat(as(B, ADMIN_B, () -> this.rules.firing(B))).isEmpty();
+
+        assertThat(as(A, ADMIN_A, () -> this.rules.mute(ruleId, A, 0, ADMIN_A))).isTrue();
+        this.engine.evaluate(now.plusSeconds(60));
+        assertThat(told(A)).containsExactly(ADMIN_A);
+        assertThat(login.queryForObject("SELECT count(*) FROM api_event_out WHERE kind = 'alert'", Integer.class)).isEqualTo(1);
+        Assertions.assertThatThrownBy(() -> this.rules.mute(ruleId, A, AlertRules.MAX_MUTE_MINUTES + 1, ADMIN_A))
+            .isInstanceOf(AlertRules.Refused.class);
+    }
+
+    static <T> T as(long tenant, long admin, Supplier<T> work) {
+        TenantContext.set(tenant, "TENANT_ADMIN", admin, "admin@" + tenant);
+        try {
+            return work.get();
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     @Test

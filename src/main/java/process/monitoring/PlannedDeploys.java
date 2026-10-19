@@ -34,13 +34,13 @@ import org.springframework.stereotype.Component;
  * hash's own expiry (a week) on every write, so a platform whose Core never runs again does not keep it.
  *
  * <p>Redis unreachable: no windows, so every restart alerts as it did before -- failing towards telling, not towards
- * silence. Read once a minute (the alert pass) and by Platform › Reliability; at most {@link #MAX} windows.
+ * silence. Read once a minute (the alert pass) and by Platform › Service health; at most {@link #MAX} windows.
  */
 @Component
 public class PlannedDeploys {
 
     public static final String KEY = "monitoring:planned-deploys";
-    /** A window is kept a day and an hour: Platform › Reliability shows the last 24 hours. */
+    /** A window is kept a day and an hour: Platform › Service health shows the last 24 hours. */
     static final Duration KEEP = Duration.ofHours(25);
     static final int MAX = 500;
     private static final Pattern SERVICE = Pattern.compile("[a-z0-9][a-z0-9_-]{0,39}");

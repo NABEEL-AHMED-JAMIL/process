@@ -13,7 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Value;
+import process.settings.EngineDial;
+import process.settings.EngineDials;
 
 /**
  * Whether a pipeline definition can be saved and run (MIG-230), as every problem at its path -- never the first one
@@ -67,15 +68,36 @@ public class DefinitionValidator {
         this.tasks = registry.tasks();
     }
 
-    /** MIG-365: the step cap (process.pipeline.max-steps), between 1 and {@value #MAX_STEPS_CEILING}. */
+    /** Owner #24: the engine settings (EngineDials) the step cap and the longest timeout come from, per workspace. */
+    private EngineDials dials;
+
     @Autowired(required = false)
-    public void useMaxSteps(@Value("${process.pipeline.max-steps:" + DEFAULT_MAX_STEPS + "}") int maxSteps) {
+    public void useDials(EngineDials dials) {
+        this.dials = dials;
+    }
+
+    /**
+     * MIG-365: a fixed step cap, between 1 and {@value #MAX_STEPS_CEILING} -- for a validator built without the engine settings
+     * (tests). With them, Platform › Engine settings' "Steps a pipeline may have" decides (its default is
+     * process.pipeline.max-steps).
+     */
+    public void useMaxSteps(int maxSteps) {
         this.maxSteps = Math.max(1, Math.min(MAX_STEPS_CEILING, maxSteps));
     }
 
-    /** How many steps a pipeline may have here. */
+    /** How many steps a pipeline may have on the platform. */
     public int maxSteps() {
-        return this.maxSteps;
+        return this.maxSteps(null);
+    }
+
+    /** How many steps a pipeline may have in this workspace (its own value, else the platform's). */
+    public int maxSteps(Long tenantId) {
+        return this.dials == null ? this.maxSteps : this.dials.forWorkspaceInt(EngineDial.PIPELINE_MAX_STEPS, tenantId);
+    }
+
+    /** The longest timeout a pipeline's settings or a step may ask for in this workspace. */
+    public int maxTimeoutSeconds(Long tenantId) {
+        return this.dials == null ? MAX_TIMEOUT_SECONDS : this.dials.forWorkspaceInt(EngineDial.STEP_MAX_TIMEOUT_SECONDS, tenantId);
     }
 
     /** The definition's problems with every task at its default and no role to check. */
@@ -98,7 +120,8 @@ public class DefinitionValidator {
             problems.add(new DefinitionProblem("version", "must be " + PipelineDefinition.CURRENT_VERSION));
         }
         this.source(definition.getSource(), problems);
-        this.settings(definition.getSettings(), problems);
+        int maxTimeout = this.maxTimeoutSeconds(tenantId);
+        this.settings(definition.getSettings(), maxTimeout, problems);
         // MIG-347: the run parameters, and every {{param.name}} a step names is one of them.
         problems.addAll(RunParameters.problems(definition.getParameters()));
         List<PipelineDefinition.Step> steps = definition.getSteps();
@@ -125,14 +148,15 @@ public class DefinitionValidator {
             problems.add(new DefinitionProblem("steps", "a pipeline has at least one step"));
             return problems;
         }
-        if (steps.size() > this.maxSteps) {
+        int maxSteps = this.maxSteps(tenantId);
+        if (steps.size() > maxSteps) {
             problems.add(new DefinitionProblem("steps", String.format("this pipeline has %d steps; a pipeline has at most %d here "
-                + "(process.pipeline.max-steps). Combine steps -- one append stacks several outputs, one compute holds up to 50 "
-                + "formulas -- or ask a platform administrator to raise the limit.", steps.size(), this.maxSteps)));
+                + "(Engine settings: Steps a pipeline may have). Combine steps -- one append stacks several outputs, one compute holds "
+                + "up to 50 formulas -- or ask a platform administrator to raise the limit.", steps.size(), maxSteps)));
         }
         Set<String> earlier = new HashSet<>();
         for (int i = 0; i < steps.size(); i++) {
-            this.step(steps.get(i), "steps[" + i + "]", steps.size(), earlier, switches, role, problems);
+            this.step(steps.get(i), "steps[" + i + "]", steps.size(), earlier, switches, role, maxTimeout, problems);
             if (steps.get(i) != null && steps.get(i).getKey() != null) {
                 earlier.add(steps.get(i).getKey());
             }
@@ -166,12 +190,12 @@ public class DefinitionValidator {
         }
     }
 
-    private void settings(PipelineDefinition.Settings settings, List<DefinitionProblem> problems) {
+    private void settings(PipelineDefinition.Settings settings, int maxTimeout, List<DefinitionProblem> problems) {
         if (settings == null) {
             return;
         }
         range(settings.getDatasetRetentionHours(), 1, MAX_RETENTION_HOURS, "settings.datasetRetentionHours", problems);
-        range(settings.getDefaultTimeoutSeconds(), 1, MAX_TIMEOUT_SECONDS, "settings.defaultTimeoutSeconds", problems);
+        range(settings.getDefaultTimeoutSeconds(), 1, maxTimeout, "settings.defaultTimeoutSeconds", problems);
         if (settings.getSensitivity() != null && !PipelineDefinition.Settings.SENSITIVITIES.contains(settings.getSensitivity())) {
             problems.add(new DefinitionProblem("settings.sensitivity", "one of " + PipelineDefinition.Settings.SENSITIVITIES));
         }
@@ -220,7 +244,7 @@ public class DefinitionValidator {
     }
 
     private void step(PipelineDefinition.Step step, String at, int stepCount, Set<String> earlier, Map<String, Boolean> switches,
-        String role, List<DefinitionProblem> problems) {
+        String role, int maxTimeout, List<DefinitionProblem> problems) {
         if (step == null) {
             problems.add(new DefinitionProblem(at, "a step is an object"));
             return;
@@ -264,7 +288,7 @@ public class DefinitionValidator {
             range(step.getRetry().getMaxAttempts(), 1, MAX_TRIES, at + ".retry.maxAttempts", problems);
             range(step.getRetry().getDelaySeconds(), 0, MAX_DELAY_SECONDS, at + ".retry.delaySeconds", problems);
         }
-        range(step.getTimeoutSeconds(), 1, MAX_TIMEOUT_SECONDS, at + ".timeoutSeconds", problems);
+        range(step.getTimeoutSeconds(), 1, maxTimeout, at + ".timeoutSeconds", problems);
         if (step.getOnError() != null && !OnError.of(step.getOnError()).isPresent()) {
             problems.add(new DefinitionProblem(at + ".onError", "one of " + OnError.words()));
         }

@@ -16,23 +16,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.model.dto.ResponseDto;
 import process.util.ProcessUtil;
 
 /**
- * MIG-355: Platform › Reliability's health view, platform administrators only -- GET reliability.json/health?bucketMinutes=:
- * each service's latest sample (status, heap, CPU, threads, requests and errors a minute, mean latency, when its JVM
- * started) with its restarts in 24 hours and its 24 hours in buckets (default 15 minutes, 5 to 60) as compact arrays;
- * the platform probes' latest readings (Kafka lag per group, disk, billing reconciliation); and the platform's alerts of
- * the last 24 hours, open first. Three statements over service_health_sample (at most a day of minutes), one over
- * platform_probe, one over alert_incident.
+ * Platform › Service health (MIG-355; slimmed by owner #21, 2026-10-19), platform administrators only -- GET
+ * reliability.json/health: each service's status, the version it runs (ServiceVersions, written by scripts/deploy.sh),
+ * when its JVM started, its restarts in 24 hours (planned or not) and its error rate (5xx a minute against requests a
+ * minute, from the latest sample); the platform probes' latest readings (Kafka lag per group, billing reconciliation --
+ * the disk probe is read by the disk rule, not shown); and the platform's alerts of the last 24 hours, open first.
+ *
+ * <p>No history of heap, CPU or requests: on AWS that is CloudWatch's (Container Insights), and the page does not
+ * duplicate it. The samples keep the heap figures only because the memory rule reads them (HealthCollector.recent).
  *
  * <p>The planned deploys of the 24 hours (PlannedDeploys, announced by scripts/deploy.sh) as {@code deploys}, and per
  * service how many of its restarts and minutes not UP fell inside one ({@code plannedRestarts24h},
- * {@code plannedMinutesNotUp24h}): what the restart and unhealthy rules did not alert on. Two more statements over the
- * samples, only when there was a deploy.
+ * {@code plannedMinutesNotUp24h}): what the restart and unhealthy rules did not alert on.
  */
 @RestController
 @RequestMapping("/reliability.json")
@@ -43,20 +43,19 @@ public class HealthRestApi {
     private final HealthCollector collector;
     private final AlertIncidents incidents;
     private final PlannedDeploys planned;
+    private final ServiceVersions versions;
 
-    public HealthRestApi(JdbcTemplate jdbc, HealthCollector collector, AlertIncidents incidents, PlannedDeploys planned) {
+    public HealthRestApi(JdbcTemplate jdbc, HealthCollector collector, AlertIncidents incidents, PlannedDeploys planned,
+        ServiceVersions versions) {
         this.jdbc = jdbc;
         this.collector = collector;
         this.incidents = incidents;
         this.planned = planned;
+        this.versions = versions;
     }
 
     @GetMapping("/health")
-    public ResponseEntity<ResponseDto> health(@RequestParam(value = "bucketMinutes", required = false) Integer bucketMinutes) {
-        int bucket = bucketMinutes == null ? 15 : bucketMinutes;
-        if (bucket < 5 || bucket > 60) {
-            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "bucketMinutes is 5 to 60."), HttpStatus.BAD_REQUEST);
-        }
+    public ResponseEntity<ResponseDto> health() {
         Instant now = Instant.now();
         Timestamp dayAgo = Timestamp.from(now.minusSeconds(86_400));
         Map<String, Map<String, Object>> services = new LinkedHashMap<>();
@@ -66,28 +65,19 @@ public class HealthRestApi {
             empty.put("status", "UNKNOWN");
             services.put(name, empty);
         }
-        this.jdbc.query("SELECT DISTINCT ON (service) service, sampled_at, status, source, response_ms, heap_used_mb, heap_max_mb, "
-            + "heap_after_gc_pct, cpu_pct, threads, started_at, requests_per_min, errors_per_min, mean_ms FROM service_health_sample "
-            + "WHERE sampled_at >= ? ORDER BY service, sampled_at DESC", rs -> {
+        this.jdbc.query("SELECT DISTINCT ON (service) service, sampled_at, status, source, started_at, requests_per_min, errors_per_min "
+            + "FROM service_health_sample WHERE sampled_at >= ? ORDER BY service, sampled_at DESC", rs -> {
                 Map<String, Object> s = services.computeIfAbsent(rs.getString("service"), k -> new LinkedHashMap<>());
                 s.put("service", rs.getString("service"));
                 s.put("status", rs.getString("status"));
                 s.put("source", rs.getString("source"));
                 s.put("sampledAt", iso(rs, "sampled_at"));
-                s.put("responseMs", integer(rs, "response_ms"));
-                s.put("heapUsedMb", integer(rs, "heap_used_mb"));
-                s.put("heapMaxMb", integer(rs, "heap_max_mb"));
-                s.put("heapAfterGcPct", number(rs, "heap_after_gc_pct"));
-                s.put("cpuPct", number(rs, "cpu_pct"));
-                s.put("threads", integer(rs, "threads"));
                 s.put("startedAt", iso(rs, "started_at"));
                 BigDecimal rpm = rs.getBigDecimal("requests_per_min");
                 BigDecimal epm = rs.getBigDecimal("errors_per_min");
                 s.put("requestsPerMin", rpm);
                 s.put("errorsPerMin", epm);
-                s.put("errorPct", rpm == null || epm == null || rpm.signum() == 0 ? null
-                    : epm.multiply(BigDecimal.valueOf(100)).divide(rpm, 1, RoundingMode.HALF_UP));
-                s.put("meanMs", number(rs, "mean_ms"));
+                s.put("errorPct", errorPct(rpm, epm));
             }, Timestamp.from(now.minusSeconds(600)));
         this.jdbc.query("SELECT service, greatest(count(DISTINCT started_at) - 1, 0) AS restarts, count(*) FILTER (WHERE status <> 'UP') AS down "
             + "FROM service_health_sample WHERE sampled_at >= ? GROUP BY service", rs -> {
@@ -97,33 +87,19 @@ public class HealthRestApi {
                     s.put("minutesNotUp24h", rs.getLong("down"));
                 }
             }, dayAgo);
-        long step = bucket * 60L;
-        this.jdbc.query("SELECT service, floor(extract(epoch FROM sampled_at) / ?) * ? AS bucket, max(heap_used_mb) AS heap, "
-            + "avg(requests_per_min) AS rpm, avg(errors_per_min) AS epm, avg(mean_ms) AS ms, avg(cpu_pct) AS cpu, "
-            + "bool_and(status = 'UP') AS up FROM service_health_sample WHERE sampled_at >= ? GROUP BY 1, 2 ORDER BY 1, 2", rs -> {
-                Map<String, Object> s = services.get(rs.getString("service"));
-                if (s == null) {
-                    return;
-                }
-                @SuppressWarnings("unchecked")
-                Map<String, List<Object>> series = (Map<String, List<Object>>) s.computeIfAbsent("series", k -> {
-                    Map<String, List<Object>> made = new LinkedHashMap<>();
-                    for (String key : new String[]{"at", "heapUsedMb", "requestsPerMin", "errorsPerMin", "meanMs", "cpuPct", "up"}) {
-                        made.put(key, new ArrayList<>());
-                    }
-                    return made;
-                });
-                series.get("at").add(Instant.ofEpochSecond(rs.getLong("bucket")).toString());
-                series.get("heapUsedMb").add(integer(rs, "heap"));
-                series.get("requestsPerMin").add(rounded(rs.getBigDecimal("rpm"), 1));
-                series.get("errorsPerMin").add(rounded(rs.getBigDecimal("epm"), 2));
-                series.get("meanMs").add(rounded(rs.getBigDecimal("ms"), 0));
-                series.get("cpuPct").add(rounded(rs.getBigDecimal("cpu"), 1));
-                series.get("up").add(rs.getBoolean("up"));
-            }, step, step, dayAgo);
+        Map<String, ServiceVersions.Version> running = this.versions.all();
+        services.forEach((name, s) -> {
+            ServiceVersions.Version v = running.get(name);
+            s.put("version", v == null ? null : v.version);
+            s.put("branch", v == null ? null : v.branch);
+            s.put("deployedAt", v == null || v.deployedAt == null ? null : v.deployedAt.toString());
+        });
         List<Map<String, Object>> deploys = this.markPlanned(services, now, dayAgo);
         List<Map<String, Object>> probes = new ArrayList<>();
         this.collector.probes().values().forEach(p -> {
+            if (p.name.startsWith(HealthCollector.DISK_PREFIX)) {
+                return;
+            }
             Map<String, Object> one = new LinkedHashMap<>();
             one.put("probe", p.name);
             one.put("readAt", p.at == null ? null : p.at.toString());
@@ -140,12 +116,17 @@ public class HealthRestApi {
         }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("asOf", now.toString());
-        data.put("bucketMinutes", bucket);
         data.put("services", new ArrayList<>(services.values()));
         data.put("deploys", deploys);
         data.put("probes", probes);
         data.put("incidents", alerts);
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Platform health.", data), HttpStatus.OK);
+    }
+
+    /** 5xx answers as a share of requests, one place: null when nothing was asked. */
+    static BigDecimal errorPct(BigDecimal requestsPerMin, BigDecimal errorsPerMin) {
+        return requestsPerMin == null || errorsPerMin == null || requestsPerMin.signum() == 0 ? null
+            : errorsPerMin.multiply(BigDecimal.valueOf(100)).divide(requestsPerMin, 1, RoundingMode.HALF_UP);
     }
 
     /**
@@ -189,16 +170,4 @@ public class HealthRestApi {
         return at == null ? null : at.toInstant().toString();
     }
 
-    private static Integer integer(ResultSet rs, String column) throws SQLException {
-        int value = rs.getInt(column);
-        return rs.wasNull() ? null : value;
-    }
-
-    private static BigDecimal number(ResultSet rs, String column) throws SQLException {
-        return rs.getBigDecimal(column);
-    }
-
-    private static BigDecimal rounded(BigDecimal value, int places) {
-        return value == null ? null : value.setScale(places, RoundingMode.HALF_UP);
-    }
 }

@@ -165,7 +165,7 @@ public class AlertEngine {
                 pass.touched++;
                 if (already.notified == null) {
                     toTell.add(already);
-                } else if (already.emailHeld && rule.email && !QuietHours.quiet(rule, now)) {
+                } else if (already.emailHeld && rule.email && !QuietHours.quiet(rule, now) && !rule.mutedAt(now)) {
                     try {
                         this.delivery.heldMail(rule, already, this.delivery.recipients(rule, audience), this.incidents, now);
                         pass.heldMailSent++;
@@ -183,6 +183,12 @@ public class AlertEngine {
             }
         }
         int told = 0;
+        // Owner #6: a muted rule's alerts open and resolve as always but nobody is told; they stay untold (notified_at
+        // empty), so the first pass after the mute ends tells the ones still open.
+        boolean muted = rule.mutedAt(now);
+        if (muted) {
+            toTell.clear();
+        }
         for (AlertIncidents.Incident incident : toTell) {
             if (told >= MAX_TOLD_PER_RULE) {
                 break;

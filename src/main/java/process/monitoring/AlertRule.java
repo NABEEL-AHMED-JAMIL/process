@@ -36,6 +36,8 @@ public final class AlertRule {
     public LocalTime quietStart;
     public LocalTime quietEnd;
     public String quietZone;
+    /** Owner #6 (2026-10-19): told nobody until then -- alerts still open and resolve, and are told once it ends. */
+    public Instant mutedUntil;
     public Long createdBy;
     public Instant created;
     public Long updatedBy;
@@ -43,7 +45,7 @@ public final class AlertRule {
 
     static final String COLUMNS = "alert_rule_id, tenant_id, kind, name, enabled, severity, job_id, threshold, window_minutes, factor, "
         + "notify_bell, notify_email, notify_webhook, recipient_roles, recipient_groups, quiet_start, quiet_end, quiet_zone, created_by, "
-        + "date_created, updated_by, date_updated";
+        + "date_created, updated_by, date_updated, muted_until";
 
     static AlertRule of(ResultSet rs, int row) throws SQLException {
         AlertRule rule = new AlertRule();
@@ -69,6 +71,8 @@ public final class AlertRule {
         rule.quietStart = start == null ? null : start.toLocalTime();
         rule.quietEnd = end == null ? null : end.toLocalTime();
         rule.quietZone = rs.getString("quiet_zone");
+        Timestamp muted = rs.getTimestamp("muted_until");
+        rule.mutedUntil = muted == null ? null : muted.toInstant();
         long createdBy = rs.getLong("created_by");
         rule.createdBy = rs.wasNull() ? null : createdBy;
         Timestamp created = rs.getTimestamp("date_created");
@@ -91,6 +95,11 @@ public final class AlertRule {
 
     public boolean isPlatform() {
         return this.tenantId == null;
+    }
+
+    /** Whether the rule tells nobody at this instant (a mute that has not ended). */
+    public boolean mutedAt(Instant now) {
+        return this.mutedUntil != null && this.mutedUntil.isAfter(now);
     }
 
     public boolean critical() {
@@ -132,6 +141,7 @@ public final class AlertRule {
             quiet.put("zone", this.quietZone);
         }
         out.put("quietHours", quiet);
+        out.put("mutedUntil", this.mutedAt(Instant.now()) ? this.mutedUntil.toString() : null);
         out.put("runbook", this.kind == null ? null : this.kind.runbook());
         out.put("whatToDo", this.kind == null ? null : this.kind.whatToDo());
         out.put("createdBy", this.createdBy);

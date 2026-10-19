@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 214.0-platform-settings
+      author: nabeel.amd93
+      description: "Owner #21, #24, #6 (2026-10-19): service_health_sample loses response_ms, cpu_pct, threads, mean_ms (Service health; history is CloudWatch's); alert_rule.muted_until; engine_setting_override (a workspace's own engine values) and engine_setting_audit (every change and reset), both under row security"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V214.0-platform-settings/V214__platform_settings.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V214.0-platform-settings/V214__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

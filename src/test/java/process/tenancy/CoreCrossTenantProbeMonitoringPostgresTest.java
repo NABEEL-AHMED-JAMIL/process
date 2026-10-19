@@ -134,6 +134,12 @@ class CoreCrossTenantProbeMonitoringPostgresTest {
             .contains("No such pipeline in this workspace");
         assertThat(fx.probe("POST reliability.json/alerts/rules/delete", ADMIN_OF_A,
             () -> fx.alerts.delete(Collections.singletonMap("id", bRule)))).contains(REFUSED);
+        Map<String, Object> muteTheirs = new HashMap<>();
+        muteTheirs.put("id", bRule);
+        muteTheirs.put("minutes", 60);
+        assertThat(fx.probe("POST reliability.json/alerts/rules/mute", ADMIN_OF_A, () -> fx.alerts.mute(muteTheirs))).contains(REFUSED);
+        assertThat(fx.db.jdbc().queryForObject("SELECT muted_until IS NULL FROM alert_rule WHERE alert_rule_id = ?", Boolean.class, bRule))
+            .isTrue();
         assertThat(fx.probe("POST reliability.json/alerts/incidents/resolve", ADMIN_OF_A,
             () -> fx.alerts.resolve(Collections.singletonMap("id", bAlert)))).contains(REFUSED);
         assertThat(fx.probe("GET reliability.json/alerts/rules(as C)", ADMIN_OF_C, () -> fx.alerts.list())).contains("\"rules\":[]");

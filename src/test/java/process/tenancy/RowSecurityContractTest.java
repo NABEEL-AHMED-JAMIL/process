@@ -57,6 +57,22 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("BackfillDispatcher: in code #3",
             "the backfill dispatcher (MIG-347) counts the backfill runs in flight on the platform (a number), the cap every workspace's"
                 + " backfills share");
+        // Owner #24: Platform › Engine settings -- a platform administrator's screen over every workspace's own engine values,
+        // and the engine's cache of them.
+        paths.put("EngineDials: in code #1",
+            "the engine settings (owner #24) read every workspace's own engine values (engine_setting_override: a key and a number each), cached for the step engine and the platform screen");
+        paths.put("EngineSettingStore: in code #1",
+            "the engine settings screen (owner #24, platform administrators) reads one workspace's own value of an engine setting before it changes it");
+        paths.put("EngineSettingStore: in code #2",
+            "the engine settings screen (owner #24, platform administrators) sets one workspace's own value of an engine setting");
+        paths.put("EngineSettingStore: in code #3",
+            "the engine settings screen (owner #24, platform administrators) removes one workspace's own value of an engine setting (reset to the platform's)");
+        paths.put("EngineSettingStore: in code #4",
+            "the engine settings screen (owner #24, platform administrators) lists every workspace's own engine values with who set them");
+        paths.put("EngineSettingStore: in code #5",
+            "the engine settings screen (owner #24, platform administrators) records a change to an engine setting, the platform's or one workspace's");
+        paths.put("EngineSettingStore: in code #6",
+            "the engine settings screen (owner #24, platform administrators) reads the history of engine setting changes, the platform's and every workspace's");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");

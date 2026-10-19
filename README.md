@@ -338,6 +338,33 @@ management.endpoint.shutdown.enabled=false
 
 The rest — `env`, `configprops`, `heapdump`, `threaddump`, `beans` and the others — are **off on purpose**: they leak configuration and secrets. `prometheus` is there for Grafana.
 
+## Engine settings, Service health and alert mutes (owner #21, #24, #6; 2026-10-19, V214)
+
+**Engine settings** (`process.settings`): `EngineDial` is the allow-list a platform administrator may change on Platform ›
+Engine settings -- `QUEUE_FETCH_LIMIT`, `PIPELINE_MAX_STEPS`, `STEP_MAX_TIMEOUT_SECONDS`, `RUN_MEMORY_MB`, `BATCH_ROWS`,
+`ENGINE_THREADS` (read at start: takes effect after a restart), `BACKFILL_MAX_OPEN`, `BACKFILL_MAX_IN_FLIGHT`,
+`BACKFILL_MEMORY_MB` -- each with a range, a unit, "takes effect", and a default: the environment's property
+(`process.pipeline.max-steps`, `process.pipeline.run-memory-mb`, ...) when it is set, else the built-in. The platform's
+values live in `orchestration_setting` (written only by `OrchestrationSettings`); a workspace's own values, for the dials
+that allow one (steps, timeout, memory, open backfills), in `engine_setting_override`; every change and reset in
+`engine_setting_audit`. `EngineDials` is what the engine reads (`DefinitionValidator`, `StepEngine`, `BackfillSettings`):
+one read of both tables, kept 30 seconds and cleared on a change. API: `GET/PUT setting.json/engineSettings`,
+`POST .../engineSettings/reset`, `GET .../engineSettings/history` (PLATFORM_ADMIN). Secrets, URLs and keys are not dials and
+cannot be written.
+
+**Service health** (`reliability.json/health`): status, version (`ServiceVersions`, from Redis `monitoring:service-versions`,
+written by etl-platform's `scripts/deploy.sh`), start, restarts in 24 h (planned/unplanned), error rate, planned deploys,
+the Kafka and billing probes, the platform's alerts. `ServiceReading` no longer reads CPU, threads or latency, and the
+samples lost `response_ms`, `cpu_pct`, `threads`, `mean_ms` (V214); the heap columns stay for the memory rule. Alert links
+point at `/platform/service-health`.
+
+**Alert mutes** (`alert_rule.muted_until`): `POST reliability.json/alerts/rules/mute {id, minutes}` (0 ends it, at most a
+week). A muted rule's alerts open, touch and resolve as always; nobody is told (bell, mail, webhook) and they stay untold,
+so the first pass after the mute tells the ones still open. The rules list adds `lastFiredAt` and `openAlerts` per rule.
+
+**Workspace figures** (`POST /internal/core/tenantFacts`): `runsThisMonth`, `failedRunsThisMonth` (Chicago's month) and
+`openAlerts` per workspace beside the six counts, for Platform › Workspaces (`WorkspaceActivity`).
+
 ## Diagrams
 
 | | |

@@ -106,14 +106,12 @@ public class HealthCollector {
         final Instant startedAt;
         final double requests;
         final double errors;
-        final double seconds;
 
-        Previous(Instant at, Instant startedAt, double requests, double errors, double seconds) {
+        Previous(Instant at, Instant startedAt, double requests, double errors) {
             this.at = at;
             this.startedAt = startedAt;
             this.requests = requests;
             this.errors = errors;
-            this.seconds = seconds;
         }
     }
 
@@ -214,7 +212,6 @@ public class HealthCollector {
     void store(ServiceReading r) {
         BigDecimal perMinute = null;
         BigDecimal errorsPerMinute = null;
-        BigDecimal meanMs = null;
         Previous before = this.previous.get(r.service);
         if (r.requests != null && before != null && before.at.isBefore(r.at)
             && (before.startedAt == null ? r.startedAt == null : before.startedAt.equals(r.startedAt))
@@ -222,25 +219,21 @@ public class HealthCollector {
             double minutes = Duration.between(before.at, r.at).toMillis() / 60_000.0;
             double requests = r.requests - before.requests;
             double errors = Math.max(0, (r.errors == null ? 0 : r.errors) - before.errors);
-            double seconds = Math.max(0, (r.seconds == null ? 0 : r.seconds) - before.seconds);
             if (minutes > 0.1) {
                 perMinute = scale(requests / minutes, 2);
                 errorsPerMinute = scale(errors / minutes, 2);
-                meanMs = requests > 0 ? scale(seconds * 1000 / requests, 1) : null;
             }
         }
         if (r.requests != null) {
-            this.previous.put(r.service, new Previous(r.at, r.startedAt, r.requests, r.errors == null ? 0 : r.errors,
-                r.seconds == null ? 0 : r.seconds));
+            this.previous.put(r.service, new Previous(r.at, r.startedAt, r.requests, r.errors == null ? 0 : r.errors));
         }
         try {
-            this.jdbc.update("INSERT INTO service_health_sample (service, sampled_at, status, source, response_ms, heap_used_mb, heap_max_mb, "
-                    + "heap_after_gc_pct, cpu_pct, threads, started_at, requests_per_min, errors_per_min, mean_ms) "
-                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (service, sampled_at) DO NOTHING",
-                r.service, Timestamp.from(r.at), r.status, r.hasFigures() ? "METRICS" : "HEALTH", r.responseMs, mb(r.heapUsedBytes),
+            this.jdbc.update("INSERT INTO service_health_sample (service, sampled_at, status, source, heap_used_mb, heap_max_mb, "
+                    + "heap_after_gc_pct, started_at, requests_per_min, errors_per_min) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (service, sampled_at) DO NOTHING",
+                r.service, Timestamp.from(r.at), r.status, r.hasFigures() ? "METRICS" : "HEALTH", mb(r.heapUsedBytes),
                 mb(r.heapMaxBytes), r.heapAfterGcPct == null ? null : scale(Math.min(999, r.heapAfterGcPct), 1),
-                r.cpuPct == null ? null : scale(Math.min(999, r.cpuPct), 1), r.threads, r.startedAt == null ? null : Timestamp.from(r.startedAt),
-                perMinute, errorsPerMinute, meanMs);
+                r.startedAt == null ? null : Timestamp.from(r.startedAt), perMinute, errorsPerMinute);
         } catch (RuntimeException failed) {
             logger.warn("Could not store {}'s health sample: {}", r.service, failed.getMessage());
         }

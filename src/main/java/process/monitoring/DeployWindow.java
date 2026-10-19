@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * A planned deploy of one service: etl-platform's scripts/deploy.sh opens it just before it recreates the container and
  * ends it once the new one is healthy (PlannedDeploys reads them). A restart, or a health check that is not UP, of that
- * service inside it is the deploy, not an incident: the platform rules do not alert on it, and Platform › Reliability
+ * service inside it is the deploy, not an incident: the platform rules do not alert on it, and Platform › Service health
  * marks it "planned deploy".
  *
  * <p>A window always ends: at {@link #end} when the deploy said so, and in any case at {@link #expires} (the deploy's

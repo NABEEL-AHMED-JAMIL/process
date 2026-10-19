@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.time.Instant;
 
 /**
  * Vulnerabilities review 2026-10-13, C7: the services' metrics answer only the platform's internal token, so the sampler
@@ -30,7 +31,7 @@ class ServiceReadingTokenTest {
         this.server.createContext("/api/v1/actuator/", exchange -> {
             boolean allowed = TOKEN.equals(exchange.getRequestHeaders().getFirst("X-Internal-Token"));
             String path = exchange.getRequestURI().getPath();
-            String body = !allowed ? "" : path.endsWith("/prometheus") ? "jvm_threads_live_threads 57.0\n"
+            String body = !allowed ? "" : path.endsWith("/prometheus") ? "process_start_time_seconds 1.7603E9\n"
                 : path.contains("/metrics/") ? "{\"name\":\"x\",\"measurements\":[{\"statistic\":\"VALUE\",\"value\":42.0}]}" : "";
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(allowed ? 200 : 401, bytes.length == 0 ? -1 : bytes.length);
@@ -54,7 +55,7 @@ class ServiceReadingTokenTest {
         ServiceReading without = new ServiceReading();
 
         assertThat(ServiceReading.prometheus(http, this.base, with, Duration.ofSeconds(5), TOKEN)).isTrue();
-        assertThat(with.threads).isEqualTo(57);
+        assertThat(with.startedAt).isEqualTo(Instant.ofEpochSecond(1_760_300_000L));
         assertThat(ServiceReading.prometheus(http, this.base, without, Duration.ofSeconds(5), "")).isFalse();
     }
 

@@ -18,6 +18,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentMatchers;
+import java.time.Instant;
 
 /**
  * MIG-107: what the platform administrator's workspace list shows that is Core's to count -- Kafka
@@ -79,5 +81,37 @@ class InternalTenantFactsRestApiTest {
             this.api.tenantFacts(TOKEN, Collections.singletonMap("ids", Collections.singletonList(2901))).getBody();
 
         assertThat(facts.get("2901")).containsEntry("sourceJobCount", 7L).doesNotContainKey("bucketCount");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void runsThisMonthFailedRunsAndOpenAlertsAreCountedWhenCoreCanCountThem() {
+        WorkspaceActivity activity = mock(WorkspaceActivity.class);
+        WorkspaceActivity.Figures figures = new WorkspaceActivity.Figures();
+        figures.runsThisMonth = 40;
+        figures.failedThisMonth = 3;
+        figures.openAlerts = 2;
+        when(activity.of(ArgumentMatchers.anyCollection(), ArgumentMatchers.any()))
+            .thenReturn(Collections.singletonMap(2901L, figures));
+        this.api.useActivity(activity);
+
+        Map<String, Map<String, Object>> facts = (Map<String, Map<String, Object>>) this.api.tenantFacts(TOKEN,
+            Collections.singletonMap("ids", Arrays.asList(2901, 2902))).getBody();
+
+        assertThat(facts.get("2901")).containsEntry("runsThisMonth", 40L).containsEntry("failedRunsThisMonth", 3L).containsEntry("openAlerts", 2L);
+        assertThat(facts.get("2902")).containsEntry("runsThisMonth", 0L).containsEntry("openAlerts", 0L);
+
+        when(activity.of(ArgumentMatchers.anyCollection(), ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("down"));
+        facts = (Map<String, Map<String, Object>>) this.api.tenantFacts(TOKEN, Collections.singletonMap("ids", Arrays.asList(2901))).getBody();
+        assertThat(facts.get("2901")).doesNotContainKeys("runsThisMonth", "failedRunsThisMonth", "openAlerts");
+    }
+
+    @Test
+    void theMonthStartsAtChicagosMidnight() {
+        assertThat(WorkspaceActivity.monthStart(Instant.parse("2026-10-19T03:00:00Z")))
+            .isEqualTo(Instant.parse("2026-10-01T05:00:00Z"));
+        assertThat(WorkspaceActivity.monthStart(Instant.parse("2026-11-01T04:00:00Z")))
+            .isEqualTo(Instant.parse("2026-10-01T05:00:00Z"));
     }
 }

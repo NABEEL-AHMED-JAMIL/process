@@ -33,6 +33,8 @@ import process.util.ProcessUtil;
  *   <li>POST reliability.json/alerts/rules {rule} -- makes one (no id) or changes one (its id); 400 with a sentence when it
  *       is not valid, 404 when the id is not the caller's;</li>
  *   <li>POST reliability.json/alerts/rules/delete {id} -- removes a rule and its alerts;</li>
+ *   <li>POST reliability.json/alerts/rules/mute {id, minutes} -- tells nobody for that long, 0 ends it (owner #6); the list
+ *       says, per rule, when it last fired and how many of its alerts are open;</li>
  *   <li>GET reliability.json/alerts/incidents?state=open|resolved|all&amp;limit= -- the caller's alerts, open first;</li>
  *   <li>POST reliability.json/alerts/incidents/resolve {id} -- a person resolves an open alert (MANUAL); its rule's
  *       recipients are told, and alert.resolved goes to the webhooks when the rule asks for them.</li>
@@ -73,7 +75,14 @@ public class AlertRestApi {
         return this.answer(() -> {
             Long scope = scope();
             List<Map<String, Object>> out = new ArrayList<>();
-            this.rules.list(scope).forEach(rule -> out.add(rule.toMap()));
+            Map<Long, Object[]> firing = this.rules.firing(scope);
+            this.rules.list(scope).forEach(rule -> {
+                Map<String, Object> row = rule.toMap();
+                Object[] f = firing.get(rule.id);
+                row.put("lastFiredAt", f == null ? null : f[0]);
+                row.put("openAlerts", f == null ? 0L : f[1]);
+                out.add(row);
+            });
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("scope", scope == null ? "platform" : "workspace");
             data.put("rules", out);
@@ -91,6 +100,29 @@ public class AlertRestApi {
             logger.info("Alert rule {} ({}) saved by user {} for {}.", saved.id, saved.kind, TenantContext.getAppUserId(),
                 scope == null ? "the platform" : "workspace " + scope);
             return new ResponseDto(ProcessUtil.SUCCESS, "Alert rule saved.", saved.toMap());
+        });
+    }
+
+    /** Owner #6: POST reliability.json/alerts/rules/mute {id, minutes} -- tells nobody for that long (0 ends the mute). */
+    @PostMapping("/rules/mute")
+    public ResponseEntity<ResponseDto> mute(@RequestBody(required = false) Map<String, Object> body) {
+        return this.answer(() -> {
+            Long scope = scope();
+            Long id = id(body);
+            Object asked = body == null ? null : body.get("minutes");
+            int minutes;
+            try {
+                minutes = asked instanceof Number ? ((Number) asked).intValue() : Integer.parseInt(String.valueOf(asked).trim());
+            } catch (NumberFormatException unreadable) {
+                throw new AlertRules.Refused(HttpStatus.BAD_REQUEST, "minutes is required: 0 to end a mute, up to 10080.");
+            }
+            if (!this.rules.mute(id, scope, minutes, TenantContext.getAppUserId())) {
+                throw new AlertRules.Refused(HttpStatus.NOT_FOUND, "No such alert rule.");
+            }
+            logger.info("Alert rule {} {} by user {}.", id, minutes == 0 ? "unmuted" : "muted for " + minutes + " minutes",
+                TenantContext.getAppUserId());
+            return new ResponseDto(ProcessUtil.SUCCESS, minutes == 0 ? "The rule tells its recipients again."
+                : "Muted: its alerts are kept, and nobody is told until the mute ends.");
         });
     }
 

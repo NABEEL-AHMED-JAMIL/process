@@ -245,3 +245,6 @@ databaseChangeLog:
   # V212: MIG-354 -- data retention per workspace: retention_platform, retention_policy (off by default), retention_rule, legal_hold, retention_pass(_class), retention_audit; job_queue.outputs_removed_at / logs_removed_at; alert kind RETENTION; job_queue's partial indexes (V212.1, concurrently).
   - include:
       file: db/changelog/yaml/V212.0-data-retention.yaml
+  # V213 is reserved by the AI batch (preview_step). V214: owner #21/#24/#6 -- service_health_sample loses response_ms, cpu_pct, threads, mean_ms; alert_rule.muted_until; engine_setting_override and engine_setting_audit (row security).
+  - include:
+      file: db/changelog/yaml/V214.0-platform-settings.yaml

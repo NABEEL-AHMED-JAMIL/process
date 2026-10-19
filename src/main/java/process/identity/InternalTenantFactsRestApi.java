@@ -27,11 +27,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.time.Instant;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * What the platform administrator's workspace list shows that Core counts (MIG-107): per workspace, its
  * Kafka profiles, buckets, task types, tasks, pipelines and jobs -- the six counts TenantServiceImpl made
- * row by row while Identity lived here, now asked for a page of workspaces at once by identity-service.
+ * row by row while Identity lived here, now asked for a page of workspaces at once by identity-service -- and (owner #19)
+ * its runs this month, how many failed, and its open alerts (WorkspaceActivity).
  * POST /internal/core/tenantFacts {ids}, service token only. A count that cannot be made is left out
  * (identity-service shows it as unknown) rather than failing the whole list.
  */
@@ -77,6 +80,16 @@ public class InternalTenantFactsRestApi {
                 HttpStatus.BAD_REQUEST);
         }
         Map<String, Map<String, Object>> facts = new LinkedHashMap<>();
+        Map<Long, WorkspaceActivity.Figures> active = Collections.emptyMap();
+        if (this.activity != null) {
+            try {
+                active = this.activity.of(ids, Instant.now());
+            } catch (RuntimeException unavailable) {
+                // Left out, so Identity shows them as unknown rather than as none.
+                active = null;
+                this.logger.warn("The workspaces' runs and alerts could not be counted: {}", unavailable.getMessage());
+            }
+        }
         for (Long tenantId : ids) {
             Map<String, Object> counts = new LinkedHashMap<>();
             counts.put("kafkaProfileCount", this.kafkaProfiles.countByTenantIdAndStatusNot(tenantId, Status.Delete));
@@ -89,9 +102,23 @@ public class InternalTenantFactsRestApi {
             counts.put("sourceTaskCount", this.tasks.countByTenantIdAndTaskStatusNot(tenantId, Status.Delete));
             counts.put("pipelineCount", this.tasks.countDistinctPipelinesByTenantId(tenantId, Status.Delete));
             counts.put("sourceJobCount", this.jobs.countByTenantIdAndJobStatusNot(tenantId, Status.Delete));
+            if (this.activity != null && active != null) {
+                WorkspaceActivity.Figures f = active.getOrDefault(tenantId, new WorkspaceActivity.Figures());
+                counts.put("runsThisMonth", f.runsThisMonth);
+                counts.put("failedRunsThisMonth", f.failedThisMonth);
+                counts.put("openAlerts", f.openAlerts);
+            }
             facts.put(String.valueOf(tenantId), counts);
         }
         return ResponseEntity.ok(facts);
+    }
+
+    /** Owner #19: runs this month, failed, alerts open; absent in a test that builds the API without the database. */
+    private WorkspaceActivity activity;
+
+    @Autowired(required = false)
+    public void useActivity(WorkspaceActivity activity) {
+        this.activity = activity;
     }
 
     private boolean admits(String presented) {

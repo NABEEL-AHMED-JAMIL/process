@@ -114,6 +114,7 @@ class ManagementModeMatrixTest {
             + "slow runs and waiting reviews; nothing is built or run (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.delete", "removing one of the workspace's own alert rules (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.resolve", "marking one of the workspace's own alerts resolved (MIG-355)");
+        CUSTOMERS_IN_EITHER_MODE.put("AlertRestApi.mute", "muting one of the workspace's own alert rules for a while (owner #6)");
         // MIG-354: how long the customer's own data is kept is the customer's record-keeping, whoever builds the pipelines.
         String retention = "the workspace's own data retention (MIG-354): how long its records are kept, legal holds over them, and "
             + "the passes that remove them; nothing is built or run";
@@ -158,6 +159,7 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("RunConfigRestApi.resolve", "resolves a run's configuration, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("MeterRestApi.verifyRun", "checks a run's metering, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("EngineSettingsRestApi.update", "platform administrators only (unchanged)");
+        CUSTOMERS_IN_EITHER_MODE.put("EngineSettingsRestApi.reset", "platform administrators only: an engine setting back to its default (owner #24)");
         CUSTOMERS_IN_EITHER_MODE.put("NotifyResetApi.changeState", "the worker's callback, not a person's (RunCallbackTokens)");
         CUSTOMERS_IN_EITHER_MODE.put("NotifyResetApi.addLogsBatch", "the worker's callback, not a person's (RunCallbackTokens)");
         CUSTOMERS_IN_EITHER_MODE.put("NotifyResetApi.addLogs", "the worker's callback, not a person's (RunCallbackTokens)");

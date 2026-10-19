@@ -342,7 +342,7 @@ public class Backfills {
         held.ifPresent(h -> warnings.add(String.format("%s is already in backfill #%d of this schedule; start refuses a range that overlaps an "
             + "open backfill.", h[1], (Long) h[0])));
         int open = this.store.openCount(plan.job.tenantId);
-        if (open >= this.settings.maxOpen()) {
+        if (open >= this.settings.maxOpen(plan.job.tenantId)) {
             warnings.add(String.format("This workspace has %d open backfills, the most it may have at once; wait for one to finish or cancel one.",
                 open));
         }
@@ -353,7 +353,7 @@ public class Backfills {
             + ", so its runs are paused: the backfill waits until it is Active again."));
         out.put("warnings", warnings);
         out.put("openBackfills", open);
-        out.put("maxOpen", this.settings.maxOpen());
+        out.put("maxOpen", this.settings.maxOpen(plan.job.tenantId));
         if (readsCosts()) {
             out.put("estimate", this.estimate(plan.job, plan.willRun()).toMap());
         } else {
@@ -383,7 +383,7 @@ public class Backfills {
             id = this.tx.execute(status -> {
                 this.store.lockWorkspace(plan.job.tenantId);
                 int open = this.store.openCount(plan.job.tenantId);
-                if (open >= this.settings.maxOpen()) {
+                if (open >= this.settings.maxOpen(plan.job.tenantId)) {
                     throw conflict("too-many-backfills", String.format("This workspace has %d open backfills, the most it may have at once. Wait "
                         + "for one to finish, or cancel one.", open));
                 }
@@ -462,7 +462,7 @@ public class Backfills {
             if ("FAILED".equals(b.status)) {
                 this.store.lockWorkspace(b.tenantId);
                 int open = this.store.openCount(b.tenantId);
-                if (open >= this.settings.maxOpen()) {
+                if (open >= this.settings.maxOpen(b.tenantId)) {
                     throw conflict("too-many-backfills", String.format("This workspace has %d open backfills, the most it may have at once; "
                         + "retrying opens this one again. Wait for one to finish, or cancel one.", open));
                 }
@@ -517,7 +517,7 @@ public class Backfills {
         out.put("total", found.get("total"));
         out.put("page", number);
         out.put("limit", size);
-        out.put("maxOpen", this.settings.maxOpen());
+        out.put("maxOpen", this.settings.maxOpen(TenantContext.getTenantId()));
         out.put("maxConcurrency", this.settings.maxConcurrency());
         return out;
     }

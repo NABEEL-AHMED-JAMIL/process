@@ -26,6 +26,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.HashMap;
+import org.springframework.jdbc.core.RowCallbackHandler;
 
 /**
  * MIG-355: alert_rule -- read, checked and written. Every read and write runs as the caller (row security): a workspace
@@ -130,6 +134,44 @@ public class AlertRules {
             });
         }
         return this.find(rule.id, tenantId).orElseThrow(() -> new Refused(HttpStatus.NOT_FOUND, "No such alert rule."));
+    }
+
+    /** The longest a rule may be muted: a week. */
+    public static final int MAX_MUTE_MINUTES = 7 * 24 * 60;
+
+    /**
+     * Owner #6: mutes the rule for so many minutes from now (0 ends a mute). False when it is not this scope's.
+     */
+    public boolean mute(long id, Long tenantId, int minutes, Long by) {
+        if (minutes < 0 || minutes > MAX_MUTE_MINUTES) {
+            throw new Refused(HttpStatus.BAD_REQUEST, "A rule is muted for 1 minute to 7 days (10080 minutes), or 0 to end the mute.");
+        }
+        Timestamp until = minutes == 0 ? null : Timestamp.from(Instant.now().plusSeconds(minutes * 60L));
+        return (tenantId == null
+            ? this.jdbc.update("UPDATE alert_rule SET muted_until = ?, updated_by = ?, date_updated = now() WHERE alert_rule_id = ? "
+                + "AND tenant_id IS NULL", until, by, id)
+            : this.jdbc.update("UPDATE alert_rule SET muted_until = ?, updated_by = ?, date_updated = now() WHERE alert_rule_id = ? "
+                + "AND tenant_id = ?", until, by, id, tenantId)) == 1;
+    }
+
+    /**
+     * Owner #6: per rule of this scope, when it last fired (its newest alert's first sighting) and how many of its alerts are
+     * open now: {ruleId: [lastFiredAt or null, open]}.
+     */
+    public Map<Long, Object[]> firing(Long tenantId) {
+        Map<Long, Object[]> out = new HashMap<>();
+        String sql = "SELECT alert_rule_id, max(first_seen_at), count(*) FILTER (WHERE state = 'OPEN') FROM alert_incident WHERE "
+            + (tenantId == null ? "tenant_id IS NULL" : "tenant_id = ?") + " GROUP BY alert_rule_id";
+        RowCallbackHandler row = rs -> {
+            Timestamp last = rs.getTimestamp(2);
+            out.put(rs.getLong(1), new Object[]{last == null ? null : last.toInstant().toString(), rs.getLong(3)});
+        };
+        if (tenantId == null) {
+            this.jdbc.query(sql, row);
+        } else {
+            this.jdbc.query(sql, row, tenantId);
+        }
+        return out;
     }
 
     /** Removes the rule, and its alerts with it. False when it is not this scope's. */

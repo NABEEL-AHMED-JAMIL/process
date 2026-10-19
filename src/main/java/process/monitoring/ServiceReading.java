@@ -22,7 +22,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 /**
  * MIG-355: one service's health and figures, read from what it already serves -- Spring Boot Actuator, nothing new:
@@ -30,8 +29,10 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *   <li>{@code health}: GET .../actuator/health; the status it answers, or UNREACHABLE when it does not answer.</li>
  *   <li>{@code prometheus}: GET .../actuator/prometheus, read a line at a time and never held whole (a service's page is
- *   200-500 KB of histograms): the heap in use and its maximum, the heap after GC (long-lived pool), CPU, live threads,
- *   the JVM's start, and http.server.requests' count, 5xx count and seconds -- the actuator's own calls left out.</li>
+ *   200-500 KB of histograms): the heap in use and its maximum, the heap after GC (long-lived pool) -- what the memory rule
+ *   reads -- the JVM's start, and http.server.requests' count and 5xx count -- the actuator's own calls left out. CPU,
+ *   threads and latency are not read (owner #21, 2026-10-19: CloudWatch's on AWS; Service health shows status, version,
+ *   restarts and the error rate).</li>
  *   <li>{@code metrics}: the same figures from .../actuator/metrics/&lt;name&gt;, a small JSON answer each, for a service
  *   whose Micrometer has no Prometheus registry (media, storage, billing, the transcriber).</li>
  *   <li>{@code self}: Core's own, from its MeterRegistry and the JVM.</li>
@@ -48,17 +49,13 @@ public final class ServiceReading {
     public Instant at;
     public String status = "UNKNOWN";
     public String source = "HEALTH";
-    public Integer responseMs;
     public Double heapUsedBytes;
     public Double heapMaxBytes;
     public Double heapAfterGcPct;
-    public Double cpuPct;
-    public Integer threads;
     public Instant startedAt;
-    /** Cumulative since the JVM started: requests, 5xx answers and seconds spent (actuator calls left out). */
+    /** Cumulative since the JVM started: requests and 5xx answers (actuator calls left out). */
     public Double requests;
     public Double errors;
-    public Double seconds;
 
     boolean hasFigures() {
         return this.heapUsedBytes != null || this.requests != null || this.startedAt != null;
@@ -67,11 +64,9 @@ public final class ServiceReading {
     // ------------------------------------------------------------------------------------------------------ health
 
     static void health(HttpClient http, String base, ServiceReading out, Duration timeout) {
-        long started = System.nanoTime();
         try {
             HttpResponse<String> answer = http.send(HttpRequest.newBuilder(URI.create(base + "/health")).timeout(timeout).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
-            out.responseMs = (int) ((System.nanoTime() - started) / 1_000_000);
             String status = null;
             try {
                 JsonNode body = JSON.readTree(answer.body());
@@ -92,11 +87,9 @@ public final class ServiceReading {
     }
 
     static void plain(HttpClient http, String url, ServiceReading out, Duration timeout) {
-        long started = System.nanoTime();
         try {
             HttpResponse<Void> answer = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(timeout).GET().build(),
                 HttpResponse.BodyHandlers.discarding());
-            out.responseMs = (int) ((System.nanoTime() - started) / 1_000_000);
             out.status = answer.statusCode() == 200 ? "UP" : "DOWN";
         } catch (IOException failed) {
             out.status = "UNREACHABLE";
@@ -149,7 +142,6 @@ public final class ServiceReading {
         boolean sawHeap = false;
         double requests = 0;
         double errors = 0;
-        double seconds = 0;
         boolean sawRequests = false;
         String line;
         while ((line = lines.readLine()) != null) {
@@ -172,26 +164,17 @@ public final class ServiceReading {
                 }
             } else if (line.startsWith("process_start_time_seconds")) {
                 out.startedAt = Instant.ofEpochMilli(Math.round(value(line) * 1000));
-            } else if (line.startsWith("process_cpu_usage")) {
-                double v = value(line);
-                out.cpuPct = Double.isNaN(v) || v < 0 ? null : v * 100;
-            } else if (line.startsWith("jvm_threads_live_threads")) {
-                out.threads = (int) value(line);
-            } else if (line.startsWith("http_server_requests_seconds_count{") || line.startsWith("http_server_requests_seconds_sum{")) {
+            } else if (line.startsWith("http_server_requests_seconds_count{")) {
                 String uri = label(line, "uri");
                 if (uri != null && uri.startsWith("/actuator")) {
                     continue;
                 }
                 double v = value(line);
-                if (line.startsWith("http_server_requests_seconds_count{")) {
-                    requests += v;
-                    sawRequests = true;
-                    String status = label(line, "status");
-                    if (status != null && status.startsWith("5")) {
-                        errors += v;
-                    }
-                } else {
-                    seconds += v;
+                requests += v;
+                sawRequests = true;
+                String status = label(line, "status");
+                if (status != null && status.startsWith("5")) {
+                    errors += v;
                 }
             }
         }
@@ -202,7 +185,6 @@ public final class ServiceReading {
         // A service that has answered nothing yet has no series at all: none is zero.
         out.requests = requests;
         out.errors = errors;
-        out.seconds = seconds;
         if (!sawRequests) {
             out.requests = 0.0;
         }
@@ -252,18 +234,10 @@ public final class ServiceReading {
         JsonNode start = metric(http, base, token, "process.start.time", timeout);
         Double startSeconds = start == null ? null : statistic(start, "VALUE");
         out.startedAt = startSeconds == null ? null : Instant.ofEpochMilli(Math.round(startSeconds * 1000));
-        JsonNode cpu = metric(http, base, token, "process.cpu.usage", timeout);
-        Double cpuValue = cpu == null ? null : statistic(cpu, "VALUE");
-        out.cpuPct = cpuValue == null || cpuValue < 0 ? null : cpuValue * 100;
-        JsonNode threads = metric(http, base, token, "jvm.threads.live", timeout);
-        Double live = threads == null ? null : statistic(threads, "VALUE");
-        out.threads = live == null ? null : live.intValue();
         JsonNode requests = metric(http, base, token, "http.server.requests", timeout);
         double count = 0;
-        double total = 0;
         if (requests != null) {
             count = orZero(statistic(requests, "COUNT"));
-            total = orZero(statistic(requests, "TOTAL_TIME"));
             // The actuator's own calls (this collector's, the container's health check) are not the service's work.
             for (JsonNode tag : requests.path("availableTags")) {
                 if (!"uri".equals(tag.path("tag").asText())) {
@@ -274,7 +248,6 @@ public final class ServiceReading {
                         JsonNode own = metric(http, base, token, "http.server.requests", timeout, "uri:" + uri.asText());
                         if (own != null) {
                             count -= orZero(statistic(own, "COUNT"));
-                            total -= orZero(statistic(own, "TOTAL_TIME"));
                         }
                     }
                 }
@@ -282,7 +255,6 @@ public final class ServiceReading {
         }
         JsonNode failed = metric(http, base, token, "http.server.requests", timeout, "outcome:SERVER_ERROR");
         out.requests = Math.max(0, count);
-        out.seconds = Math.max(0, total);
         out.errors = failed == null ? 0 : orZero(statistic(failed, "COUNT"));
         out.source = "METRICS";
         return true;
@@ -336,17 +308,13 @@ public final class ServiceReading {
         out.heapUsedBytes = (double) (runtime.totalMemory() - runtime.freeMemory());
         out.heapMaxBytes = (double) runtime.maxMemory();
         out.startedAt = Instant.ofEpochMilli(ManagementFactory.getRuntimeMXBean().getStartTime());
-        out.threads = ManagementFactory.getThreadMXBean().getThreadCount();
         if (registry == null) {
             return;
         }
         Gauge afterGc = Search.in(registry).name("jvm.memory.usage.after.gc").tag("area", "heap").tag("pool", "long-lived").gauge();
         out.heapAfterGcPct = afterGc == null ? null : afterGc.value() * 100;
-        Gauge cpu = Search.in(registry).name("process.cpu.usage").gauge();
-        out.cpuPct = cpu == null || Double.isNaN(cpu.value()) ? null : cpu.value() * 100;
         double count = 0;
         double errors = 0;
-        double seconds = 0;
         List<Timer> timers = new ArrayList<>(Search.in(registry).name("http.server.requests").timers());
         for (Timer timer : timers) {
             String uri = timer.getId().getTag("uri");
@@ -354,7 +322,6 @@ public final class ServiceReading {
                 continue;
             }
             count += timer.count();
-            seconds += timer.totalTime(TimeUnit.SECONDS);
             String status = timer.getId().getTag("status");
             if (status != null && status.startsWith("5")) {
                 errors += timer.count();
@@ -362,6 +329,5 @@ public final class ServiceReading {
         }
         out.requests = count;
         out.errors = errors;
-        out.seconds = seconds;
     }
 }

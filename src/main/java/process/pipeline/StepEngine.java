@@ -9,7 +9,8 @@ import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import process.settings.EngineDial;
+import process.settings.EngineDials;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
@@ -162,10 +163,22 @@ public class StepEngine {
     private int runMemoryMb = RunMemory.DEFAULT_MB;
     private int batchRows = RowSource.DEFAULT_BATCH;
 
+    /**
+     * Owner #24: how many runs at once is Platform › Engine settings' "Runs at once" (its default
+     * process.pipeline.engine.threads), read when Core starts -- a change takes effect at the next restart.
+     */
     @Autowired
     public StepEngine(PipelineDefinitionStore definitions, StepStore steps, StepTasks tasks, DefinitionValidator validator,
         DatasetStore datasets, NotifyService notify, TransactionServiceImpl transactions, PlatformTransactionManager transactionManager,
-        @Value("${process.pipeline.engine.threads:4}") int threads) {
+        EngineDials dials) {
+        this(definitions, steps, tasks, validator, datasets, notify, transactions, transactionManager,
+            dials.platformInt(EngineDial.ENGINE_THREADS));
+        this.dials = dials;
+    }
+
+    public StepEngine(PipelineDefinitionStore definitions, StepStore steps, StepTasks tasks, DefinitionValidator validator,
+        DatasetStore datasets, NotifyService notify, TransactionServiceImpl transactions, PlatformTransactionManager transactionManager,
+        int threads) {
         this(definitions, steps, tasks, validator, datasets, notify, transactions, new TransactionTemplate(transactionManager),
             newRunThreads(Math.max(1, threads)), newTryThreads(Math.max(1, threads)), duration -> Thread.sleep(duration.toMillis()));
     }
@@ -235,12 +248,30 @@ public class StepEngine {
         this.retention = retention == null ? RetentionPolicy.DEFINITION_ONLY : retention;
     }
 
-    /** MIG-344: a run's memory budget in MB, and how many rows a streaming step reads at a time. */
-    @Autowired
-    public void useMemory(@Value("${process.pipeline.run-memory-mb:128}") int runMemoryMb,
-                          @Value("${process.pipeline.batch-rows:1024}") int batchRows) {
+    /** MIG-344: a fixed memory budget in MB and batch, for an engine built without the engine settings (tests). */
+    public void useMemory(int runMemoryMb, int batchRows) {
         this.runMemoryMb = Math.max(16, runMemoryMb);
         this.batchRows = Math.max(1, batchRows);
+    }
+
+    /**
+     * Owner #24: Platform › Engine settings -- each run's memory budget (the workspace's own, else the platform's) and the
+     * rows a streaming step reads at a time, read when a run starts. Their defaults are process.pipeline.run-memory-mb and
+     * process.pipeline.batch-rows.
+     */
+    private EngineDials dials;
+
+    @Autowired(required = false)
+    public void useDials(EngineDials dials) {
+        this.dials = dials;
+    }
+
+    int runMemoryMbFor(long tenantId) {
+        return this.dials == null ? this.runMemoryMb : this.dials.forWorkspaceInt(EngineDial.RUN_MEMORY_MB, tenantId);
+    }
+
+    int batchRows() {
+        return this.dials == null ? this.batchRows : this.dials.platformInt(EngineDial.BATCH_ROWS);
     }
 
     private static ExecutorService newRunThreads(int threads) {
@@ -450,8 +481,8 @@ public class StepEngine {
         private Duration keptFor;
         /** MIG-344: each dataset's row count by its key, so a step knows its input's size before reading it. */
         private final Map<String, Long> sizes = new HashMap<>();
-        /** MIG-344: the run's memory budget. */
-        private final RunMemory memory = RunMemory.ofMegabytes(runMemoryMb);
+        /** MIG-344: the run's memory budget (owner #24: the workspace's, read when the run starts). */
+        private final RunMemory memory;
         /** MIG-360: the files the run was started for, read once, when a step first asks. */
         private volatile List<String> inputKeys;
         /** MIG-364: the documents the run was started for, and the first one's values, each read once, when a step first asks. */
@@ -464,6 +495,7 @@ public class StepEngine {
             this.plan = plan;
             this.run = plan.run;
             this.tenantId = plan.job.getTenantId();
+            this.memory = RunMemory.ofMegabytes(runMemoryMbFor(this.tenantId));
             this.attempt = Math.max(1, plan.run.getAttempt());
             this.definition = plan.definition;
             this.settings = plan.definition == null ? new PipelineDefinition.Settings() : plan.definition.effectiveSettings();
@@ -803,9 +835,9 @@ public class StepEngine {
                 long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - began);
                 // MIG-344: what a streaming step held, on its log -- for a step that read a batch or more, or spilled (a small
                 // step's log stays as it was).
-                if (tried.streamed && (input.size() >= batchRows || this.memory.spilled() > 0)) {
+                if (tried.streamed && (input.size() >= batchRows() || this.memory.spilled() > 0)) {
                     log.line("INFO", String.format("Streamed in batches of %,d row(s): at most about %s held at once of the run's %s "
-                        + "memory budget%s.", batchRows, RunMemory.megabytes(this.memory.peak()), RunMemory.megabytes(this.memory.budget()),
+                        + "memory budget%s.", batchRows(), RunMemory.megabytes(this.memory.peak()), RunMemory.megabytes(this.memory.budget()),
                         this.memory.spilled() > 0 ? String.format("; %s spilled to disk", RunMemory.megabytes(this.memory.spilled())) : ""));
                 }
                 if (tried.result != null && tried.result.isAwaiting()) {
@@ -1071,7 +1103,7 @@ public class StepEngine {
             if (key == null) {
                 return source;
             }
-            try (RowSource rows = datasets.open(key, batchRows)) {
+            try (RowSource rows = datasets.open(key, batchRows())) {
                 return RowSource.materialize(rows, what);
             } catch (IllegalStateException tooBig) {
                 throw tooBig;
@@ -1117,7 +1149,7 @@ public class StepEngine {
             }
 
             RowSource open() throws Exception {
-                return this.key == null ? RowSource.of(this.source, batchRows) : datasets.open(this.key, batchRows);
+                return this.key == null ? RowSource.of(this.source, batchRows()) : datasets.open(this.key, batchRows());
             }
 
             /** The first row, or null: one row read, whatever the input's size. */
@@ -1327,7 +1359,7 @@ public class StepEngine {
                     stepKey));
             }
             String key = this.outputs.get(stepKey);
-            return key == null ? RowSource.of(this.sourceRows, batchRows) : datasets.open(key, batchRows);
+            return key == null ? RowSource.of(this.sourceRows, batchRows()) : datasets.open(key, batchRows());
         }
 
         /** A file a step made, beside the run's datasets, and its run_dataset row. */

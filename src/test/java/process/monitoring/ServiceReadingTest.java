@@ -32,18 +32,15 @@ class ServiceReadingTest {
         "http_server_requests_seconds_bucket{exception=\"None\",le=\"0.1\",uri=\"/x\",} 80.0");
 
     @Test
-    void theHeapStartCpuAndRequestsAreRead() throws Exception {
+    void theHeapStartAndRequestsAreReadAndCpuThreadsAndLatencyAreNot() throws Exception {
         ServiceReading r = new ServiceReading();
         ServiceReading.parsePrometheus(new BufferedReader(new StringReader(PAGE)), r);
         assertThat(r.heapUsedBytes).isEqualTo(3.145728E8);
         assertThat(r.heapMaxBytes).isEqualTo(1.073741824E9);
         assertThat(r.heapAfterGcPct).isCloseTo(25.0, within(0.001));
         assertThat(r.startedAt).isEqualTo(Instant.ofEpochSecond(1_760_300_000L));
-        assertThat(r.cpuPct).isCloseTo(3.1, within(0.001));
-        assertThat(r.threads).isEqualTo(57);
         assertThat(r.requests).isEqualTo(100.0);
         assertThat(r.errors).isEqualTo(10.0);
-        assertThat(r.seconds).isEqualTo(5.0);
     }
 
     @Test

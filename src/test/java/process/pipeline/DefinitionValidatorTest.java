@@ -179,8 +179,8 @@ class DefinitionValidatorTest {
         PipelineDefinition definition = Definitions.of();
         definition.setSteps(samples(DefinitionValidator.DEFAULT_MAX_STEPS + 1));
         assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("steps", "this pipeline has 101 steps; a "
-            + "pipeline has at most 100 here (process.pipeline.max-steps). Combine steps -- one append stacks several outputs, one "
-            + "compute holds up to 50 formulas -- or ask a platform administrator to raise the limit."));
+            + "pipeline has at most 100 here (Engine settings: Steps a pipeline may have). Combine steps -- one append stacks several "
+            + "outputs, one compute holds up to 50 formulas -- or ask a platform administrator to raise the limit."));
         this.validator.useMaxSteps(60);
         assertThat(this.validator.problems(fifty)).isEmpty();
         definition.setSteps(samples(61));

@@ -249,7 +249,7 @@ public final class RuleChecks {
 
     /**
      * SERVICE_UNHEALTHY, with the planned deploys: a sample taken inside one of the service's deploy windows is the deploy
-     * (Platform › Reliability marks it), so only the samples outside them count -- the last threshold of those all not UP.
+     * (Platform › Service health marks it), so only the samples outside them count -- the last threshold of those all not UP.
      */
     public static List<Finding> serviceUnhealthy(AlertRule rule, Map<String, List<Sample>> recent, Map<String, List<DeployWindow>> planned) {
         List<Finding> out = new ArrayList<>();
@@ -276,7 +276,7 @@ public final class RuleChecks {
                 String status = samples.get(0).status;
                 out.add(Finding.of("service:" + entry.getKey(), entry.getKey() + " is " + word(status) + " (" + needed
                     + (needed == 1 ? " minute)" : " minutes in a row)"), "Its health check answered " + status + " at each of the last "
-                    + needed + " checks.", "/platform/reliability?service=" + entry.getKey()));
+                    + needed + " checks.", "/platform/service-health?service=" + entry.getKey()));
             }
         }
         return out;
@@ -312,7 +312,7 @@ public final class RuleChecks {
                 (starts.size() > 1 ? starts.size() + " starts in the last " + minutes(rule.windowMinutes) + ". " : "")
                     + "Not a planned deploy (scripts/deploy.sh announces those, and they do not alert): a crash, an out-of-memory kill "
                     + "or a restart by hand.",
-                "/platform/reliability?service=" + entry.getKey()));
+                "/platform/service-health?service=" + entry.getKey()));
         }
         return out;
     }
@@ -342,7 +342,7 @@ public final class RuleChecks {
             out.add(Finding.of(subject, entry.getKey() + " memory is high: " + figure,
                 String.format(Locale.ROOT, "Heap %s of %s MB in use; the rule's high-water mark is %d%%.",
                     latest.heapUsedMb == null ? "?" : String.valueOf(latest.heapUsedMb), latest.heapMaxMb == null ? "?" : String.valueOf(latest.heapMaxMb),
-                    rule.threshold), "/platform/reliability?service=" + entry.getKey()));
+                    rule.threshold), "/platform/service-health?service=" + entry.getKey()));
         }
         return out;
     }
@@ -356,7 +356,7 @@ public final class RuleChecks {
             }
             String group = probe.name.substring(HealthCollector.KAFKA_PREFIX.length());
             out.add(Finding.of("kafka:" + group, "Kafka consumer group " + group + " is " + Math.round(probe.reading) + " messages behind",
-                probe.detail, "/platform/reliability"));
+                probe.detail, "/platform/service-health"));
         }
         return out;
     }
@@ -369,7 +369,7 @@ public final class RuleChecks {
                 continue;
             }
             out.add(Finding.of("disk:" + probe.name.substring(HealthCollector.DISK_PREFIX.length()),
-                String.format(Locale.ROOT, "Disk space low: %.1f%% free", probe.reading), probe.detail, "/platform/reliability"));
+                String.format(Locale.ROOT, "Disk space low: %.1f%% free", probe.reading), probe.detail, "/platform/service-health"));
         }
         return out;
     }
@@ -381,7 +381,7 @@ public final class RuleChecks {
             return Collections.emptyList();
         }
         return Collections.singletonList(Finding.of("billing:reconcile", "Billing reconciliation does not agree", probe.detail,
-            "/platform/reliability"));
+            "/platform/service-health"));
     }
 
     // ------------------------------------------------------------------------------------------------------ words
