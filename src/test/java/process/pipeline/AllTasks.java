@@ -8,6 +8,7 @@ import process.pipeline.tasks.AggregateStepTask;
 import process.pipeline.tasks.AiPromptStepTask;
 import process.pipeline.tasks.ComputeStepTask;
 import process.pipeline.tasks.RenderPdfStepTask;
+import process.pipeline.tasks.CallApiStepTask;
 import process.pipeline.tasks.EnrichStepTask;
 import process.pipeline.tasks.FilterStepTask;
 import process.pipeline.tasks.JoinStepTask;
@@ -60,7 +61,7 @@ public final class AllTasks {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
             new ReadApiStepTask(this.api), new ReadS3StepTask(this.buckets), new ReadFileStepTask(this.buckets),
             new ReadDatabaseStepTask(this.database), new ValidateStepTask(this.contracts), new TransformStepTask(), new FilterStepTask(),
-            new JoinStepTask(), new EnrichStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
+            new JoinStepTask(), new EnrichStepTask(this.api), new CallApiStepTask(this.api), new AggregateStepTask(), new SaveFileStepTask(),
             new UploadBucketStepTask(this.buckets), new WriteDatabaseStepTask(this.database), new SendNotificationStepTask(this.notifier),
             new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(), new MeasureImageStepTask(this.buckets),
             new RenderPdfStepTask(this.reports), new AppendStepTask(), new SortStepTask(),
