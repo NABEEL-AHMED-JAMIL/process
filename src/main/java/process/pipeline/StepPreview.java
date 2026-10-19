@@ -65,7 +65,8 @@ public class StepPreview {
 
     /** The tasks a preview may run: rows in, rows out, nothing written, sent or asked of a model. */
     static final Set<String> PREVIEWABLE = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList("transform", "filter", "select", "sort",
-        "limit", "compute", "aggregate", "append", "join", "enrich", "validate", "sample")));
+        "limit", "compute", "aggregate", "append", "join", "enrich", "validate", "sample", "dedupe", "split_column", "pivot", "unpivot",
+        "fill_missing")));
 
     /** The roles that may preview a step that calls an API (enrich). */
     static final Set<String> ADMINS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("TENANT_ADMIN", "PLATFORM_ADMIN")));
@@ -119,7 +120,7 @@ public class StepPreview {
                 + "that writes, sends, saves or calls a model.", code, String.join(", ", PREVIEWABLE)));
         }
         StepTask task = found.get();
-        Optional<String> refusal = this.registry.refusal(task, this.registry.overridesOf(tenantId), TenantContext.getUserRole());
+        Optional<String> refusal = this.registry.refusal(task, this.registry.controlsOf(tenantId), TenantContext.getUserRole());
         if (refusal.isPresent()) {
             return refused(refusal.get());
         }

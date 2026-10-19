@@ -263,8 +263,19 @@ public class PipelineDefinitionService {
      * {@code legacy} entry with that pipeline's pipelineId, pipelineKey and name, and the config a step runs it with.
      */
     public ResponseDto tasks() {
-        Long tenantId = TenantContext.getTenantId();
+        return this.tasks(null);
+    }
+
+    /**
+     * Owner #16: a platform administrator reads the registry as one workspace has it -- the shared workspace selector's
+     * {@code tenantId} -- with that workspace's switches and blocks; anyone else reads their own workspace's, whatever
+     * they send. Each entry names who switched or blocked it (switchedByName, blockedByName).
+     */
+    public ResponseDto tasks(Long requestedTenantId) {
+        Long tenantId = TenantContext.isPlatformAdmin() && requestedTenantId != null && requestedTenantId > 0 ? requestedTenantId
+            : TenantContext.getTenantId();
         List<Map<String, Object>> list = new ArrayList<>(this.registry.entries(tenantId));
+        this.attachControlNames(list);
         Optional<Map<String, Object>> legacy = list.stream().filter(entry -> PipelineDefinition.LEGACY_TASK.equals(entry.get("code"))).findFirst();
         int pipelines = 0;
         if (tenantId != null && legacy.isPresent()) {
@@ -308,17 +319,32 @@ public class PipelineDefinitionService {
         if (Boolean.TRUE.equals(request.getEnabled()) && task.get().unavailable().isPresent()) {
             return new ResponseDto(ERROR, String.format("'%s' is not available here: %s.", spec.code(), task.get().unavailable().get()));
         }
+        // Owner #16: a task a platform administrator blocked for this workspace stays as it is until they unblock it.
+        if (this.overrides.blocks(tenantId).containsKey(spec.code())) {
+            return new ResponseDto(ERROR, String.format("'%s' is blocked for this workspace by a platform administrator; only a platform "
+                + "administrator can unblock it.", spec.code()));
+        }
+        String before = TaskControlService.switchWord(this.overrides.switchRows(tenantId).get(spec.code()));
         if (request.getEnabled() == null) {
             this.overrides.clear(tenantId, spec.code());
         } else {
-            this.overrides.set(tenantId, spec.code(), request.getEnabled(), TenantContext.getAppUserId());
+            this.overrides.set(tenantId, spec.code(), request.getEnabled(), TenantContext.getAppUserId(), TenantContext.getUserRole());
         }
+        this.overrides.audit(tenantId, spec.code(), request.getEnabled() == null ? "default" : request.getEnabled() ? "enable" : "disable",
+            before, request.getEnabled() == null ? "default" : request.getEnabled() ? "on" : "off", null, TenantContext.getAppUserId(),
+            TenantContext.getUserRole());
         this.logger.info("Task {} switched {} in workspace {}.", spec.code(), request.getEnabled() == null ? "to its default"
             : request.getEnabled() ? "on" : "off", tenantId);
-        Map<String, Object> entry = this.registry.entries(tenantId).stream().filter(one -> spec.code().equals(one.get("code")))
-            .findFirst().orElse(null);
+        List<Map<String, Object>> entries = this.registry.entries(tenantId);
+        this.attachControlNames(entries);
+        Map<String, Object> entry = entries.stream().filter(one -> spec.code().equals(one.get("code"))).findFirst().orElse(null);
         return new ResponseDto(SUCCESS, request.getEnabled() == null ? String.format("'%s' is back to its default.", spec.code())
             : String.format("'%s' is switched %s in this workspace.", spec.code(), request.getEnabled() ? "on" : "off"), entry);
+    }
+
+    /** Owner #16: the names of the people who switched or blocked each entry (ids stay; a name that cannot be read is null). */
+    void attachControlNames(List<Map<String, Object>> entries) {
+        TaskControlService.attachNames(entries, this.names);
     }
 
     private Optional<Pipeline> owned(Long pipelineKey) {

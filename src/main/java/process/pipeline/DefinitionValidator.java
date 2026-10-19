@@ -3,10 +3,10 @@ package process.pipeline;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.pipeline.registry.ConfigSchemaValidator;
+import process.pipeline.registry.TaskControls;
 import process.pipeline.registry.TaskRegistry;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +110,7 @@ public class DefinitionValidator {
      * checks no role -- the step engine, running what an admin saved.
      */
     public List<DefinitionProblem> problems(PipelineDefinition definition, Long tenantId, String role) {
-        Map<String, Boolean> switches = definition == null ? Collections.<String, Boolean>emptyMap() : this.registry.overridesOf(tenantId);
+        TaskControls switches = definition == null ? TaskControls.NONE : this.registry.controlsOf(tenantId);
         List<DefinitionProblem> problems = new ArrayList<>();
         if (definition == null) {
             problems.add(new DefinitionProblem("$", "the definition is empty"));
@@ -243,7 +243,7 @@ public class DefinitionValidator {
         }
     }
 
-    private void step(PipelineDefinition.Step step, String at, int stepCount, Set<String> earlier, Map<String, Boolean> switches,
+    private void step(PipelineDefinition.Step step, String at, int stepCount, Set<String> earlier, TaskControls switches,
         String role, int maxTimeout, List<DefinitionProblem> problems) {
         if (step == null) {
             problems.add(new DefinitionProblem(at, "a step is an object"));

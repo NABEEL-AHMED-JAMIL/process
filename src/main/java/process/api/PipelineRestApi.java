@@ -104,6 +104,18 @@ public class PipelineRestApi {
         }
     }
 
+    /** Owner #18: one registry pipeline by key, with its topic and fields -- the New/Edit registry task page reads it. */
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/get", method = RequestMethod.GET)
+    public ResponseEntity<?> get(@RequestParam Long pipelineKey) {
+        try {
+            return new ResponseEntity<>(this.pipelineService.formByKey(pipelineKey), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while reading pipeline {}", pipelineKey, ex);
+            return internalError();
+        }
+    }
+
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = {"/definition", "/formForPipeline"}, method = RequestMethod.GET)
     public ResponseEntity<?> formForPipeline(@RequestParam String pipelineId,

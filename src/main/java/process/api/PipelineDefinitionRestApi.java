@@ -24,7 +24,9 @@ import process.pipeline.StepPreview;
  *   <li>GET pipeline.json/steps/tasks: the Task Registry as the caller's workspace sees it (MIG-231) -- each task's
  *       entry with its config schema and enabled, and one Legacy entry per pipeline of the workspace;</li>
  *   <li>POST pipeline.json/steps/preview (AI tools batch): one step on at most 50 rows, sandboxed, as the person (StepPreview).</li>
- *   <li>POST pipeline.json/steps/tasks/enabled: a workspace admin switches a task on, off, or back to its default.</li>
+ *   <li>POST pipeline.json/steps/tasks/enabled: a workspace admin switches a task on, off, or back to its default (not a
+ *       task a platform administrator blocked for the workspace, owner #16). The platform's controls, the audit and the
+ *       usage counts are {@link TaskRegistryRestApi}'s.</li>
  *   <li>GET pipeline.json/steps/reads (UX review 2026-10-13, I1): what the workspace's pipelines read -- storage, API
  *       requests, database connections, document types -- grouped by place, with the pipelines and steps that read each.
  *       Gated as Connections › Sources (page key sources: Core's and Identity's PageKey), not as the pipelines page.</li>
@@ -73,9 +75,10 @@ public class PipelineDefinitionRestApi {
         return new ResponseEntity<>(this.preview.preview(request), HttpStatus.OK);
     }
 
+    /** Owner #16: a platform administrator names the workspace (the shared selector's tenantId); anyone else reads their own. */
     @RequestMapping(value = "/pipeline.json/steps/tasks", method = RequestMethod.GET)
-    public ResponseEntity<?> tasks() {
-        return new ResponseEntity<>(this.service.tasks(), HttpStatus.OK);
+    public ResponseEntity<?> tasks(@RequestParam(required = false) Long tenantId) {
+        return new ResponseEntity<>(this.service.tasks(tenantId), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/pipeline.json/steps/reads", method = RequestMethod.GET)

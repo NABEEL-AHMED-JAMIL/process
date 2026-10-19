@@ -248,3 +248,6 @@ databaseChangeLog:
   # V213 is reserved by the AI batch (preview_step). V214: owner #21/#24/#6 -- service_health_sample loses response_ms, cpu_pct, threads, mean_ms; alert_rule.muted_until; engine_setting_override and engine_setting_audit (row security).
   - include:
       file: db/changelog/yaml/V214.0-platform-settings.yaml
+  # V215: owner #16 -- task_registry_block (a platform administrator's block of a registry task for a workspace), task_registry_audit (insert-only), task_registry_override.updated_by_role (row security).
+  - include:
+      file: db/changelog/yaml/V215.0-task-registry-controls.yaml

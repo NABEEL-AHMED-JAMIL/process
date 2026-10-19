@@ -1,5 +1,6 @@
 package process.tenancy;
 
+import process.api.TaskRegistryRestApi;
 import process.api.AiModelChoiceRestApi;
 import process.api.FormRestApi;
 import process.api.PublicFormRestApi;
@@ -122,6 +123,8 @@ class CoreProbeCoverageTest {
         KafkaSecretRestApi.class, SettingRestApi.class, PipelineConfigRestApi.class, TaskReferenceRestApi.class,
         EngineSettingsRestApi.class, DashboardRestApi.class, MessageQRestApi.class, ReportRestApi.class, FileChatRestApi.class,
         AiModelChoiceRestApi.class, InboxTriggerRestApi.class, DocumentTriggerRestApi.class, PipelineDefinitionRestApi.class, StepTimelineRestApi.class,
+        // Owner #16, #17: the Task Registry's platform controls, history and usage counts
+        TaskRegistryRestApi.class,
         RunReviewRestApi.class, RunReviewBulkRestApi.class, FormRestApi.class, FormSubmissionRestApi.class, EventRouteRestApi.class,
         // MIG-355: Runs › Failed and the bulk retry; a workspace's alert rules and alerts; the platform's health (platform only)
         FailedRunsRestApi.class, AlertRestApi.class, HealthRestApi.class,

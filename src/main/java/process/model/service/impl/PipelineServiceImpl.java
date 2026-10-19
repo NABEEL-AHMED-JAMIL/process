@@ -216,6 +216,26 @@ public class PipelineServiceImpl {
     }
 
     /**
+     * Owner #18 (2026-10-19): one registry pipeline by its key, whole -- its topic and its fields, prompts named -- for the
+     * New/Edit registry task page (a page of its own now, so it reads the row it edits instead of being handed it). Scoped
+     * like {@link #fieldsFor}: a tenant reads its own, a platform admin any; anything else is "no longer exists".
+     */
+    public ResponseDto formByKey(Long pipelineKey) {
+        if (ProcessUtil.isNull(pipelineKey)) {
+            return new ResponseDto(ERROR, "pipelineKey missing.");
+        }
+        Optional<Pipeline> existing = this.pipelineRepository.findByPipelineKeyAndStatusNot(pipelineKey, Status.Delete);
+        if (!existing.isPresent() || !isOwnedByCaller(existing.get())) {
+            return new ResponseDto(ERROR, "That pipeline no longer exists.");
+        }
+        List<Pipeline> one = Collections.singletonList(existing.get());
+        this.attachTopics(one);
+        this.namePrompts(existing.get().getFields());
+        this.userNameResolver.attachNames(existing.get());
+        return new ResponseDto(SUCCESS, "Pipeline found.", existing.get());
+    }
+
+    /**
      * The form a task screen should show for this pipeline, or nothing if none is defined.
      *
      * A platform admin carries no tenant of its own to match a form's {@code tenant_id} against

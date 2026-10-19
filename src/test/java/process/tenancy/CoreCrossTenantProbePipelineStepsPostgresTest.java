@@ -232,19 +232,60 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
      * MIG-231: the Task Registry as a workspace sees it lists that workspace's pipelines as Legacy entries and its own
      * task switches -- never B's pipeline, never B's switch -- and a switch an admin of A makes is A's row alone.
      */
+    /**
+     * Owner #16, #17, #18: the Task Registry's history and usage counts, and one registry pipeline by key, are the caller's
+     * workspace's -- B's pipeline, its runs and its audit never reach A's administrator, whatever tenantId A sends.
+     */
+    @Test
+    void theRegistrysCountsHistoryAndPipelineReadAreMyWorkspaces() {
+        JdbcTemplate sql = fx.db.jdbc();
+        sql.update("INSERT INTO task_registry_audit (tenant_id, task_code, action, before_value, after_value, note, actor_user_id, actor_role) "
+            + "VALUES (?, 'dedupe', 'block', 'default', 'blocked', 'bravo audit marker', 1, 'PLATFORM_ADMIN')", B);
+        String before = fx.foreignRows();
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/usage", ADMIN_OF_A, () -> fx.taskRegistry.usage(B)))
+            .contains(SUCCEEDED).contains(String.valueOf(A_PIPELINE)).doesNotContain(String.valueOf(B_PIPELINE));
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/pipelines", ADMIN_OF_A, () -> fx.taskRegistry.pipelines(null, B_PIPELINE, B)))
+            .contains(SUCCEEDED).doesNotContain("Bravo Secret Task");
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/pipelines(sample)", ADMIN_OF_A, () -> fx.taskRegistry.pipelines("sample", null, B)))
+            .contains(SUCCEEDED).doesNotContain("Bravo Secret Task");
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/pipelines(mine)", ADMIN_OF_A, () -> fx.taskRegistry.pipelines(null, A_PIPELINE, null)))
+            .contains(SUCCEEDED).contains("Acme Task");
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/runs", ADMIN_OF_A, () -> fx.taskRegistry.runs(null, B_PIPELINE, 50, B)))
+            .contains(SUCCEEDED).doesNotContain(String.valueOf(B_RUN)).doesNotContain("Bravo Secret Job");
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/runs(sample)", ADMIN_OF_A, () -> fx.taskRegistry.runs("sample", null, 50, B)))
+            .contains(SUCCEEDED).doesNotContain(String.valueOf(B_RUN));
+        assertThat(fx.probe("GET pipeline.json/steps/tasks/history", ADMIN_OF_A, () -> fx.taskRegistry.history(null, B)))
+            .contains(SUCCEEDED).doesNotContain("bravo audit marker");
+        assertThat(fx.probe("GET pipeline.json/get", ADMIN_OF_A, () -> fx.pipelines.get(B_PIPELINE)))
+            .contains(REFUSED).doesNotContain("Bravo Secret Pipeline");
+        assertThat(fx.probe("GET pipeline.json/get(mine)", ADMIN_OF_A, () -> fx.pipelines.get(A_PIPELINE)))
+            .contains(SUCCEEDED).contains("Acme Pipeline");
+        for (Long none : NO_WORKSPACE) {
+            Caller caller = tenantlessUser(none);
+            assertThat(fx.probe("GET pipeline.json/steps/tasks/usage", caller, () -> fx.taskRegistry.usage(B)))
+                .doesNotContain(String.valueOf(B_PIPELINE)).doesNotContain(String.valueOf(A_PIPELINE));
+            assertThat(fx.probe("GET pipeline.json/steps/tasks/history", caller, () -> fx.taskRegistry.history(null, B)))
+                .doesNotContain("bravo audit marker");
+        }
+        assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
     @Test
     void theTaskRegistryIsMyWorkspacesAndMySwitchIsMine() {
         String before = fx.foreignRows();
         for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
-            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks()))
+            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks(null)))
                 .contains(SUCCEEDED).contains(A_PIPELINE_ID).doesNotContain(B_PIPELINE_ID).doesNotContain("Bravo Secret Pipeline")
                 .doesNotContain("Switched off in this workspace");
         }
+        // Owner #16: a workspace administrator naming another workspace is answered their own (only a platform admin picks).
+        assertThat(fx.probe("GET pipeline.json/steps/tasks?tenantId=B", ADMIN_OF_A, () -> fx.pipelineSteps.tasks(B)))
+            .contains(SUCCEEDED).contains(A_PIPELINE_ID).doesNotContain(B_PIPELINE_ID).doesNotContain("Switched off in this workspace");
         try {
             assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled(mine)", ADMIN_OF_A,
                 () -> fx.pipelineSteps.switchTask(switchOf("select", false)))).contains(SUCCEEDED).contains("switched off");
             assertThat(switches(A)).containsExactly("select=false");
-            assertThat(fx.probe("GET pipeline.json/steps/tasks(after my switch)", USER_OF_A, () -> fx.pipelineSteps.tasks()))
+            assertThat(fx.probe("GET pipeline.json/steps/tasks(after my switch)", USER_OF_A, () -> fx.pipelineSteps.tasks(null)))
                 .contains("Switched off in this workspace");
         } finally {
             assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled(mine, back to default)", ADMIN_OF_A,
@@ -254,7 +295,7 @@ class CoreCrossTenantProbePipelineStepsPostgresTest {
         assertThat(switches(B)).containsExactly("select=false");
         for (Long none : NO_WORKSPACE) {
             Caller caller = tenantlessUser(none);
-            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks()))
+            assertThat(fx.probe("GET pipeline.json/steps/tasks", caller, () -> fx.pipelineSteps.tasks(null)))
                 .doesNotContain(B_PIPELINE_ID).doesNotContain(A_PIPELINE_ID);
             assertThat(fx.probe("POST pipeline.json/steps/tasks/enabled", caller, () -> fx.pipelineSteps.switchTask(switchOf("select", false))))
                 .contains(REFUSED);

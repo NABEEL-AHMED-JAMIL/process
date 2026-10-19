@@ -159,6 +159,8 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("RunConfigRestApi.resolve", "resolves a run's configuration, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("MeterRestApi.verifyRun", "checks a run's metering, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("EngineSettingsRestApi.update", "platform administrators only (unchanged)");
+        CUSTOMERS_IN_EITHER_MODE.put("TaskRegistryRestApi.platformState", "platform administrators only: a registry task's control "
+            + "(default, enabled, disabled, blocked) for one workspace -- the platform's, in either mode (owner #16)");
         CUSTOMERS_IN_EITHER_MODE.put("EngineSettingsRestApi.reset", "platform administrators only: an engine setting back to its default (owner #24)");
         CUSTOMERS_IN_EITHER_MODE.put("NotifyResetApi.changeState", "the worker's callback, not a person's (RunCallbackTokens)");
         CUSTOMERS_IN_EITHER_MODE.put("NotifyResetApi.addLogsBatch", "the worker's callback, not a person's (RunCallbackTokens)");

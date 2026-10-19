@@ -627,6 +627,22 @@ class StepEngineTest {
         assertThat(this.statuses()).containsExactly(entry("read", "Skip"), entry("keep", "Skip"));
     }
 
+    /**
+     * Owner #16: a task a platform administrator blocked for the run's workspace after the definition was saved -- even one
+     * the workspace switched on: the run is declined, naming the task and the reason.
+     */
+    @Test
+    void aRunNamingATaskBlockedForItsWorkspaceIsDeclinedNamingTheTask() {
+        this.switches.set(TENANT, "select", true, 7L, "TENANT_ADMIN");
+        this.switches.block(TENANT, "select", "Under review", 9001L);
+        this.runs(Definitions.of(sample("read", row("id", 1)), step("keep", "select", config("columns", Collections.singletonList("id")))));
+
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Failed);
+        assertThat(this.worker.last()).isEqualTo("Failed: Declined by the step engine: definition version 3 no longer validates: "
+            + "steps[1].task: the task 'select' (Select columns) is blocked for this workspace by a platform administrator: Under review");
+        assertThat(this.statuses()).containsExactly(entry("read", "Skip"), entry("keep", "Skip"));
+    }
+
     /** A step that says nothing of retry takes its task's registry default: Read API is tried three times, 10 s apart. */
     @Test
     void aStepWithoutItsOwnRetryTakesItsTasksDefault() {

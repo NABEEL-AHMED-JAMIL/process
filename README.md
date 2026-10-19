@@ -195,12 +195,57 @@ Added on 2026-10-12:
 
 `POST /api/v1/pipeline.json/steps/preview` `{task, config, rows, inputs}` (`hasRole('TENANT_USER')`, the pipelines' page gate) runs ONE step of the Task Registry on a few rows, outside any run, as the signed-in person (`StepPreview`). The AI Assistant's `preview_step`, `transform_data`, `enrich_data` and `join_data` use it. Sandboxed:
 
-- only tasks that turn rows into rows: transform, filter, select, sort, limit, compute, aggregate, append, join, enrich, validate, sample -- never a step that writes, sends, uploads, saves, asks for an approval or calls a model; the task must be on for the workspace and within the person's role, and its settings hold to its schema (problems answered at their path);
+- only tasks that turn rows into rows: transform, filter, select, sort, limit, compute, aggregate, append, join, enrich, validate, sample, dedupe, split_column, pivot, unpivot, fill_missing -- never a step that writes, sends, uploads, saves, asks for an approval or calls a model; the task must be on for the workspace and within the person's role, and its settings hold to its schema (problems answered at their path);
 - at most 50 rows in, at most 4 other inputs (a join's `with`, by step key), at most 1,000,000 bytes of rows, the step's own row and cell bounds, 20 seconds, at most 10,000 rows out; the answer is `{task, rowsIn, rowCount, columns, shown, rows (at most 20), masked, log, warnings}`;
 - no external call but a read the workspace may do: enrich only for a workspace administrator (calling a saved request is theirs, as testing one is) and only with a saved request of the workspace's that reads (GET or HEAD, as integration-service's `describe` now says), at most 10 calls; validate reads its contract. No run, dataset, file or output is kept (the context refuses `keepFile`);
 - the rows shown are masked where a column's name says it holds a person's details (name, birth, address, city, postal code, phone, email, record or member numbers...) or a value looks like an email, phone or card number: letters become x/X and digits 9.
 
 Tests: `StepPreviewTest`. The cross-tenant probe lists it as having nothing to aim (its one id, an enrich requestId, is checked against the caller's own workspace). api-check: TA 200, TU 200, TUX 403, ANON 401, BAD 400.
+
+## Task Registry controls, usage and common tasks (owner #16, #17; 2026-10-19, V215)
+
+**Per-workspace control (#16)** -- the tools' model (ai-service `tools/platformState`, owner #15) for pipeline step tasks.
+The platform default is each task's own (`TaskSpec.enabledByDefault`); a workspace has at most a switch
+(`task_registry_override`, now with `updated_by_role`) and a platform administrator's block (`task_registry_block`).
+
+- `POST /api/v1/pipeline.json/steps/tasks/platformState?tenantId=` `{code, state, reason}` (PLATFORM_ADMIN): `default`
+  (no switch, no block), `enabled` / `disabled` (the workspace's switch, recorded as the platform's; lifts a block) or
+  `blocked`. The workspace must exist (Identity). `legacy` is never switched or blocked.
+- A blocked task is off whatever the switch says: `DefinitionValidator` refuses it at validate and save time, the step
+  engine declines a run whose definition names it (`Declined by the step engine: ... the task 'x' (Name) is blocked for
+  this workspace by a platform administrator: <reason>`), Step preview refuses it, and the workspace administrator's
+  `steps/tasks/enabled` answers that only a platform administrator can unblock it (`TaskRegistry.refusal`, `TaskControls`).
+- Every change -- the platform's and a workspace administrator's switch -- is a row of `task_registry_audit` (insert-only
+  for process_app): `GET /api/v1/pipeline.json/steps/tasks/history?code=&tenantId=` (TENANT_ADMIN; a platform
+  administrator names the workspace), newest first, with who (name and role), from/to and the reason.
+- `GET /api/v1/pipeline.json/steps/tasks?tenantId=`: a platform administrator reads the registry as that workspace has
+  it; each entry says `effectiveState` (unavailable, blocked, off, on), `setBy` (default, workspace, platform),
+  `switchedBy/ByName/ByRole/At` and `blocked`, `blockedBy/ByName/At`, `blockReason`. Anyone else's tenantId is ignored.
+
+**Usage counts (#17)** -- `TaskUsage`, counted on the server at the moment of asking, under row security and an explicit
+tenant_id: a workspace administrator's own workspace; a platform administrator's chosen one, or all (no tenantId).
+
+- `GET /api/v1/pipeline.json/steps/tasks/usage?tenantId=`: per step task (`code`), the live pipelines (source tasks,
+  Active or Inactive) whose latest definition runs it, and per Legacy row (`pipelineKey`) the pipelines naming its id;
+  with `runs` -- those pipelines' runs created since the first of this month (America/Chicago), not deleted.
+- `GET .../steps/tasks/pipelines?code=|pipelineKey=&tenantId=` and `GET .../steps/tasks/runs?code=|pipelineKey=&limit=&tenantId=`:
+  the lists behind a count (the runs newest first, at most 200, with the month's total).
+
+All five are TENANT_ADMIN at the class (`TaskRegistryRestApi`), platformState PLATFORM_ADMIN.
+
+**Common tasks added** (each streamed, previewable, with its config schema, a check and engine tests in `CommonTasksTest`):
+
+| Code | Name | What it does |
+|---|---|---|
+| `dedupe` | Remove duplicates | one row per key (named columns, or the whole row), the first or the last; a 128-bit fingerprint per key charged to the run's memory budget (fails past it, saying so) |
+| `split_column` | Split column | a text column cut at a separator into named columns, or into one row per part |
+| `pivot` | Pivot (rows to columns) | one row per group, one column per value of a column (first, last, sum, count, min, max, avg); at most 200 new columns; one row per group held, charged to the budget |
+| `unpivot` | Unpivot (columns to rows) | each named column becomes a row with its name and value, the other columns repeated |
+| `fill_missing` | Fill missing values | empty cells of named columns get a value or the column's last value above |
+
+Already there and not duplicated: filter, sort, select (also renames), transform (casts), join (a left join is the
+lookup), validate (a data contract is the schema check), send_notification. Not added: a wait/delay step -- it would hold
+one of the engine's few run threads idle; a schedule, a trigger or an Approval step is the way to wait.
 
 ## Run review and bulk review (2026-10-12)
 

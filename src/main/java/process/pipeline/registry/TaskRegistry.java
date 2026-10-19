@@ -23,6 +23,10 @@ import java.util.Optional;
  * and (the workspace's override, else the task's default). {@code legacy} is not overridable and never unavailable:
  * every existing pipeline stays runnable. A disabled task cannot be added to a pipeline (validate and save refuse it)
  * and a run whose pinned definition names one is declined, as a run naming a task that no longer exists is.
+ *
+ * <b>Blocked</b> (owner #16, V215): a platform administrator's block of a task for one workspace -- off whatever the
+ * workspace's switch says, refused at design and save time and at run time with a message naming the task, and the
+ * workspace's administrator cannot switch it on. The platform default stays each task's own (enabledByDefault).
  */
 @Component
 public class TaskRegistry {
@@ -50,7 +54,23 @@ public class TaskRegistry {
         return tenantId == null ? Collections.<String, Boolean>emptyMap() : this.overrides.overrides(tenantId);
     }
 
+    /** This workspace's switches (who set each) and blocks; none for no workspace. */
+    public TaskControls controlsOf(Long tenantId) {
+        if (tenantId == null) {
+            return TaskControls.NONE;
+        }
+        return new TaskControls(this.overrides.switchRows(tenantId), this.overrides.blocks(tenantId));
+    }
+
+    public TaskOverrideStore store() {
+        return this.overrides;
+    }
+
     public boolean enabled(StepTask task, Map<String, Boolean> switches) {
+        return this.enabled(task, TaskControls.of(switches));
+    }
+
+    public boolean enabled(StepTask task, TaskControls controls) {
         if (task.unavailable().isPresent()) {
             return false;
         }
@@ -58,8 +78,22 @@ public class TaskRegistry {
         if (!spec.overridable()) {
             return spec.enabledByDefault();
         }
-        Boolean own = switches.get(task.code());
+        if (controls.blocked(task.code())) {
+            return false;
+        }
+        Boolean own = controls.switched(task.code());
         return own == null ? spec.enabledByDefault() : own;
+    }
+
+    /** unavailable, blocked, on or off: what the registry and the console say a task is in this workspace. */
+    public String effectiveState(StepTask task, TaskControls controls) {
+        if (task.unavailable().isPresent()) {
+            return "unavailable";
+        }
+        if (task.spec().overridable() && controls.blocked(task.code())) {
+            return "blocked";
+        }
+        return this.enabled(task, controls) ? "on" : "off";
     }
 
     /**
@@ -67,11 +101,20 @@ public class TaskRegistry {
      * the caller does not have. {@code role} null skips the role (the engine, running a definition an admin saved).
      */
     public Optional<String> refusal(StepTask task, Map<String, Boolean> switches, String role) {
+        return this.refusal(task, TaskControls.of(switches), role);
+    }
+
+    public Optional<String> refusal(StepTask task, TaskControls controls, String role) {
         Optional<String> unavailable = task.unavailable();
         if (unavailable.isPresent()) {
             return Optional.of(String.format("the task '%s' is not available: %s", task.code(), unavailable.get()));
         }
-        if (!this.enabled(task, switches)) {
+        TaskOverrideStore.Block block = task.spec().overridable() ? controls.blockOf(task.code()) : null;
+        if (block != null) {
+            return Optional.of(String.format("the task '%s' (%s) is blocked for this workspace by a platform administrator%s", task.code(),
+                task.spec().name(), block.reason == null || block.reason.trim().isEmpty() ? "" : ": " + block.reason.trim()));
+        }
+        if (!this.enabled(task, controls)) {
             return Optional.of(String.format("the task '%s' is disabled in this workspace", task.code()));
         }
         if (role != null && rank(role) < rank(task.spec().requiredRole())) {
@@ -83,17 +126,50 @@ public class TaskRegistry {
 
     /** The registry as this workspace sees it: each entry with its enabled, and why not when it is off. */
     public List<Map<String, Object>> entries(Long tenantId) {
-        Map<String, Boolean> switches = this.overridesOf(tenantId);
+        return this.entries(this.controlsOf(tenantId));
+    }
+
+    /**
+     * The registry with these controls. Owner #16: each entry also says its effective state here (unavailable, blocked,
+     * off, on), who set it (default, workspace, platform), the switch's and the block's who and when, and the block's
+     * reason; the people's names are the caller's to add (ids here).
+     */
+    public List<Map<String, Object>> entries(TaskControls controls) {
         List<Map<String, Object>> entries = new ArrayList<>();
         for (StepTask task : this.tasks.all()) {
             Map<String, Object> entry = task.spec().toEntry();
             entry.put("runsInEngine", task.runsInEngine());
-            boolean enabled = this.enabled(task, switches);
+            boolean overridable = task.spec().overridable();
+            TaskOverrideStore.Switch sw = overridable ? controls.switchOf(task.code()) : null;
+            TaskOverrideStore.Block block = overridable ? controls.blockOf(task.code()) : null;
+            boolean enabled = this.enabled(task, controls);
             entry.put("enabled", enabled);
-            entry.put("overridden", switches.containsKey(task.code()) && task.spec().overridable());
+            entry.put("overridden", sw != null);
             entry.put("available", !task.unavailable().isPresent());
-            entry.put("disabledReason", enabled ? null : task.unavailable().orElse(switches.containsKey(task.code())
-                ? "Switched off in this workspace." : "Off by default; a workspace admin can switch it on."));
+            String reason = null;
+            if (!enabled) {
+                if (task.unavailable().isPresent()) {
+                    reason = task.unavailable().get();
+                } else if (block != null) {
+                    reason = "Blocked for this workspace by a platform administrator" + (block.reason == null || block.reason.trim().isEmpty()
+                        ? "." : ": " + block.reason.trim());
+                } else if (sw != null) {
+                    reason = "PLATFORM_ADMIN".equals(sw.updatedByRole) ? "Switched off for this workspace by a platform administrator."
+                        : "Switched off in this workspace.";
+                } else {
+                    reason = "Off by default; a workspace admin can switch it on.";
+                }
+            }
+            entry.put("disabledReason", reason);
+            entry.put("effectiveState", this.effectiveState(task, controls));
+            entry.put("setBy", block != null ? "platform" : sw == null ? "default" : "PLATFORM_ADMIN".equals(sw.updatedByRole) ? "platform" : "workspace");
+            entry.put("switchedBy", sw == null ? null : sw.updatedBy);
+            entry.put("switchedByRole", sw == null ? null : sw.updatedByRole);
+            entry.put("switchedAt", sw == null || sw.at == null ? null : sw.at.toInstant().toString());
+            entry.put("blocked", block != null);
+            entry.put("blockedBy", block == null ? null : block.blockedBy);
+            entry.put("blockedAt", block == null || block.at == null ? null : block.at.toInstant().toString());
+            entry.put("blockReason", block == null ? null : block.reason);
             entries.add(entry);
         }
         return entries;

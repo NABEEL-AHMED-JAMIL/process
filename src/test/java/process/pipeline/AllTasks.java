@@ -35,6 +35,11 @@ import process.pipeline.tasks.LimitStepTask;
 import process.pipeline.tasks.SendWebhookStepTask;
 import process.pipeline.tasks.ReadDocumentsStepTask;
 import process.pipeline.tasks.SortStepTask;
+import process.pipeline.tasks.DedupeStepTask;
+import process.pipeline.tasks.FillMissingStepTask;
+import process.pipeline.tasks.PivotStepTask;
+import process.pipeline.tasks.SplitColumnStepTask;
+import process.pipeline.tasks.UnpivotStepTask;
 
 import static org.mockito.Mockito.mock;
 
@@ -60,7 +65,8 @@ public final class AllTasks {
             new AiPromptStepTask(this.ai, this.buckets), new ComputeStepTask(), new MeasureImageStepTask(this.buckets),
             new RenderPdfStepTask(this.reports), new AppendStepTask(), new SortStepTask(),
             new LimitStepTask(), new ApprovalStepTask(),
-            new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents)));
+            new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents),
+            new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask()));
     }
 
     public StepTasks tasks() {

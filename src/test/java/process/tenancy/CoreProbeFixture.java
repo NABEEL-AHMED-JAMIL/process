@@ -1,5 +1,8 @@
 package process.tenancy;
 
+import process.pipeline.TaskUsage;
+import process.pipeline.TaskControlService;
+import process.api.TaskRegistryRestApi;
 import process.ai.AiModelChoiceService;
 import process.ai.AiPort;
 import process.ai.JdbcModelChoiceStore;
@@ -432,6 +435,8 @@ final class CoreProbeFixture implements AutoCloseable {
     final PipelineRestApi pipelines;
     /** MIG-230: a pipeline's definition as ordered steps. */
     final PipelineDefinitionRestApi pipelineSteps;
+    /** Owner #16, #17: the Task Registry's controls, history and usage counts. */
+    final TaskRegistryRestApi taskRegistry;
     /** MIG-230: a run's steps, for the timeline. */
     final StepTimelineRestApi stepTimeline;
     /** MIG-237: a run's two-party result review, the console's half. */
@@ -529,6 +534,8 @@ final class CoreProbeFixture implements AutoCloseable {
         // UX review 2026-10-13 (I1): what the workspace's pipelines read, as the application wires it.
         definitionService.useReads(new PipelineReads(new PipelineDefinitionStore(this.db.appJdbc()), stepTasks));
         this.pipelineSteps = new PipelineDefinitionRestApi(definitionService, new StepPreview(registry));
+        this.taskRegistry = new TaskRegistryRestApi(new TaskControlService(registry, this.identity, names),
+            new TaskUsage(this.db.appJdbc(), new PipelineDefinitionStore(this.db.appJdbc())));
         this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         JdbcRunReviewStore reviewRows = new JdbcRunReviewStore(this.db.appJdbc());
         RunReviews runReviews = new RunReviews(new JdbcStepStore(this.db.appJdbc()), new PipelineDefinitionStore(this.db.appJdbc()),

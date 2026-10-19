@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 215.0-task-registry-controls
+      author: nabeel.amd93
+      description: "Owner #16 (2026-10-19): task_registry_override.updated_by_role; task_registry_block (a platform administrator's block of one task for one workspace) and task_registry_audit (every switch, block and reset, insert-only), both under row security"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V215.0-task-registry-controls/V215__task_registry_controls.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V215.0-task-registry-controls/V215__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

@@ -253,6 +253,25 @@ public class PipelineServiceImplTenantIsolationTest {
         assertThat(response.getData()).isSameAs(this.tenantAForm.getFields());
     }
 
+    // ---- formByKey (owner #18): the New/Edit registry task page's read, scoped like fieldsFor ----------
+
+    @Test
+    void aTenantReadsItsOwnPipelineByKeyAndNeverAnotherTenants() {
+        when(this.pipelineRepository.findByPipelineKeyAndStatusNot(this.tenantAForm.getPipelineKey(), Status.Delete))
+            .thenReturn(Optional.of(this.tenantAForm));
+        this.actAsTenant(TENANT_B);
+        ResponseDto theirs = this.service.formByKey(this.tenantAForm.getPipelineKey());
+        assertThat(theirs.getStatus()).isEqualTo(ERROR);
+        assertThat(theirs.getMessage()).isEqualTo("That pipeline no longer exists.");
+        assertThat(theirs.getData()).isNull();
+
+        this.actAsTenant(TENANT_A);
+        ResponseDto mine = this.service.formByKey(this.tenantAForm.getPipelineKey());
+        assertThat(mine.getStatus()).isEqualTo(SUCCESS);
+        assertThat(mine.getData()).isSameAs(this.tenantAForm);
+        assertThat(this.service.formByKey(null).getMessage()).isEqualTo("pipelineKey missing.");
+    }
+
     // ---- formForPipeline: strict, no shared fallback -------------------------------------------
 
     @Test

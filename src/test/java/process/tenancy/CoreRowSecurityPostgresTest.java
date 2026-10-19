@@ -195,6 +195,9 @@ class CoreRowSecurityPostgresTest {
         withheld.put("run_review DELETE", false);
         withheld.put("run_review_decision DELETE", false);
         withheld.put("run_review_decision UPDATE", false);
+        // Owner #16 (V215): the Task Registry's audit is insert-only.
+        withheld.put("task_registry_audit DELETE", false);
+        withheld.put("task_registry_audit UPDATE", false);
         assertThat(missing).isEqualTo(withheld);
         assertThat(login.queryForObject("SELECT has_table_privilege(?, 'public.databasechangelog', 'INSERT')", Boolean.class, APP)).isFalse();
         assertThat(login.queryForObject("SELECT count(*) FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE r.rolname = ?",
