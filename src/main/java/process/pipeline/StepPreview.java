@@ -44,8 +44,9 @@ import java.util.regex.Pattern;
  *   <li>at most {@value #MAX_ROWS} rows in and {@value #MAX_INPUTS} other inputs, at most {@value #MAX_BYTES} bytes of rows
  *       in all, the step's own row and cell bounds, and {@value #TIMEOUT_SECONDS} seconds; the answer is the output's
  *       columns and at most {@value #SHOWN} rows;</li>
- *   <li>no external call except a read the person's workspace may do: Enrich only with a saved request of the workspace's
- *       that reads (GET or HEAD), at most {@value #MAX_CALLS} calls; Validate reads its contract. Nothing is kept: no run,
+ *   <li>no external call except a read the person's workspace may do: Enrich only for a workspace administrator (calling a
+ *       saved request is theirs, as testing one is), with a request of the workspace's that reads (GET or HEAD), at most
+ *       {@value #MAX_CALLS} calls; Validate reads its contract. Nothing is kept: no run,
  *       no dataset, no file, no output;</li>
  *   <li>the rows shown are masked where a column's name says it holds a person's details (name, birth date, address,
  *       phone, email, record numbers...) or a value looks like one (an email, a phone or card number).</li>
@@ -65,6 +66,9 @@ public class StepPreview {
     /** The tasks a preview may run: rows in, rows out, nothing written, sent or asked of a model. */
     static final Set<String> PREVIEWABLE = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList("transform", "filter", "select", "sort",
         "limit", "compute", "aggregate", "append", "join", "enrich", "validate", "sample")));
+
+    /** The roles that may preview a step that calls an API (enrich). */
+    static final Set<String> ADMINS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("TENANT_ADMIN", "PLATFORM_ADMIN")));
 
     /** One preview's request. */
     public static class PreviewRequest {
@@ -160,6 +164,10 @@ public class StepPreview {
                 + ".", data);
         }
         StepTask runnable = task;
+        if ("enrich".equals(code) && !ADMINS.contains(TenantContext.getUserRole())) {
+            // Calling a saved API request is a workspace administrator's, as testing one in API collections is.
+            return refused("Previewing an enrich step calls a saved API request: a workspace administrator's, as testing a request is.");
+        }
         if ("enrich".equals(code)) {
             if (this.api == null || this.names == null) {
                 return refused("Enrich cannot be previewed here: integration-service's runner is not wired to this Core.");

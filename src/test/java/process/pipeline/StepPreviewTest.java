@@ -54,7 +54,7 @@ class StepPreviewTest {
 
     @BeforeEach
     void setUp() {
-        TenantContext.set(TENANT, "TENANT_USER", 4640L, "admin@riverside.test");
+        TenantContext.set(TENANT, "TENANT_ADMIN", 4640L, "admin@riverside.test");
         StepTasks tasks = Definitions.builtInTasks(new TransformStepTask(), new FilterStepTask(), new AggregateStepTask(), new JoinStepTask(),
             new SaveFileStepTask(), new EnrichStepTask(this.runner()));
         TaskOverrideStore store = new TaskOverrideStore() {
@@ -255,6 +255,19 @@ class StepPreviewTest {
         assertThat(this.preview.preview(request("enrich", config, patients(2))).getMessage())
             .isEqualTo("There is no API request 99 in this workspace.");
         assertThat(this.apiCalls.get()).isZero();
+    }
+
+    @Test
+    void onlyAnAdministratorPreviewsAStepThatCallsAnApi() {
+        TenantContext.set(TENANT, "TENANT_USER", 4642L, "viewer@riverside.test");
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("requestId", 77);
+        config.put("fields", Collections.singletonList(row("path", "score", "target", "score")));
+        assertThat(this.preview.preview(request("enrich", config, patients(1))).getMessage()).contains("a workspace administrator's");
+        assertThat(this.apiCalls.get()).isZero();
+        // A step that calls nothing is anyone's to preview.
+        assertThat(this.preview.preview(request("filter", row("conditions", Collections.singletonList(row("column", "age", "operator", "gt",
+            "value", 40))), patients(2))).getStatus()).isEqualTo(ProcessUtil.SUCCESS);
     }
 
     @Test
