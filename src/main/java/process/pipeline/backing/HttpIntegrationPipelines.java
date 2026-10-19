@@ -295,6 +295,7 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
             name.collectionId = request.hasNonNull("collectionId") ? request.get("collectionId").asLong() : null;
             name.collectionName = request.path("collectionName").asText(null);
             request.path("needsVariables").forEach(v -> name.needsVariables.add(v.asText()));
+            name.method = request.path("method").asText(null);
             names.requests.put(request.get("requestId").asLong(), name);
         }
         for (JsonNode connection : data.path("connections")) {

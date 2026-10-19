@@ -66,6 +66,7 @@ import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.PipelineReads;
 import process.pipeline.PipelineSummaries;
 import process.pipeline.StepReferences;
+import process.pipeline.StepPreview;
 import process.pipeline.StepTasks;
 import process.pipeline.registry.JdbcTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
@@ -527,7 +528,7 @@ final class CoreProbeFixture implements AutoCloseable {
             new PipelineDefinitionStore(this.db.appJdbc()), new DefinitionValidator(registry), registry, taskSwitches, names);
         // UX review 2026-10-13 (I1): what the workspace's pipelines read, as the application wires it.
         definitionService.useReads(new PipelineReads(new PipelineDefinitionStore(this.db.appJdbc()), stepTasks));
-        this.pipelineSteps = new PipelineDefinitionRestApi(definitionService);
+        this.pipelineSteps = new PipelineDefinitionRestApi(definitionService, new StepPreview(registry));
         this.runDatasets = new FileDatasetStore(Files.createTempDirectory("core-probe-datasets").toString());
         JdbcRunReviewStore reviewRows = new JdbcRunReviewStore(this.db.appJdbc());
         RunReviews runReviews = new RunReviews(new JdbcStepStore(this.db.appJdbc()), new PipelineDefinitionStore(this.db.appJdbc()),

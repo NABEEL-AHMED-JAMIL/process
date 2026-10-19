@@ -151,6 +151,8 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("SourceTaskRestApi.listSourceTask", read);
         CUSTOMERS_IN_EITHER_MODE.put("SourceTaskRestApi.fetchAllLinkJobsWithSourceTaskId", read);
         CUSTOMERS_IN_EITHER_MODE.put("PipelineDefinitionRestApi.validate", "checks a definition, saves nothing");
+        CUSTOMERS_IN_EITHER_MODE.put("PipelineDefinitionRestApi.preview", "runs one step on rows the caller sends, sandboxed; saves nothing "
+            + "(AI tools batch)");
         CUSTOMERS_IN_EITHER_MODE.put("SettingRestApi.xmlCreateChecker", "checks a document, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("KafkaConnectionProfileRestApi.testConnection", "tries a connection, saves nothing");
         CUSTOMERS_IN_EITHER_MODE.put("RunConfigRestApi.resolve", "resolves a run's configuration, saves nothing");

@@ -179,6 +179,11 @@ class CoreProbeCoverageTest {
         // task list reads them and the workspace's pipelines too, so it is probed.)
         NOTHING_TO_AIM.put("POST pipeline.json/steps/validate", "parses and checks the definition text in the request body; "
             + "names no stored pipeline, definition or workspace");
+        // AI tools batch (2026-10-13): a step preview runs the rows posted through one rows-to-rows task; it reads no stored
+        // pipeline, run or dataset. The one id it may name -- an enrich step's requestId -- is looked up in the caller's own
+        // workspace (from the token) and refused otherwise (StepPreviewTest.anotherWorkspacesRequestIsNotFound).
+        NOTHING_TO_AIM.put("POST pipeline.json/steps/preview", "runs the rows in the request body through one task; names no stored "
+            + "pipeline, run or dataset, and an enrich requestId is checked against the caller's own workspace");
 
         // /internal: the gateway answers 404 for /internal from outside, and each checks X-Internal-Token first.
         String service = "service token only (X-Internal-Token); no tenant reaches it -- the calling service names the tenant";

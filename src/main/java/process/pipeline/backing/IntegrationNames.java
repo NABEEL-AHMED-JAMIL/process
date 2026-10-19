@@ -22,6 +22,8 @@ public interface IntegrationNames {
         public String collectionName;
         /** AI hard-workflow test: the {{variables}} a run must give the request (its default environment does not define them). */
         public List<String> needsVariables = new ArrayList<>();
+        /** AI tools batch: the request's HTTP method (a step preview runs only reads); null from an older integration-service. */
+        public String method;
     }
 
     /** What integration-service named, by id. */

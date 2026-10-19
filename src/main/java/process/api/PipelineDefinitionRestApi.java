@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.pipeline.PipelineDefinitionService;
+import process.pipeline.StepPreview;
 
 /**
  * A pipeline's definition as ordered steps (MIG-230), for the console's step builder (MIG-249), under the prefix the
@@ -22,6 +23,7 @@ import process.pipeline.PipelineDefinitionService;
  *   <li>POST pipeline.json/steps/save: the draft as the next version (tenant admins, as the pipeline's form);</li>
  *   <li>GET pipeline.json/steps/tasks: the Task Registry as the caller's workspace sees it (MIG-231) -- each task's
  *       entry with its config schema and enabled, and one Legacy entry per pipeline of the workspace;</li>
+ *   <li>POST pipeline.json/steps/preview (AI tools batch): one step on at most 50 rows, sandboxed, as the person (StepPreview).</li>
  *   <li>POST pipeline.json/steps/tasks/enabled: a workspace admin switches a task on, off, or back to its default.</li>
  *   <li>GET pipeline.json/steps/reads (UX review 2026-10-13, I1): what the workspace's pipelines read -- storage, API
  *       requests, database connections, document types -- grouped by place, with the pipelines and steps that read each.
@@ -37,8 +39,11 @@ public class PipelineDefinitionRestApi {
 
     private final PipelineDefinitionService service;
 
-    public PipelineDefinitionRestApi(PipelineDefinitionService service) {
+    private final StepPreview preview;
+
+    public PipelineDefinitionRestApi(PipelineDefinitionService service, StepPreview preview) {
         this.service = service;
+        this.preview = preview;
     }
 
     @RequestMapping(value = "/pipeline.json/steps/definition", method = RequestMethod.GET)
@@ -56,6 +61,16 @@ public class PipelineDefinitionRestApi {
     @RequestMapping(value = "/pipeline.json/steps/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody PipelineDefinitionService.DefinitionRequest request) {
         return new ResponseEntity<>(this.service.save(request), HttpStatus.OK);
+    }
+
+    /**
+     * AI tools batch (owner item #14): one step run on at most 50 rows, outside any run, as the person -- sandboxed (StepPreview):
+     * rows-to-rows tasks only, nothing written or sent, reads only, capped; the output's columns and at most 20 masked rows.
+     * Not a builder action: it changes nothing.
+     */
+    @RequestMapping(value = "/pipeline.json/steps/preview", method = RequestMethod.POST)
+    public ResponseEntity<?> preview(@RequestBody StepPreview.PreviewRequest request) {
+        return new ResponseEntity<>(this.preview.preview(request), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/pipeline.json/steps/tasks", method = RequestMethod.GET)

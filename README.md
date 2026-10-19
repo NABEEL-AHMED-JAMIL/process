@@ -191,6 +191,17 @@ Added on 2026-10-12:
 - **Retry a failed run** (MIG-345, V205): see [Run review and bulk review](#run-review-and-bulk-review-2026-10-12).
 - **settings.review.individual** on a pipeline definition (bulk review, 2026-10-12): `true` means the run's internal review and its Approval steps' requests are never decided in bulk. Absent or false: bulk decisions are allowed as the workspace's review policy says. Read per the definition version the run follows.
 
+## Step preview (AI tools batch, 2026-10-19)
+
+`POST /api/v1/pipeline.json/steps/preview` `{task, config, rows, inputs}` (`hasRole('TENANT_USER')`, the pipelines' page gate) runs ONE step of the Task Registry on a few rows, outside any run, as the signed-in person (`StepPreview`). The AI Assistant's `preview_step`, `transform_data`, `enrich_data` and `join_data` use it. Sandboxed:
+
+- only tasks that turn rows into rows: transform, filter, select, sort, limit, compute, aggregate, append, join, enrich, validate, sample -- never a step that writes, sends, uploads, saves, asks for an approval or calls a model; the task must be on for the workspace and within the person's role, and its settings hold to its schema (problems answered at their path);
+- at most 50 rows in, at most 4 other inputs (a join's `with`, by step key), at most 1,000,000 bytes of rows, the step's own row and cell bounds, 20 seconds, at most 10,000 rows out; the answer is `{task, rowsIn, rowCount, columns, shown, rows (at most 20), masked, log, warnings}`;
+- no external call but a read the workspace may do: enrich only with a saved request of the workspace's that reads (GET or HEAD, as integration-service's `describe` now says), at most 10 calls; validate reads its contract. No run, dataset, file or output is kept (the context refuses `keepFile`);
+- the rows shown are masked where a column's name says it holds a person's details (name, birth, address, city, postal code, phone, email, record or member numbers...) or a value looks like an email, phone or card number: letters become x/X and digits 9.
+
+Tests: `StepPreviewTest`. The cross-tenant probe lists it as having nothing to aim (its one id, an enrich requestId, is checked against the caller's own workspace). api-check: TA 200, TU 200, TUX 403, ANON 401, BAD 400.
+
 ## Run review and bulk review (2026-10-12)
 
 Paths as the gateway sees them. All of them are `TENANT_USER` and up at the class level and gated by Core's own page check (`PageKey`): a tenant user needs the Source Jobs page, or the Queue page for the run reads below (an administrator holds every page). A run that is not the caller's is the envelope's "not found". Envelope refusals come back as HTTP 200 with `status: ERROR` and a message, unless a status is named. Per-role statuses are in etl-platform's `api-check/expectations.tsv`.
