@@ -43,6 +43,7 @@ public class FormService {
     static final String FORM_NOT_FOUND = "Form not found.";
     static final String NO_WORKSPACE = "Forms belong to a workspace; sign in to one to use them.";
     static final String ADMINS_ONLY = "Only a workspace admin builds forms.";
+    static final String NOT_A_DATASET = "This form's submissions are not an Analytics dataset yet; make the form Active to make them one.";
     static final int MAX_NAME = 120;
     static final int MAX_DESCRIPTION = 2000;
     static final int MAX_LINKABLE_JOBS = 500;
@@ -317,6 +318,68 @@ public class FormService {
             this.store.setDataset(tenantId, form.formId, null, location.alias);
             return " Its submissions are not an Analytics dataset yet (" + refused.getMessage() + ").";
         }
+    }
+
+    /**
+     * The form's dataset files written again, one per submission, in the bucket its rows are kept in: when the bucket
+     * lost them (a storage reset, a moved bucket). An administrator's; the form must already be a dataset. No answer
+     * changes; each file is rebuilt from the submission as kept. At most the newest BACKFILL submissions are taken.
+     */
+    public ResponseDto rebuildDataset(Long formId) {
+        Long tenantId = workspace();
+        if (tenantId == null) {
+            return new ResponseDto(ERROR, NO_WORKSPACE);
+        }
+        if (!isAdmin()) {
+            return new ResponseDto(ERROR, ADMINS_ONLY);
+        }
+        Optional<FormStore.Form> found = formId == null ? Optional.empty() : this.store.find(tenantId, formId);
+        if (!found.isPresent()) {
+            return new ResponseDto(ERROR, FORM_NOT_FOUND);
+        }
+        FormStore.Form form = found.get();
+        if (form.analyticsDatasetId == null) {
+            return new ResponseDto(ERROR, NOT_A_DATASET);
+        }
+        if (this.rows == null) {
+            return new ResponseDto(ERROR, "Dataset files cannot be rebuilt here.");
+        }
+        String bucket = form.datasetBucket != null ? form.datasetBucket : this.inbox == null ? null : this.inbox.locate().alias;
+        if (bucket == null) {
+            return new ResponseDto(ERROR, "The form's dataset has no bucket to write to; give the workspace an inbox first.");
+        }
+        Optional<String> unavailable = this.rows.unavailable();
+        if (unavailable.isPresent()) {
+            return new ResponseDto(ERROR, "The workspace's files cannot be written right now (" + unavailable.get() + "); try again later.");
+        }
+        FormDatasetWriter.Rewritten rewritten = this.rows.rewrite(tenantId, form, bucket);
+        logger.info("Form {}'s dataset files rebuilt by {} in {}: {} of {} submission(s)", form.formId, TenantContext.getAppUserId(),
+            bucket, rewritten.written, rewritten.taken);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("formId", form.formId);
+        data.put("bucket", bucket);
+        data.put("path", FormDatasets.globOf(form.formId));
+        data.put("submissions", form.submissions);
+        data.put("taken", rewritten.taken);
+        data.put("written", rewritten.written);
+        return new ResponseDto(rewritten.written == rewritten.taken ? SUCCESS : ERROR, rebuiltMessage(form.submissions, rewritten), data);
+    }
+
+    /** What a rebuild says: how many files were written, of how many submissions, and what it left alone. */
+    static String rebuiltMessage(long submissions, FormDatasetWriter.Rewritten rewritten) {
+        if (submissions == 0 || rewritten.taken == 0) {
+            return "The form has no submissions yet, so there are no dataset files to rebuild.";
+        }
+        StringBuilder message = new StringBuilder(String.format("Rebuilt %d of %d submission file(s); no answers changed.",
+            rewritten.written, rewritten.taken));
+        if (rewritten.written < rewritten.taken) {
+            message.append(String.format(" %d could not be written; try again.", rewritten.taken - rewritten.written));
+        }
+        if (submissions > rewritten.taken) {
+            message.append(String.format(" Only the newest %d of its %d submissions are rebuilt; the older ones' files are left as they are.",
+                rewritten.taken, submissions));
+        }
+        return message.toString();
     }
 
     /** Null when the job may be linked: none at all, or one of the workspace's own that is not deleted. */

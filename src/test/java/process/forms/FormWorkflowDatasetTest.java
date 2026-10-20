@@ -177,6 +177,68 @@ class FormWorkflowDatasetTest {
     }
 
     @Test
+    void anAdminRebuildsADatasetFormsFilesFromItsSubmissionsInTheBucketItsRowsAreIn() {
+        long formId = formIdOf(save(null));
+        this.store.receive(A, formId, 1, Collections.singletonMap("patient_id", "P-1"), null, 4597L, "alex");
+        this.store.receive(A, formId, 1, Collections.singletonMap("patient_id", "P-2"), null, 4597L, "alex");
+        this.bucket.rows.clear();
+
+        TenantContext.set(A, "TENANT_ADMIN", 4537L, "admin@clinic.example");
+        ResponseDto rebuilt = this.forms.rebuildDataset(formId);
+        assertThat(rebuilt.getStatus()).isEqualTo(SUCCESS);
+        assertThat(rebuilt.getMessage()).isEqualTo("Rebuilt 2 of 2 submission file(s); no answers changed.");
+        assertThat(this.bucket.rows).hasSize(2).allMatch(r -> r.startsWith(A + " wound-inbox datasets/forms/form-" + formId + "/submission-"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) rebuilt.getData();
+        assertThat(data).containsEntry("written", 2).containsEntry("taken", 2).containsEntry("bucket", "wound-inbox")
+            .containsEntry("path", "datasets/forms/form-" + formId + "/*.json");
+        assertThat(this.store.submissions.values()).extracting(sub -> sub.answers.get("patient_id")).containsExactly("P-1", "P-2");
+
+        // The rows moved to another bucket: they are written where the form says they are, not in the inbox.
+        this.store.setDataset(A, formId, null, "moved-bucket");
+        this.bucket.rows.clear();
+        assertThat(this.forms.rebuildDataset(formId).getStatus()).isEqualTo(SUCCESS);
+        assertThat(this.bucket.rows).hasSize(2).allMatch(r -> r.startsWith(A + " moved-bucket "));
+    }
+
+    @Test
+    void aRebuildIsRefusedToAMemberAnotherWorkspaceAFormThatIsNoDatasetAndAnUnreachableBucket() {
+        long formId = formIdOf(save(null));
+        TenantContext.set(A, "TENANT_ADMIN", 4537L, "admin@clinic.example");
+        FormSaveRequest draft = new FormSaveRequest(null, "Not yet", null, FormStore.DRAFT,
+            Collections.singletonList(new FormField("patient_id", "Patient ID", "text", true, null, null)), null);
+        long draftId = formIdOf(this.forms.save(draft));
+        this.bucket.rows.clear();
+
+        assertThat(this.forms.rebuildDataset(draftId).getMessage()).isEqualTo(FormService.NOT_A_DATASET);
+        assertThat(this.forms.rebuildDataset(null).getMessage()).isEqualTo(FormService.FORM_NOT_FOUND);
+        assertThat(this.forms.rebuildDataset(formId).getMessage()).as("no submissions")
+            .isEqualTo("The form has no submissions yet, so there are no dataset files to rebuild.");
+        this.bucket.unavailable = "storage is down";
+        ResponseDto unreachable = this.forms.rebuildDataset(formId);
+        assertThat(unreachable.getStatus()).isNotEqualTo(SUCCESS);
+        assertThat(unreachable.getMessage()).contains("cannot be written right now (storage is down)");
+        this.bucket.unavailable = null;
+
+        TenantContext.set(A, "TENANT_USER", 4597L, "alex@clinic.example");
+        assertThat(this.forms.rebuildDataset(formId).getMessage()).isEqualTo(FormService.ADMINS_ONLY);
+        TenantContext.set(A + 1, "TENANT_ADMIN", 4600L, "admin@other.example");
+        assertThat(this.forms.rebuildDataset(formId).getMessage()).isEqualTo(FormService.FORM_NOT_FOUND);
+        TenantContext.set(0L, "PLATFORM_ADMIN", 4639L, "platform@example");
+        assertThat(this.forms.rebuildDataset(formId).getMessage()).isEqualTo(FormService.NO_WORKSPACE);
+        assertThat(this.bucket.rows).isEmpty();
+    }
+
+    @Test
+    void aRebuildSaysWhatItCouldNotWriteAndThatItTakesTheNewestThousandOnly() {
+        assertThat(FormService.rebuiltMessage(3, new FormDatasetWriter.Rewritten(3, 2)))
+            .isEqualTo("Rebuilt 2 of 3 submission file(s); no answers changed. 1 could not be written; try again.");
+        assertThat(FormService.rebuiltMessage(1500, new FormDatasetWriter.Rewritten(FormDatasetWriter.BACKFILL, FormDatasetWriter.BACKFILL)))
+            .isEqualTo("Rebuilt 1000 of 1000 submission file(s); no answers changed. Only the newest 1000 of its 1500 submissions are "
+                + "rebuilt; the older ones' files are left as they are.");
+    }
+
+    @Test
     void aRequestThatDoesNotStartLeavesTheSubmissionNotStartedWithWhy() {
         long formId = formIdOf(save("approve-visit"));
         this.workflows.startFails = new IllegalStateException("There is no active workflow \"approve-visit\".");

@@ -35,6 +35,8 @@ import java.io.IOException;
  *   <li>GET form.json/linkableJobs -- the jobs a form may start (an administrator's);</li>
  *   <li>POST form.json/save -- create or replace a form (an administrator's; a builder action);</li>
  *   <li>POST form.json/status {formId, status} -- Draft, Active or Archived (an administrator's; a builder action);</li>
+ *   <li>POST form.json/rebuildDataset?formId= -- a dataset form's files written again in its bucket, one per submission
+ *       (its newest 1000), when the bucket lost them; no answer changes (an administrator's).</li>
  *   <li>POST form.json/upload (multipart: formId, field, file) -- a file or drawn signature for a form's field, before it
  *       is sent (MIG-277); the answer names it by uploadId. Data entry, as submit.</li>
  *   <li>POST form.json/submit {formId, answers} -- fill it in; when the form names a job, the submission starts it
@@ -122,6 +124,13 @@ public class FormRestApi {
     @RequestMapping(value = "/form.json/status", method = RequestMethod.POST)
     public ResponseEntity<?> status(@RequestBody FormStatusRequest request) {
         return new ResponseEntity<>(this.forms.status(request), HttpStatus.OK);
+    }
+
+    /** Not a builder action: it writes again what the submissions already are, so a MANAGED workspace's admin may too. */
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @RequestMapping(value = "/form.json/rebuildDataset", method = RequestMethod.POST)
+    public ResponseEntity<?> rebuildDataset(@RequestParam Long formId) {
+        return new ResponseEntity<>(this.forms.rebuildDataset(formId), HttpStatus.OK);
     }
 
     @RequestMapping(value = "/form.json/upload", method = RequestMethod.POST)

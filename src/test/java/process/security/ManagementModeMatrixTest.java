@@ -99,6 +99,8 @@ class ManagementModeMatrixTest {
         // MIG-278: a visitor of a share link fills in the form the workspace published; no workspace person is acting.
         CUSTOMERS_IN_EITHER_MODE.put("PublicFormRestApi.submit", "a share link's visitor filling in the form: data entry (MIG-278)");
         CUSTOMERS_IN_EITHER_MODE.put("PublicFormRestApi.upload", "a share link's visitor attaching a file: data entry (MIG-278)");
+        CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.rebuildDataset", "repair: a dataset form's files written again from the submissions "
+            + "as kept, when the bucket lost them; nothing built or answered changes");
         CUSTOMERS_IN_EITHER_MODE.put("FormRestApi.upload", "a file or signature for a form being filled in: data entry (MIG-277)");
         // Owner 2026-09-29: running an existing schedule is not building it; a managed customer reruns with a new file.
         CUSTOMERS_IN_EITHER_MODE.put("SourceJobRestApi.runSourceJob", "running an existing schedule (Run now)");

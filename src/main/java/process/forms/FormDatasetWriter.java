@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import process.pipeline.backing.BucketStore;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Writes a form's dataset rows (MIG-279, FormDatasets): one JSON file per submission in the bucket the form's rows are
@@ -50,12 +51,37 @@ public class FormDatasetWriter {
 
     /** Every submission the form has (its newest BACKFILL), when it first becomes a dataset; how many rows were written. */
     public int backfill(long tenantId, FormStore.Form form, String bucket) {
+        return this.rewrite(tenantId, form, bucket).written;
+    }
+
+    /**
+     * The form's rows written again from its submissions (its newest BACKFILL), each over the file it had: when the
+     * bucket lost them or the form's rows moved. The answers are read, never changed.
+     */
+    public Rewritten rewrite(long tenantId, FormStore.Form form, String bucket) {
+        List<FormStore.Submission> taken = this.store.submissions(tenantId, form.formId, BACKFILL);
         int written = 0;
-        for (FormStore.Submission submission : this.store.submissions(tenantId, form.formId, BACKFILL)) {
+        for (FormStore.Submission submission : taken) {
             if (this.write(tenantId, form, submission, bucket)) {
                 written++;
             }
         }
-        return written;
+        return new Rewritten(taken.size(), written);
+    }
+
+    /** Why the buckets cannot be written now; empty when they can. */
+    public Optional<String> unavailable() {
+        return this.buckets.unavailable();
+    }
+
+    /** What a rewrite did: the submissions it took and the rows it wrote of them. */
+    public static final class Rewritten {
+        public final int taken;
+        public final int written;
+
+        public Rewritten(int taken, int written) {
+            this.taken = taken;
+            this.written = written;
+        }
     }
 }

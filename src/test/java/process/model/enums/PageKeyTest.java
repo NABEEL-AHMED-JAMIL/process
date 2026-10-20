@@ -45,7 +45,7 @@ public class PageKeyTest {
         assertThat(PageKey.pagesGating("/form.json/list")).containsExactlyInAnyOrder(PageKey.FORMS, PageKey.FORM_SUBMISSIONS);
         assertThat(PageKey.pagesGating("/form.json/fetch")).containsExactlyInAnyOrder(PageKey.FORMS, PageKey.FORM_SUBMISSIONS);
         for (String write : new String[] {"/form.json/save", "/form.json/status", "/form.json/submit", "/form.json/upload",
-            "/form.json/shareLinks/create", "/form.json/sharePolicy", "/form.json/linkableJobs", "/form.json/listX"}) {
+            "/form.json/shareLinks/create", "/form.json/sharePolicy", "/form.json/linkableJobs", "/form.json/rebuildDataset", "/form.json/listX"}) {
             assertThat(PageKey.pagesGating(write)).as(write).containsExactly(PageKey.FORMS);
         }
     }

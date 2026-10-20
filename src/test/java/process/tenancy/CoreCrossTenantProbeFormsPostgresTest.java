@@ -111,6 +111,7 @@ class CoreCrossTenantProbeFormsPostgresTest {
                 "Archived", oneField(), null)))).contains(REFUSED);
             assertThat(fx.probe("POST form.json/status", caller, () -> fx.forms.status(new FormStatusRequest(B_FORM, "Archived"))))
                 .contains(REFUSED);
+            assertThat(fx.probe("POST form.json/rebuildDataset", caller, () -> fx.forms.rebuildDataset(B_FORM))).contains(REFUSED);
             assertThat(fx.probe("POST form.json/submit", caller, () -> fx.forms.submit(new FormSubmitRequest(B_FORM,
                 Collections.<String, Object>singletonMap("q", "probe"))))).contains(REFUSED);
             assertThat(fx.probe("POST form.json/upload", caller, () -> fx.forms.upload(B_FORM, "q",
