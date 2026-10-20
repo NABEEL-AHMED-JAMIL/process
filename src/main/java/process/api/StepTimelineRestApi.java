@@ -69,7 +69,9 @@ public class StepTimelineRestApi {
         if (download.refusal != null) {
             ResponseDto refusal = download.refusal;
             return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON)
-                .body(out -> REFUSALS.writeValue(out, refusal));
+                // Written as bytes: writeValue(out) closes the response's stream itself, and on Tomcat 11 a stream closed
+                // under Spring's async streaming left the chunked answer unterminated (MIG-389).
+                .body(out -> out.write(REFUSALS.writeValueAsBytes(refusal)));
         }
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName + "\"")
