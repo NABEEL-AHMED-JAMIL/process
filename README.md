@@ -248,6 +248,14 @@ Already there and not duplicated: filter, sort, select (also renames), transform
 lookup), validate (a data contract is the schema check), send_notification. Not added: a wait/delay step -- it would hold
 one of the engine's few run threads idle; a schedule, a trigger or an Approval step is the way to wait.
 
+**Imaging review tasks (2026-10-19)** -- for a pipeline whose results a clinician reviews, and the dashboards and reports
+made from that review:
+
+| Code | Name | What it does |
+|---|---|---|
+| `measure_mask` | Measure mask | each row's segmentation mask (an image the photo's size, the marked pixels light on dark) measured in code, in pixels: `mask_width`, `mask_height`, `area_px`, `area_pct` (of the image), `box_x/_y/_width/_height` (empty when nothing is marked), `regions` (8-connected), `largest_region_px`, `measure_note`; an optional `prefix` before every column, `threshold` (default 128). A mask has no scale, so no cm or mm (`measure_image` measures against a ruler). At most 12,000,000 pixels a mask, read from its header before its pixels |
+| `read_runs` | Read runs | a pipeline's runs in the run's workspace (`pipelineId`, empty for its own; the last `days`, default 30; finished runs unless `includeRunning`), oldest first, one row each: `run_id`, `job_id`, `pipeline_id`, `attempt`, `status`, `message`, `input_key`, `input_name` (the inbox file's name), `run_date`, `created_at`, `started_at`, `ended_at` (Chicago wall clock), `duration_seconds`, `review_status` (RunReviews' rule: none, not_required, pending, approved, rejected, not_applicable), the last decision's `review_decision`, `reviewer_id`, `reviewer_name`, `review_comment`, `review_reason`, `review_decided_at`, and `review_wait_minutes` (run end to decision). TENANT_ADMIN (a review names its reviewer); row security keeps it to the workspace. Join it to the rows each run kept (`run_id`) and every result carries the reviewer's decision |
+
 ## Run review and bulk review (2026-10-12)
 
 Paths as the gateway sees them. All of them are `TENANT_USER` and up at the class level and gated by Core's own page check (`PageKey`): a tenant user needs the Source Jobs page, or the Queue page for the run reads below (an administrator holds every page). A run that is not the caller's is the envelope's "not found". Envelope refusals come back as HTTP 200 with `status: ERROR` and a message, unless a status is named. Per-role statuses are in etl-platform's `api-check/expectations.tsv`.

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import process.pipeline.data.Values;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -333,6 +334,38 @@ public final class Fakes {
             List<long[]> list = this.marks.computeIfAbsent(jobId + "#" + stepKey + "#" + documentTypeId, k -> new ArrayList<>());
             list.removeIf(m -> m[0] == jobQueueId);
             list.add(new long[] {jobQueueId, upTo, rows});
+        }
+    }
+
+    /** read_runs' history: the rows it answers, and what it was last asked. */
+    public static final class Runs implements RunHistory {
+        public final List<Map<String, Object>> rows = new ArrayList<>();
+        public String unavailable;
+        public long lastTenant;
+        public String lastPipeline;
+        public Instant lastSince;
+        public boolean lastFinishedOnly;
+        public int lastLimit;
+
+        @Override
+        public Optional<String> unavailable() {
+            return Optional.ofNullable(this.unavailable);
+        }
+
+        @Override
+        public List<Map<String, Object>> runs(long tenantId, String pipelineId, Instant since, boolean finishedOnly, int limit) {
+            this.lastTenant = tenantId;
+            this.lastPipeline = pipelineId;
+            this.lastSince = since;
+            this.lastFinishedOnly = finishedOnly;
+            this.lastLimit = limit;
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (Map<String, Object> row : this.rows) {
+                if (pipelineId.equals(row.get("pipeline_id")) && out.size() < limit) {
+                    out.add(row);
+                }
+            }
+            return out;
         }
     }
 }

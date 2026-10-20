@@ -14,6 +14,8 @@ import process.pipeline.tasks.FilterStepTask;
 import process.pipeline.tasks.JoinStepTask;
 import process.pipeline.tasks.LegacyStepTask;
 import process.pipeline.tasks.MeasureImageStepTask;
+import process.pipeline.tasks.MeasureMaskStepTask;
+import process.pipeline.tasks.ReadRunsStepTask;
 import process.pipeline.tasks.ReadApiStepTask;
 import process.pipeline.tasks.ReadDatabaseStepTask;
 import process.pipeline.tasks.ReadFileStepTask;
@@ -56,6 +58,7 @@ public final class AllTasks {
     public final ReportRenderer reports = mock(ReportRenderer.class);
     public final Fakes.Webhooks webhooks = new Fakes.Webhooks();
     public final Fakes.Documents documents = new Fakes.Documents();
+    public final Fakes.Runs runs = new Fakes.Runs();
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -67,7 +70,8 @@ public final class AllTasks {
             new RenderPdfStepTask(this.reports), new AppendStepTask(), new SortStepTask(),
             new LimitStepTask(), new ApprovalStepTask(),
             new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents),
-            new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask()));
+            new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
+            new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs)));
     }
 
     public StepTasks tasks() {

@@ -42,7 +42,9 @@ class TaskRegistryTest {
             entry("validate", "Process"), entry("write_database", "Output"),
             // Owner #16 (2026-10-19): the common tasks added.
             entry("dedupe", "Process"), entry("split_column", "Process"), entry("pivot", "Process"), entry("unpivot", "Process"),
-            entry("fill_missing", "Process"));
+            entry("fill_missing", "Process"),
+            // 2026-10-19: imaging review -- a segmentation mask measured in pixels, and a pipeline's runs with their reviews.
+            entry("measure_mask", "Process"), entry("read_runs", "Read"));
     }
 
     /**
