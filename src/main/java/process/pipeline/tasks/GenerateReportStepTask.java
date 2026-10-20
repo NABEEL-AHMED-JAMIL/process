@@ -71,7 +71,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             .property("templateVersion", JsonSchema.string().pattern(VERSION.pattern()).title("Version").defaultValue("latest")
                 .description("latest: its newest published version; or a version number, pinned."))
             .property("reportName", JsonSchema.string().maxLength(200).format("template").title("Report name")
-                .description("Fills from the run: Wound clinic weekly · {{date}}. The design's name and the run when empty."))
+                .description("Placeholders fill from the run, e.g. Weekly summary · {{date}}. Empty: the design's name and the run."))
             .property("formats", JsonSchema.array(JsonSchema.string().enumOf("PDF", "HTML")).maxItems(2).title("Formats")
                 .description("PDF and HTML as the design says when empty. The PDF is kept with the run."))
             .property("period", JsonSchema.string().maxLength(60).format("template").title("Period")
