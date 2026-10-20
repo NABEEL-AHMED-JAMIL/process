@@ -42,6 +42,9 @@ public class ReadS3StepTask extends RegisteredTask {
             .property("format", JsonSchema.string().enumOf("list", "auto", "csv", "json", "jsonl", "parquet").title("Read as")
                 .defaultValue("list").description("list: one row per object. Otherwise each object's rows (auto: by its extension)."))
             .property("limit", JsonSchema.integer().minimum(1).maximum(Limits.MAX_OBJECTS).title("At most objects").defaultValue(100))
+            .property("runFiles", JsonSchema.bool().title("The run's own files first").defaultValue(false)
+                .description("A run started for files (an inbox arrival) reads those files instead of the prefix; any other run "
+                    + "reads the prefix. So one pipeline serves an inbox trigger and a schedule."))
             .property("since", JsonSchema.string().enumOf(SINCE_ALL, SINCE_LAST_RUN).title("Which objects").defaultValue(SINCE_ALL)
                 .description("all, or only the objects written since this job's last completed run read the prefix (oldest first; "
                     + "a failed run moves nothing, so its files come again)."))))
@@ -82,6 +85,9 @@ public class ReadS3StepTask extends RegisteredTask {
         String prefix = Templates.fill(Configs.text(config, "prefix", ""), Templates.ofRun(context, null));
         String format = Configs.text(config, "format", "list");
         int limit = Configs.integer(config, "limit", 100);
+        if (Configs.bool(config, "runFiles", false) && !context.inputKeys().isEmpty()) {
+            return this.runFiles(context, config, bucket, format);
+        }
         boolean sinceLastRun = SINCE_LAST_RUN.equals(Configs.text(config, "since", SINCE_ALL));
         BucketStore.Listing listing;
         ObjectReadMarks.Mark upTo = null;
@@ -101,6 +107,23 @@ public class ReadS3StepTask extends RegisteredTask {
                 listing.objects.size(), context.attempt());
         }
         return result;
+    }
+
+    /** The files the run was started for, in its own bucket (the inbox), instead of the prefix; no watermark moves. */
+    private StepResult runFiles(StepContext context, Map<String, Object> config, String bucket, String format) throws Exception {
+        String own = context.inputBucket() == null ? bucket : context.inputBucket();
+        List<BucketStore.Listed> objects = new ArrayList<>();
+        for (String key : context.inputKeys()) {
+            BucketStore.Listed found = null;
+            for (BucketStore.Listed listed : this.buckets.list(context.tenantId(), own, key, 1).objects) {
+                if (listed.key.equals(key)) {
+                    found = listed;
+                }
+            }
+            objects.add(found != null ? found : new BucketStore.Listed(key, 0));
+        }
+        context.log(String.format("The run was started for %d file(s) in %s: they are read instead of the prefix.", objects.size(), own));
+        return this.read(context, config, own, "", format, new BucketStore.Listing(objects, false));
     }
 
     /** The new objects a try reads, and the newest of them (or the mark it started from, when none is new). */

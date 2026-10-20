@@ -138,6 +138,23 @@ class ReadS3SinceLastRunTest {
         assertThat(this.marks.byRun).isEmpty();
     }
 
+    /** An inbox arrival's run reads its own file; a scheduled run of the same pipeline reads the prefix since the last run. */
+    @Test
+    void theRunsOwnFilesComeFirstWhenAskedAndMoveNoMark() throws Exception {
+        object("intake/2026/10/20/x-new.m4a", 5);
+        TaskContext arrival = new TaskContext(config("bucket", "lake", "prefix", "in/", "since", "last_run", "runFiles", true), Dataset.EMPTY);
+        arrival.inputBucket = "inbox";
+        arrival.inputKey = "intake/2026/10/20/x-new.m4a";
+        List<Map<String, Object>> rows = this.task.run(arrival).getOutput().getRows();
+        assertThat(rows).extracting(r -> r.get("key")).containsExactly("intake/2026/10/20/x-new.m4a");
+        assertThat(rows.get(0).get("size")).isEqualTo(10L);
+        assertThat(this.marks.byRun).isEmpty();
+
+        object("in/a.m4a", 1);
+        assertThat(keys(2, config("bucket", "lake", "prefix", "in/", "since", "last_run", "runFiles", true)))
+            .as("a run no file started reads the prefix").contains("in/a.m4a");
+    }
+
     @Test
     void storagesTimesAreRead() {
         assertThat(BucketStore.Listed.instant("2026-10-20T15:04:05Z")).isEqualTo(Instant.parse("2026-10-20T15:04:05Z"));
