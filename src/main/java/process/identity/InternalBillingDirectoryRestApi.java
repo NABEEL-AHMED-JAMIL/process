@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceTaskTypeRepository;
+import process.pipeline.PipelineDefinition;
+import process.pipeline.PipelineDefinitionStore;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -49,16 +51,19 @@ public class InternalBillingDirectoryRestApi {
     private final IdentityPort identity;
     private final SourceTaskTypeRepository taskTypes;
     private final JobQueueRepository runs;
+    /** Owner #23: the runs' pipelines' latest definitions, for the facts a rate card's pricing rule matches on. */
+    private final PipelineDefinitionStore definitions;
     private final byte[] token;
 
     /** The most run ids one question may name: Billing asks for a month of a workspace's runs at a time. */
     static final int MAX_RUN_IDS = 10000;
 
     public InternalBillingDirectoryRestApi(IdentityPort identity, SourceTaskTypeRepository taskTypes, JobQueueRepository runs,
-        @Value("${internal.service-token:}") String token) {
+        PipelineDefinitionStore definitions, @Value("${internal.service-token:}") String token) {
         this.identity = identity;
         this.taskTypes = taskTypes;
         this.runs = runs;
+        this.definitions = definitions;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -81,8 +86,12 @@ public class InternalBillingDirectoryRestApi {
 
     /**
      * Body {tenantId, jobQueueIds: [..]}: the workspace's runs among these ids, each {jobQueueId, jobId, schedule,
-     * taskDetailId, pipeline, startedAt (ISO-8601, UTC), status}, by id. A run of another workspace, or one that does not
-     * exist, is simply absent. Runs as that workspace (row-level security) and filters by it too.
+     * taskDetailId, pipeline, startedAt (ISO-8601, UTC), status, sensitivity, tags}, by id. A run of another workspace, or one
+     * that does not exist, is simply absent. Runs as that workspace (row-level security) and filters by it too.
+     *
+     * <p>Owner #23: sensitivity and tags are what a rate card's pricing rule matches a run on (CLASS, TAG) -- from its
+     * pipeline's latest definition: settings.sensitivity (internal when not said) and settings.tags; null and none for a
+     * legacy pipeline, which has no settings. Billing keeps the answer once per run.
      */
     @PostMapping(value = "/runs", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> runs(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
@@ -107,7 +116,9 @@ public class InternalBillingDirectoryRestApi {
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         if (!ids.isEmpty()) {
-            for (Object[] run : RowSecurity.forTenant(tenantId, () -> this.runs.findRunNames(tenantId, JobQueueRepository.idArray(ids)))) {
+            List<Object[]> found = RowSecurity.forTenant(tenantId, () -> this.runs.findRunNames(tenantId, JobQueueRepository.idArray(ids)));
+            Map<Long, PipelineDefinition.Settings> settings = this.settingsOf(tenantId, found);
+            for (Object[] run : found) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("jobQueueId", number(run[0]));
                 row.put("jobId", number(run[1]));
@@ -117,6 +128,11 @@ public class InternalBillingDirectoryRestApi {
                 Instant started = instant(run[5]);
                 row.put("startedAt", started == null ? null : started.toString());
                 row.put("status", run[6] == null ? null : run[6].toString());
+                Long task = number(run[3]);
+                boolean engine = task != null && settings.containsKey(task);
+                PipelineDefinition.Settings s = engine ? settings.get(task) : null;
+                row.put("sensitivity", !engine ? null : s == null ? PipelineDefinition.Settings.INTERNAL : s.effectiveSensitivity());
+                row.put("tags", s == null || s.getTags() == null ? new ArrayList<String>() : new ArrayList<>(s.getTags()));
                 rows.add(row);
             }
         }
@@ -124,6 +140,35 @@ public class InternalBillingDirectoryRestApi {
         answer.put("tenantId", tenantId);
         answer.put("runs", rows);
         return new ResponseEntity<>(answer, HttpStatus.OK);
+    }
+
+    /**
+     * Owner #23: the settings of the runs' pipelines' latest definitions, by pipeline (task_detail_id) -- a pipeline with a
+     * definition maps to its settings (null when it says none); a legacy pipeline is absent. One query for the page.
+     */
+    private Map<Long, PipelineDefinition.Settings> settingsOf(long tenantId, List<Object[]> found) {
+        Set<Long> tasks = new LinkedHashSet<>();
+        for (Object[] run : found) {
+            Long task = number(run[3]);
+            if (task != null) {
+                tasks.add(task);
+            }
+        }
+        Map<Long, PipelineDefinition.Settings> out = new LinkedHashMap<>();
+        if (tasks.isEmpty()) {
+            return out;
+        }
+        for (PipelineDefinitionStore.TaskDefinition task : RowSecurity.forTenant(tenantId, () -> this.definitions.latestForTasks(tenantId, tasks))) {
+            try {
+                PipelineDefinition definition = task.stored.definition();
+                if (!definition.isLegacy()) {
+                    out.put(task.taskDetailId, definition.getSettings());
+                }
+            } catch (RuntimeException unreadable) {
+                this.logger.warn("Pipeline {}'s definition is not read for billing: {}", task.taskDetailId, unreadable.getMessage());
+            }
+        }
+        return out;
     }
 
     private static Long number(Object value) {

@@ -1,5 +1,6 @@
 package process.identity;
 
+import process.pipeline.PipelineDefinitionStore;
 import org.junit.jupiter.api.Test;
 import process.model.enums.Status;
 import process.model.repository.AppUserRepository;
@@ -18,6 +19,7 @@ import org.barco.platform.tenancy.RowSecurity;
 import org.barco.platform.tenancy.RowSecurityCaller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -37,8 +39,9 @@ class InternalBillingDirectoryRestApiTest {
     private final AppUserRepository users = mock(AppUserRepository.class);
     private final SourceTaskTypeRepository taskTypes = mock(SourceTaskTypeRepository.class);
     private final JobQueueRepository runs = mock(JobQueueRepository.class);
+    private final PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
     private final InternalBillingDirectoryRestApi api = new InternalBillingDirectoryRestApi(TestIdentity.over(this.users, this.tenants), this.taskTypes,
-        this.runs, TOKEN);
+        this.runs, this.definitions, TOKEN);
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
@@ -53,7 +56,7 @@ class InternalBillingDirectoryRestApiTest {
     @Test
     void anUnsetTokenAdmitsNobody() {
         InternalBillingDirectoryRestApi unset = new InternalBillingDirectoryRestApi(TestIdentity.over(this.users, this.tenants), this.taskTypes,
-            this.runs, " ");
+            this.runs, this.definitions, " ");
         assertThat(unset.usageFacts("", 2905L).getStatusCodeValue()).isEqualTo(401);
         assertThat(unset.usageFacts(" ", 2905L).getStatusCodeValue()).isEqualTo(401);
     }
@@ -108,6 +111,39 @@ class InternalBillingDirectoryRestApiTest {
         assertThat(rows.get(0)).containsEntry("jobQueueId", 8258L).containsEntry("jobId", 2967L).containsEntry("schedule", "X-ray triage (inbox)")
             .containsEntry("taskDetailId", 1933L).containsEntry("pipeline", "X-ray triage").containsEntry("startedAt", "2026-10-13T01:07:31.619Z")
             .containsEntry("status", "Failed");
+        // No definition: a legacy pipeline says no data class and no tags.
+        assertThat(rows.get(0)).containsEntry("sensitivity", null).containsEntry("tags", Collections.emptyList());
+    }
+
+    /** Owner #23: what a rate card's pricing rule matches a run on -- its pipeline's data class and tags, from its latest definition. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void eachRunCarriesItsPipelinesDataClassAndTagsForTheRateCardsRules() {
+        when(this.runs.findRunNames(eq(2960L), anyString())).thenReturn(Arrays.asList(
+            new Object[] {8258L, 2967L, "X-ray triage (inbox)", 1933L, "X-ray triage", null, "Completed"},
+            new Object[] {8259L, 2968L, "Claims (daily)", 1934L, "Claims", null, "Completed"}));
+        String[] scoped = {null};
+        when(this.definitions.latestForTasks(eq(2960L), any())).thenAnswer(call -> {
+            scoped[0] = RowSecurity.current(NOBODY).tenantId();
+            PipelineDefinitionStore.TaskDefinition xray = new PipelineDefinitionStore.TaskDefinition();
+            xray.taskDetailId = 1933L;
+            xray.stored = new PipelineDefinitionStore.Stored();
+            xray.stored.json = "{\"version\":1,\"steps\":[{\"key\":\"a\",\"task\":\"filter\"}],"
+                + "\"settings\":{\"sensitivity\":\"sensitive\",\"tags\":[\"research\",\"pilot\"]}}";
+            PipelineDefinitionStore.TaskDefinition claims = new PipelineDefinitionStore.TaskDefinition();
+            claims.taskDetailId = 1934L;
+            claims.stored = new PipelineDefinitionStore.Stored();
+            claims.stored.json = "{\"version\":1,\"steps\":[{\"key\":\"a\",\"task\":\"filter\"}]}";
+            return Arrays.asList(xray, claims);
+        });
+
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) ((Map<String, Object>) this.api.runs(TOKEN, body(2960L, 8258L, 8259L))
+            .getBody()).get("runs");
+
+        assertThat(scoped[0]).isEqualTo("2960");
+        assertThat(rows.get(0)).containsEntry("sensitivity", "sensitive").containsEntry("tags", Arrays.asList("research", "pilot"));
+        // A definition that says no settings: internal, as the data policy reads it, and no tags.
+        assertThat(rows.get(1)).containsEntry("sensitivity", "internal").containsEntry("tags", Collections.emptyList());
     }
 
     @Test

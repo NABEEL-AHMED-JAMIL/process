@@ -350,7 +350,7 @@ public class PipelineDefinition {
 
     /** What applies to every step that does not say otherwise, and how long a run's datasets are kept. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "review", "sensitivity", "inputContract"})
+    @JsonPropertyOrder({"datasetRetentionHours", "defaultTimeoutSeconds", "defaultOnError", "review", "sensitivity", "tags", "inputContract"})
     public static class Settings {
 
         public static final int DEFAULT_RETENTION_HOURS = 24;
@@ -381,6 +381,19 @@ public class PipelineDefinition {
 
         /** MIG-243: the sensitivity of the pipeline's data -- public, internal or sensitive; not said is internal. */
         private String sensitivity;
+
+        /**
+         * Owner #23: the pipeline's tags -- short words a rate card's pricing rule may price by (TAG), say "research" or
+         * "pilot". Not said is none. At most {@link #MAX_TAGS}, each 1 to {@link #TAG_MAX} characters.
+         */
+        private List<String> tags;
+
+        public static final int MAX_TAGS = 20;
+        public static final int TAG_MAX = 60;
+
+        public List<String> getTags() { return tags; }
+
+        public void setTags(List<String> tags) { this.tags = tags; }
 
         /**
          * MIG-332: the data contract (MIG-233) a run's record must meet when the customer API starts it

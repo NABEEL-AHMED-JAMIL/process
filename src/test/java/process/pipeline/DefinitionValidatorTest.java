@@ -107,6 +107,26 @@ class DefinitionValidatorTest {
             new DefinitionProblem("settings.sensitivity", "one of [public, internal, sensitive]"));
     }
 
+    /** Owner #23: a pipeline's tags, what a rate card's TAG rule prices by -- short words, none twice, at most 20. */
+    @Test
+    void tagsAreShortWordsGivenOnce() {
+        PipelineDefinition definition = this.valid();
+        definition.getSettings().setTags(Arrays.asList("research", "pilot"));
+        assertThat(this.validator.problems(definition)).isEmpty();
+        definition.getSettings().setTags(Arrays.asList("research", " padded", "", "research", "x".repeat(61)));
+        assertThat(this.validator.problems(definition)).containsExactly(
+            new DefinitionProblem("settings.tags[1]", "a tag of 1 to 60 characters, with no space at either end"),
+            new DefinitionProblem("settings.tags[2]", "a tag of 1 to 60 characters, with no space at either end"),
+            new DefinitionProblem("settings.tags[3]", "a tag given once"),
+            new DefinitionProblem("settings.tags[4]", "a tag of 1 to 60 characters, with no space at either end"));
+        List<String> many = new ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            many.add("t" + i);
+        }
+        definition.getSettings().setTags(many);
+        assertThat(this.validator.problems(definition)).containsExactly(new DefinitionProblem("settings.tags", "at most 20 tags"));
+    }
+
     @Test
     void everyExistingPipelinesLegacyWrapValidates() {
         assertThat(this.validator.problems(PipelineDefinition.legacy("F768927"))).isEmpty();

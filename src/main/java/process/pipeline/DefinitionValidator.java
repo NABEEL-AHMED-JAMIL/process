@@ -36,7 +36,8 @@ import process.settings.EngineDials;
  *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError;
  *       review.required (MIG-237) each of internal and customer at most once; review.individual (bulk review) true or
  *       false -- a boolean, which reading the definition already holds it to; sensitivity public, internal or sensitive
- *       (MIG-243); inputContract (MIG-332) a contract by id or by name, not both.</li>
+ *       (MIG-243); tags (owner #23) at most 20, each 1 to 60 characters, none twice; inputContract (MIG-332) a contract by id
+ *       or by name, not both.</li>
  * </ul>
  */
 @Component
@@ -190,6 +191,26 @@ public class DefinitionValidator {
         }
     }
 
+    /** Owner #23: settings.tags -- at most 20, each 1 to 60 characters with no space at either end, none twice. */
+    static void tags(List<String> tags, List<DefinitionProblem> problems) {
+        if (tags == null) {
+            return;
+        }
+        if (tags.size() > PipelineDefinition.Settings.MAX_TAGS) {
+            problems.add(new DefinitionProblem("settings.tags", "at most " + PipelineDefinition.Settings.MAX_TAGS + " tags"));
+        }
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < tags.size(); i++) {
+            String tag = tags.get(i);
+            String at = "settings.tags[" + i + "]";
+            if (tag == null || tag.trim().isEmpty() || tag.length() > PipelineDefinition.Settings.TAG_MAX || !tag.equals(tag.trim())) {
+                problems.add(new DefinitionProblem(at, "a tag of 1 to " + PipelineDefinition.Settings.TAG_MAX + " characters, with no space at either end"));
+            } else if (!seen.add(tag)) {
+                problems.add(new DefinitionProblem(at, "a tag given once"));
+            }
+        }
+    }
+
     private void settings(PipelineDefinition.Settings settings, int maxTimeout, List<DefinitionProblem> problems) {
         if (settings == null) {
             return;
@@ -199,6 +220,7 @@ public class DefinitionValidator {
         if (settings.getSensitivity() != null && !PipelineDefinition.Settings.SENSITIVITIES.contains(settings.getSensitivity())) {
             problems.add(new DefinitionProblem("settings.sensitivity", "one of " + PipelineDefinition.Settings.SENSITIVITIES));
         }
+        tags(settings.getTags(), problems);
         if (settings.getDefaultOnError() != null && !OnError.of(settings.getDefaultOnError()).isPresent()) {
             problems.add(new DefinitionProblem("settings.defaultOnError", "one of " + OnError.words()));
         }
