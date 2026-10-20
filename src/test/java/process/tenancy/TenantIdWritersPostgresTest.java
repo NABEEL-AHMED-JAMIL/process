@@ -37,7 +37,7 @@ import process.util.BusinessTime;
 import process.util.OpenSearchAuditLogClient;
 import process.util.TaskPayloadLocationUtil;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Arrays;

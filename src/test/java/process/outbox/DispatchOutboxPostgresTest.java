@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.concurrent.SettableListenableFuture;
+import java.util.concurrent.CompletableFuture;
 import process.AcrossTenantsProxy;
 import process.ScratchJpa;
 import process.ScratchPostgres;
@@ -168,10 +168,10 @@ class DispatchOutboxPostgresTest {
 
     // drives the deprecated API the code under test still uses (QUALITY.md lists them)
     @SuppressWarnings("deprecation")
-    private static SettableListenableFuture<SendResult<String, String>> tookItAt(long offset) {
-        SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
-        future.set(new SendResult<>(new ProducerRecord<>("etl.jobs", "k", "v"),
-            new RecordMetadata(new TopicPartition("etl.jobs", 0), offset, 0L, 0L, 0L, 0, 0)));
+    private static CompletableFuture<SendResult<String, String>> tookItAt(long offset) {
+        CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
+        future.complete(new SendResult<>(new ProducerRecord<>("etl.jobs", "k", "v"),
+            new RecordMetadata(new TopicPartition("etl.jobs", 0), offset, 0, 0L, 0, 0)));
         return future;
     }
 
@@ -255,8 +255,8 @@ class DispatchOutboxPostgresTest {
     @SuppressWarnings("unchecked")
     void aBrokerThatRefusesClosesTheRunAndTheTokenGoesWithIt() {
         this.queuedRun(96003);
-        SettableListenableFuture<SendResult<String, String>> refused = new SettableListenableFuture<>();
-        refused.setException(new IllegalStateException("Topic etl.jobs not present in metadata"));
+        CompletableFuture<SendResult<String, String>> refused = new CompletableFuture<>();
+        refused.completeExceptionally(new IllegalStateException("Topic etl.jobs not present in metadata"));
         when(this.broker.send(any(ProducerRecord.class))).thenReturn(refused);
 
         this.phase.runPass();
@@ -283,8 +283,8 @@ class DispatchOutboxPostgresTest {
         this.sql.update("INSERT INTO dispatch_outbox (job_queue_id, attempt, tenant_id, source_task_type_id, topic, message_key, "
             + "payload, headers) VALUES (98001, 1, 1, 1, 'down', 'a', '{}', '{}'), (98002, 1, 1, 1, 'down', 'b', '{}', '{}'), "
             + "(98003, 1, 2, 1, 'up', 'c', '{}', '{}')");
-        SettableListenableFuture<SendResult<String, String>> refused = new SettableListenableFuture<>();
-        refused.setException(new IllegalStateException("broker down"));
+        CompletableFuture<SendResult<String, String>> refused = new CompletableFuture<>();
+        refused.completeExceptionally(new IllegalStateException("broker down"));
         when(this.broker.send(any(ProducerRecord.class))).thenAnswer(inv ->
             "down".equals(((ProducerRecord<String, String>) inv.getArgument(0)).topic()) ? refused : tookItAt(5L));
 

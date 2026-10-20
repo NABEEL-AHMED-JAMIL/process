@@ -7,10 +7,10 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import process.ScratchPostgres;
 
-import javax.persistence.Column;
-import javax.persistence.EnumType;
-import javax.persistence.Enumerated;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Table;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -38,7 +38,7 @@ import process.model.pojo.JobQueue;
 import process.model.pojo.Pipeline;
 import process.model.pojo.AppUser;
 import process.model.pojo.Tenant;
-import javax.persistence.Entity;
+import jakarta.persistence.Entity;
 
 /**
  * Task 7 (2026-09-24), V164: every enum-backed status column accepts only its enum's exact spellings.

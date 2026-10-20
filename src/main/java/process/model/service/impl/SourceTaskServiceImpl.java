@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import process.pipeline.PipelineSummaries;
+import process.util.SqlTimes;
 
 import process.model.projection.SourceTaskTypeProjection;
 import process.identity.WorkspaceNames;
@@ -45,10 +46,9 @@ import process.util.TaskPayloadLocationUtil;
 import process.util.excel.BulkExcel;
 import process.util.excel.UploadedSheet;
 import process.util.validation.SourceTaskValidation;
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.io.ByteArrayOutputStream;
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -661,7 +661,7 @@ public class SourceTaskServiceImpl implements SourceTaskService {
                     }
                     index++;
                     if (!ProcessUtil.isNull(obj[index])) {
-                        sourceJobDto.setDateCreated((Timestamp) obj[index]);
+                        sourceJobDto.setDateCreated(SqlTimes.timestamp(obj[index]));
                     }
                     sourceJobDtoList.add(sourceJobDto);
                 }

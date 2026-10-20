@@ -28,7 +28,7 @@ final class LogCapture implements AutoCloseable {
             Logger logger = (Logger) LoggerFactory.getLogger(name);
             this.loggers.add(logger);
             this.levels.add(logger.getLevel());
-            logger.setLevel(Level.ALL);
+            logger.setLevel(Level.TRACE);
             logger.addAppender(this.appender);
         }
     }

@@ -25,7 +25,7 @@ import process.notifications.JobMail;
 import process.pipeline.StepEngine;
 import process.util.exception.ExceptionUtil;
 
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;

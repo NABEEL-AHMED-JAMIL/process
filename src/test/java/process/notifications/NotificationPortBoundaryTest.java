@@ -31,7 +31,7 @@ class NotificationPortBoundaryTest {
     /** What only a delivering Notifications needs. */
     private static final List<String> DELIVERY_ONLY = Arrays.asList(
         "org.springframework.messaging.simp", "EnableWebSocketMessageBroker",
-        "org.apache.velocity", "software.amazon.awssdk.services.ses", "javax.mail", "MimeMessageHelper");
+        "org.apache.velocity", "software.amazon.awssdk.services.ses", "jakarta.mail", "MimeMessageHelper");
 
     @Test
     void processDeliversNothingItself() throws IOException {

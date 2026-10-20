@@ -24,7 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static process.util.ProcessUtil.ERROR;
@@ -304,7 +303,7 @@ public class PublicForms {
             }
             Boolean first;
             try {
-                first = this.redis.opsForValue().setIfAbsent("form-link:ticket:" + parts[2], "1", MAX_FILL.getSeconds(), TimeUnit.SECONDS);
+                first = this.redis.opsForValue().setIfAbsent("form-link:ticket:" + parts[2], "1", Duration.ofSeconds(MAX_FILL.getSeconds()));
             } catch (RuntimeException redisDown) {
                 logger.warn("A share-link ticket could not be checked (Redis): {}", redisDown.getMessage());
                 throw new Refused(HttpStatus.SERVICE_UNAVAILABLE, "Submissions cannot be checked right now. Try again in a minute.");
@@ -335,7 +334,7 @@ public class PublicForms {
         try {
             count = this.redis.opsForValue().increment(key);
             if (count != null && count == 1L) {
-                this.redis.expire(key, windowSeconds + 5L, TimeUnit.SECONDS);
+                this.redis.expire(key, Duration.ofSeconds(windowSeconds + 5L));
             }
         } catch (RuntimeException redisDown) {
             logger.warn("A share-link rate limit could not be counted (Redis): {}", redisDown.getMessage());

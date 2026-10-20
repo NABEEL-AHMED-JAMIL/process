@@ -95,7 +95,7 @@ class RunConfigResolverTest {
     void aLiveRunGetsWhatItsTaskReferencesFromItsOwnWorkspace() {
         ResponseEntity<ResponseDto> answer = this.resolve(TOKEN, list("INPUT_BUCKET"), list("DB_PASSWORD"));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(answer.getBody().getStatus()).isEqualTo("SUCCESS");
         Map<String, Map<String, String>> data = data(answer);
         assertThat(data.get("config")).containsExactly(entry("INPUT_BUCKET", "etl-inputs"));
@@ -129,7 +129,7 @@ class RunConfigResolverTest {
     void anotherRunsTokenIsRefusedBeforeAnythingIsRead() {
         ResponseEntity<ResponseDto> answer = this.resolve("someone-elses", list("INPUT_BUCKET"), list("DB_PASSWORD"));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(401);
+        assertThat(answer.getStatusCode().value()).isEqualTo(401);
         assertThat(answer.getBody().getMessage()).isEqualTo("Unauthorized worker callback.");
         assertThat(answer.getBody().getData()).isNull();
         verify(this.entries, never()).findForRun(anyLong(), anyCollection());
@@ -141,7 +141,7 @@ class RunConfigResolverTest {
         for (JobStatus status : JobStatus.values()) {
             this.run.setJobStatus(status);
             int expected = status == JobStatus.Start || status == JobStatus.Running ? 200 : 401;
-            assertThat(this.resolve(TOKEN, list("INPUT_BUCKET"), list()).getStatusCodeValue()).as(status.name()).isEqualTo(expected);
+            assertThat(this.resolve(TOKEN, list("INPUT_BUCKET"), list()).getStatusCode().value()).as(status.name()).isEqualTo(expected);
         }
     }
 
@@ -152,7 +152,7 @@ class RunConfigResolverTest {
         ResponseEntity<ResponseDto> secretAsConfig = this.resolve(TOKEN, list(), list("INPUT_BUCKET"));
 
         for (ResponseEntity<ResponseDto> answer : Arrays.asList(other, otherKind, secretAsConfig)) {
-            assertThat(answer.getStatusCodeValue()).isEqualTo(400);
+            assertThat(answer.getStatusCode().value()).isEqualTo(400);
             assertThat(answer.getBody().getData()).isNull();
         }
         assertThat(other.getBody().getMessage()).contains("OUTPUT_BUCKET").contains("not referenced");
@@ -161,9 +161,9 @@ class RunConfigResolverTest {
 
     @Test
     void aMalformedRequestIsABadRequest() {
-        assertThat(this.resolver.resolve(TOKEN, null, 9L, list("INPUT_BUCKET"), list()).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.resolve(TOKEN, list(), list()).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.resolve(TOKEN, list("input_bucket"), list()).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.resolver.resolve(TOKEN, null, 9L, list("INPUT_BUCKET"), list()).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.resolve(TOKEN, list(), list()).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.resolve(TOKEN, list("input_bucket"), list()).getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
@@ -172,7 +172,7 @@ class RunConfigResolverTest {
 
         ResponseEntity<ResponseDto> answer = this.resolve(TOKEN, list("INPUT_BUCKET"), list("DB_PASSWORD"));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(answer.getBody().getStatus()).isEqualTo("ERROR");
         assertThat(answer.getBody().getMessage()).isEqualTo("Configuration DB_PASSWORD is not set in this workspace.");
         assertThat(answer.getBody().getData()).isNull();

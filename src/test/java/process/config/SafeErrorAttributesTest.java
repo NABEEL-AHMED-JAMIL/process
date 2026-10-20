@@ -10,7 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import process.util.FailureReference;
 import process.util.ProcessUtil;
 
-import javax.servlet.RequestDispatcher;
+import jakarta.servlet.RequestDispatcher;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;

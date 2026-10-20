@@ -6,14 +6,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import jakarta.servlet.http.HttpServletResponse;
 import process.model.dto.ResponseDto;
 
 import java.util.Arrays;
@@ -84,7 +89,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
-        HttpHeaders headers, HttpStatus status, WebRequest request) {
+        HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         String message = "The request could not be read.";
         Throwable cause = ex.getMostSpecificCause();
         if (cause instanceof InvalidFormatException) {
@@ -99,9 +104,38 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, message), headers, status);
     }
 
+    /**
+     * MIG-389: a path nothing serves is Boot's own /error answer, as on Boot 2.7, not the envelope. Spring 6.1+ hands
+     * these to this advice; on 5.3 the resource handler answered them with sendError, which is what this does.
+     */
+    @Override
+    protected ResponseEntity<Object> handleNoResourceFoundException(NoResourceFoundException ex, HttpHeaders headers,
+        HttpStatusCode status, WebRequest request) {
+        return notFoundAsBefore(request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleNoHandlerFoundException(NoHandlerFoundException ex, HttpHeaders headers,
+        HttpStatusCode status, WebRequest request) {
+        return notFoundAsBefore(request);
+    }
+
+    private static ResponseEntity<Object> notFoundAsBefore(WebRequest request) {
+        HttpServletResponse response = request instanceof ServletWebRequest ? ((ServletWebRequest) request).getResponse() : null;
+        if (response == null || response.isCommitted()) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+        try {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+        } catch (IOException ex) {
+            logger.debug("Could not send the 404: {}", ex.toString());
+        }
+        return null;
+    }
+
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
-        HttpHeaders headers, HttpStatus status, WebRequest request) {
+        HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         logger.warn("Request handling exception resolved to {}: {}", status, ex.getMessage());
         // A 4xx sentence names what the client got wrong (a missing parameter, an unreadable
         // body); a 5xx sentence is the framework's own and stays in the log.

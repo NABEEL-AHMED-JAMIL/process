@@ -1,7 +1,5 @@
 package process.util;
 
-import org.springframework.scheduling.support.CronSequenceGenerator;
-
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -18,8 +16,9 @@ import java.util.TimeZone;
  * promise runs it never makes. Names (MON-FRI, JAN), ranges, lists and steps are Spring's; Sunday is 0 or 7. Quartz's
  * L, W, # and year field are not.
  *
- * Spring 5.2's CronSequenceGenerator does the reading and the stepping (the build is on Spring 5.2, which has no
- * CronExpression; the dialect is the same bar L/W/#). It is handed a zone with no daylight saving, so what it steps is
+ * Spring 5.3's CronSequenceGenerator, kept as LegacyCronSequence (MIG-389), does the reading and the stepping (Spring 6
+ * removed it, and CronExpression steps differently; the dialect is the same bar L/W/#). It is handed a zone with no
+ * daylight saving, so what it steps is
  * the Chicago wall-clock reading itself -- the domain every other frequency steps in (ProcessTimeUtil). What a
  * wall-clock slot means as an instant, across the gap and the repeated hour, is BusinessTime's, decided once for every
  * schedule: a slot in the spring-forward gap (02:30 on the second Sunday of March) runs the gap's length on, at 03:30
@@ -52,8 +51,6 @@ public final class CronSchedule {
     /**
      * What is wrong with this expression, as a sentence for the caller; null when a schedule may run on it.
      */
-    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
-    @SuppressWarnings("deprecation")
     public static String problem(String expression) {
         String tidy = normalise(expression);
         if (tidy == null) {
@@ -72,9 +69,9 @@ public final class CronSchedule {
             return String.format("A cron expression has 5 fields (%s), or 6 with a leading seconds field of 0; got %d in '%s'.",
                 FIELDS, fields.length, tidy);
         }
-        CronSequenceGenerator generator;
+        LegacyCronSequence generator;
         try {
-            generator = new CronSequenceGenerator(springForm(tidy), WALL_CLOCK);
+            generator = new LegacyCronSequence(springForm(tidy), WALL_CLOCK);
         } catch (RuntimeException ex) {
             return String.format("'%s' is not a cron expression this scheduler reads (%s): %s.", tidy, FIELDS, reasonOf(ex));
         }
@@ -97,14 +94,12 @@ public final class CronSchedule {
      * The first slot strictly after this Chicago wall-clock reading; null when the expression cannot be read or never
      * fires. Only an expression {@link #problem} passed is ever stored, so null here means a row written some other way.
      */
-    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
-    @SuppressWarnings("deprecation")
     public static LocalDateTime next(String expression, LocalDateTime after) {
         if (after == null || problemOfShape(expression)) {
             return null;
         }
         try {
-            return next(new CronSequenceGenerator(springForm(expression), WALL_CLOCK), after);
+            return next(new LegacyCronSequence(springForm(expression), WALL_CLOCK), after);
         } catch (RuntimeException ex) {
             return null;
         }
@@ -120,9 +115,7 @@ public final class CronSchedule {
         return !(fields.length == 5 || (fields.length == 6 && fields[0].matches("0+")));
     }
 
-    // CronSequenceGenerator: CronExpression differs around DST and day-of-week; switching is a behaviour change for Wave 6, with its own tests.
-    @SuppressWarnings("deprecation")
-    private static LocalDateTime next(CronSequenceGenerator generator, LocalDateTime after) {
+    private static LocalDateTime next(LegacyCronSequence generator, LocalDateTime after) {
         // Whole seconds: the generator drops the millis, and a reading at 09:00:00.5 must still step past 09:00.
         LocalDateTime from = after.withNano(0);
         for (int year = 0; year < YEARS_SEARCHED; year++) {

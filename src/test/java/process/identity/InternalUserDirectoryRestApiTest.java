@@ -41,8 +41,8 @@ class InternalUserDirectoryRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.resolve(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.resolve("wrong", Collections.singletonMap("ids", Arrays.asList(1))).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.resolve(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.resolve("wrong", Collections.singletonMap("ids", Arrays.asList(1))).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.users);
     }
 

@@ -9,9 +9,9 @@ import process.model.dto.MessageQSearchDto;
 import process.model.service.impl.QueryService;
 import process.security.TenantContext;
 
-import javax.persistence.Entity;
-import javax.persistence.Index;
-import javax.persistence.Table;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.ResultSet;

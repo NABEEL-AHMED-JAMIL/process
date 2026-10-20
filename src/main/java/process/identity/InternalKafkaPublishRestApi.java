@@ -80,13 +80,17 @@ public class InternalKafkaPublishRestApi {
         } catch (KafkaRouteUnresolvedException unresolved) {
             this.logger.warn("Did not publish an event on {} for workspace {}: {}", topic, tenantId, unresolved.getMessage());
             return new ResponseEntity<>(Collections.singletonMap("message", unresolved.getMessage()),
-                HttpStatus.UNPROCESSABLE_ENTITY);
+                HttpStatus.UNPROCESSABLE_CONTENT);
         }
         KafkaTemplate<String, String> template = this.templates.getTemplate(profile);
         // The asking request's id travels as the record's X-Correlation-Id (MIG-94), so the consumer logs under it.
-        template.send(OutboxRelay.recordOf(topic, key, payload, CorrelationId.current())).addCallback(
-            sent -> this.logger.debug("Published an event on {} for workspace {}.", topic, tenantId),
-            failed -> this.logger.warn("An event on {} was not published: {}", topic, failed.getMessage()));
+        template.send(OutboxRelay.recordOf(topic, key, payload, CorrelationId.current())).whenComplete((sent, failed) -> {
+            if (failed == null) {
+                this.logger.debug("Published an event on {} for workspace {}.", topic, tenantId);
+            } else {
+                this.logger.warn("An event on {} was not published: {}", topic, failed.getMessage());
+            }
+        });
         return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 

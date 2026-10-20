@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import org.springframework.stereotype.Service;
+import process.util.SqlTimes;
 import process.notifications.JobMail;
 import process.engine.BulkAction;
 import process.model.enums.JobStatus;
@@ -14,7 +15,6 @@ import process.security.JobOwnership;
 import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -111,7 +111,7 @@ public class MessageQServiceImpl implements MessageQService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueue.setDateCreated((Timestamp) obj[index]);
+                    sourceJobQueue.setDateCreated(SqlTimes.timestamp(obj[index]));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {

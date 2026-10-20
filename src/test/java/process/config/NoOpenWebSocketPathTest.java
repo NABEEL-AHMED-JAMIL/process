@@ -19,7 +19,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import process.identity.IdentityPort;
 
-import javax.servlet.Filter;
+import jakarta.servlet.Filter;
 import java.util.Optional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;

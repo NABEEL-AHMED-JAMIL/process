@@ -25,7 +25,7 @@ import process.security.TenantFilterHelper;
 import process.util.OpenSearchAuditLogClient;
 import process.util.UserNameResolver;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

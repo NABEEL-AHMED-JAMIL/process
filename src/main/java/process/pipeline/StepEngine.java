@@ -36,7 +36,7 @@ import process.util.BusinessTime;
 import process.util.ProcessUtil;
 import process.util.exception.ExceptionUtil;
 
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
@@ -579,8 +579,8 @@ public class StepEngine {
                 values.put("approved_by", Values.scalar(d.get("approvedBy")));
                 values.put("date_approved", Values.scalar(d.get("dateApproved")));
                 values.put("dataset_row_id", Values.scalar(d.get("datasetRowId")));
-                d.path("fields").fields().forEachRemaining(f -> values.putIfAbsent(f.getKey(), Values.scalar(f.getValue())));
-                d.path("tables").fields().forEachRemaining(t -> values.putIfAbsent(t.getKey(), Values.scalar(t.getValue())));
+                d.path("fields").properties().iterator().forEachRemaining(f -> values.putIfAbsent(f.getKey(), Values.scalar(f.getValue())));
+                d.path("tables").properties().iterator().forEachRemaining(t -> values.putIfAbsent(t.getKey(), Values.scalar(t.getValue())));
             }
             this.documentValues = Collections.unmodifiableMap(values);
             return this.documentValues;

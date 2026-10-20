@@ -39,7 +39,7 @@ class InternalTenantFactsRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsCounted() {
-        assertThat(this.api.tenantFacts(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.tenantFacts(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.kafka, this.storage, this.types, this.tasks, this.jobs);
     }
 
@@ -67,7 +67,7 @@ class InternalTenantFactsRestApiTest {
         Long[] many = new Long[InternalTenantFactsRestApi.MAX_IDS + 1];
         for (int i = 0; i < many.length; i++) many[i] = (long) i + 1;
 
-        assertThat(this.api.tenantFacts(TOKEN, Collections.singletonMap("ids", Arrays.asList(many))).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.tenantFacts(TOKEN, Collections.singletonMap("ids", Arrays.asList(many))).getStatusCode().value()).isEqualTo(400);
         verifyNoInteractions(this.kafka, this.storage, this.types, this.tasks, this.jobs);
     }
 

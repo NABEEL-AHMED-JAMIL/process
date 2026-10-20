@@ -135,10 +135,10 @@ class CoreRowSecurityPostgresTest {
         try {
             TenantContext.set(A, "TENANT_ADMIN", CoreProbeFixture.ADMIN_A, "alice@acme.example");
             assertThatThrownBy(() -> app.update("UPDATE source_job SET tenant_id = ? WHERE tenant_id = ?", B, A))
-                .isInstanceOf(DataAccessException.class).hasMessageContaining("row-level security");
+                .isInstanceOf(DataAccessException.class).hasStackTraceContaining("row-level security");
             assertThatThrownBy(() -> app.update("INSERT INTO kafka_connection_profile (tenant_id, profile_name, bootstrap_servers, "
                 + "security_protocol, status) VALUES (NULL, 'planted', 'x:9092', 'PLAINTEXT', 'Active')"))
-                .isInstanceOf(DataAccessException.class).hasMessageContaining("row-level security");
+                .isInstanceOf(DataAccessException.class).hasStackTraceContaining("row-level security");
             assertThat(app.update("UPDATE kafka_connection_profile SET profile_name = 'renamed' WHERE kafka_connection_profile_id = ?",
                 PLATFORM_PROFILE)).isZero();
             assertThat(app.update("DELETE FROM job_audit_logs WHERE tenant_id = ?", B)).isZero();

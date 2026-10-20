@@ -138,11 +138,11 @@ class RunReviewSchemaPostgresTest {
             }
             assertThat(tenants).doesNotContain(B);
             assertThatThrownBy(() -> statement.execute("INSERT INTO run_review_decision (job_queue_id, tenant_id, attempt, party, decision) "
-                + "VALUES (" + RUN_OF_B + ", " + B + ", 1, 'CUSTOMER', 'APPROVED')")).hasMessageContaining("row-level security");
+                + "VALUES (" + RUN_OF_B + ", " + B + ", 1, 'CUSTOMER', 'APPROVED')")).hasStackTraceContaining("row-level security");
             assertThatThrownBy(() -> statement.execute("UPDATE run_review_decision SET decision = 'APPROVED'"))
-                .hasMessageContaining("permission denied");
-            assertThatThrownBy(() -> statement.execute("DELETE FROM run_review_decision")).hasMessageContaining("permission denied");
-            assertThatThrownBy(() -> statement.execute("DELETE FROM run_review")).hasMessageContaining("permission denied");
+                .hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> statement.execute("DELETE FROM run_review_decision")).hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> statement.execute("DELETE FROM run_review")).hasStackTraceContaining("permission denied");
             statement.execute("INSERT INTO run_review (job_queue_id, required_parties, status) VALUES (" + RUN_OF_A + ", 'INTERNAL', "
                 + "'PENDING') ON CONFLICT (job_queue_id) DO UPDATE SET status = 'PENDING'");
             assertThat(statement.executeUpdate("UPDATE run_review SET status = 'APPROVED', decided_at = now() WHERE job_queue_id = "

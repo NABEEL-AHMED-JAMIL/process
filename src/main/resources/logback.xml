@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- MIG-389: %-40.40c, as the {1.} after it was never logback syntax: 1.2 ignored it, 1.5 reports it at start-up; the line reads the same. -->
 <configuration>
     <property name="HOME_LOG" value="logs/process.log"/>
     <appender name="CONSOLE-ROLLING" class="ch.qos.logback.core.ConsoleAppender">
         <layout class="ch.qos.logback.classic.PatternLayout">
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c : %m%n%ex</pattern>
         </layout>
     </appender>
     <appender name="FILE-ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -18,7 +19,7 @@
             <maxHistory>60</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c{1.} : %m%n%ex</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${HOSTNAME:-process} --- [%15.15t] [%X{correlationId:--} t=%X{tenantId:--} u=%X{userId:--}] %-40.40c : %m%n%ex</pattern>
         </encoder>
     </appender>
     <logger name="process" level="debug" additivity="false">

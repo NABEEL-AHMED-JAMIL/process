@@ -1,23 +1,22 @@
 package process.model.pojo;
 
-import javax.persistence.PrePersist;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.SequenceGenerator;
 import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Column;
-import javax.persistence.ManyToOne;
-import javax.persistence.FetchType;
-import javax.persistence.JoinColumn;
-import javax.persistence.Transient;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Column;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Transient;
 
 
 /** One field of a task form: the XML tag it fills, and how it is presented. */
@@ -28,18 +27,11 @@ import javax.persistence.Transient;
 @Table(name = "pipeline_field")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class PipelineField {
 
-    @GenericGenerator(
-        name = "pipelineFieldSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "pipeline_source_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        })
+    @SequenceGenerator(name = "pipelineFieldSequenceGenerator", sequenceName = "pipeline_source_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @GeneratedValue(generator = "pipelineFieldSequenceGenerator")
     @Column(name = "pipeline_field_id")

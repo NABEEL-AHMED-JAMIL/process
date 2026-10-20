@@ -53,7 +53,7 @@ class InternalPageAccessRestApiTest {
     @SuppressWarnings("unchecked")
     private Map<String, Object> ask(String path) {
         ResponseEntity<?> answer = this.api.check(TOKEN, "Bearer caller-token", Collections.singletonMap("path", path));
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         return (Map<String, Object>) answer.getBody();
     }
 
@@ -78,14 +78,14 @@ class InternalPageAccessRestApiTest {
     void noBearerTokenIsNoCallerToGate() {
         TenantContext.clear();
         ResponseEntity<?> answer = this.api.check(TOKEN, null, Collections.singletonMap("path", "/documentConverter.json/convert"));
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(((Map<?, ?>) answer.getBody()).get("allowed")).isEqualTo(true);
     }
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.check(null, "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.check("wrong", "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.check(null, "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.check("wrong", "Bearer caller-token", Collections.singletonMap("path", "/billing.json")).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.users, this.pages);
     }
 

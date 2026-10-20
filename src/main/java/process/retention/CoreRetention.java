@@ -1,6 +1,7 @@
 package process.retention;
 
 import org.slf4j.Logger;
+import process.util.SqlTimes;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -311,7 +312,7 @@ public class CoreRetention {
 
     static Instant instant(Object value) {
         if (value instanceof Timestamp) {
-            return ((Timestamp) value).toInstant();
+            return SqlTimes.timestamp(value).toInstant();
         }
         if (value instanceof OffsetDateTime) {
             return ((OffsetDateTime) value).toInstant();

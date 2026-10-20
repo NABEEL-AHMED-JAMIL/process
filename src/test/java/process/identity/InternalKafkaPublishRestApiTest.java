@@ -4,7 +4,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.util.concurrent.SettableListenableFuture;
+import java.util.concurrent.CompletableFuture;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaRouteUnresolvedException;
 import process.config.KafkaTemplateProvider;
@@ -47,13 +47,13 @@ class InternalKafkaPublishRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsPublished() {
-        assertThat(this.api.publish(null, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.publish(null, event("analytics.query.completed")).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.resolver, this.templates);
     }
 
     @Test
     void aTopicThatIsNotOnTheListIsRefused() {
-        assertThat(this.api.publish(TOKEN, event("job.events")).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.publish(TOKEN, event("job.events")).getStatusCode().value()).isEqualTo(400);
         verifyNoInteractions(this.resolver, this.templates);
     }
 
@@ -64,9 +64,9 @@ class InternalKafkaPublishRestApiTest {
         KafkaConnectionProfile own = new KafkaConnectionProfile();
         when(this.resolver.require(2905L, null)).thenReturn(own);
         when(this.templates.getTemplate(own)).thenReturn(template);
-        when(template.send(any(ProducerRecord.class))).thenReturn(new SettableListenableFuture<>());
+        when(template.send(any(ProducerRecord.class))).thenReturn(new CompletableFuture<>());
 
-        assertThat(this.api.publish(TOKEN, event("analytics.query.completed")).getStatusCodeValue()).isEqualTo(202);
+        assertThat(this.api.publish(TOKEN, event("analytics.query.completed")).getStatusCode().value()).isEqualTo(202);
 
         // No task type: the resolver enters at the workspace's default (the platform's, for a workspace with none of its own).
         verify(this.resolver).require(eq(2905L), isNull());
@@ -89,7 +89,7 @@ class InternalKafkaPublishRestApiTest {
 
         ResponseEntity<?> answer = this.api.publish(TOKEN, event("analytics.query.completed"));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(422);
+        assertThat(answer.getStatusCode().value()).isEqualTo(422);
         assertThat(answer.getBody()).isEqualTo(Collections.singletonMap("message",
             "No Kafka connection is set for this workspace: set a default connection."));
         verifyNoInteractions(this.templates);

@@ -367,7 +367,7 @@ public final class RunParameters {
         try {
             JsonNode root = JSON.readTree(runParams);
             Map<String, String> params = new LinkedHashMap<>();
-            Iterator<Map.Entry<String, JsonNode>> fields = root.path("params").fields();
+            Iterator<Map.Entry<String, JsonNode>> fields = root.path("params").properties().iterator();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
                 params.put(field.getKey(), field.getValue().isNull() ? null : field.getValue().asText());

@@ -2,7 +2,7 @@ package process.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CachingConfigurerSupport;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -25,7 +25,7 @@ import java.util.Map;
  * */
 @Configuration
 @EnableCaching
-public class RedisConfig extends CachingConfigurerSupport {
+public class RedisConfig implements CachingConfigurer {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisConfig.class);
 
@@ -41,11 +41,14 @@ public class RedisConfig extends CachingConfigurerSupport {
         return template;
     }
 
-    // Deliberately an overload of, and not an override of, CachingConfigurerSupport.cacheManager():
+    // Deliberately an overload of, and not an override of, CachingConfigurer.cacheManager():
     // that inherited no-arg method keeps returning null, which is how a CachingConfigurer says
     // "resolve the CacheManager by type from the context" -- and by type it finds exactly this
     // bean. Extending the support class to supply an error handler therefore changes nothing
     // about which CacheManager is in use.
+    // GenericJackson2JsonRedisSerializer: the values already cached were written with it, and Jackson 2 is the JSON
+    // library Core keeps (MIG-389); Spring Data Redis 4 marks it for removal in favour of its Jackson 3 twin.
+    @SuppressWarnings("removal")
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()

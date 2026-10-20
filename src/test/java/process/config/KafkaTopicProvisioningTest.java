@@ -329,7 +329,7 @@ class KafkaTopicProvisioningTest {
         Map<String, Object> props = new HashMap<>();
         props.put("bootstrap.servers", bootstrap);
         try (AdminClient admin = AdminClient.create(props)) {
-            assertThat(admin.describeTopics(Arrays.asList(topic)).all().get(10, TimeUnit.SECONDS).get(topic).partitions()).hasSize(3);
+            assertThat(admin.describeTopics(Arrays.asList(topic)).allTopicNames().get(10, TimeUnit.SECONDS).get(topic).partitions()).hasSize(3);
             admin.deleteTopics(Arrays.asList(topic)).all().get(10, TimeUnit.SECONDS);
         }
     }

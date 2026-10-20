@@ -2,20 +2,19 @@ package process.model.pojo;
 
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.ParamDef;
-import org.hibernate.annotations.Parameter;
 
 import java.sql.Timestamp;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Id;
-import javax.persistence.Column;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Transient;
-import javax.persistence.PrePersist;
-import javax.persistence.PreUpdate;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Transient;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 
 /**
  * One configuration entry of a workspace (MIG-167), referenced from task payloads as ${config:KEY} or ${secret:KEY}.
@@ -28,22 +27,14 @@ import javax.persistence.PreUpdate;
 @Entity
 @Table(name = "pipeline_config")
 @EntityListeners(AuditListener.class)
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class PipelineConfig implements Audited {
 
     public static final String VALUE = "VALUE";
     public static final String SECRET = "SECRET";
 
-    @GenericGenerator(
-        name = "pipelineConfigSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "pipeline_config_id_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "pipelineConfigSequenceGenerator", sequenceName = "pipeline_config_id_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "id")
     @GeneratedValue(generator = "pipelineConfigSequenceGenerator")

@@ -50,6 +50,6 @@ class CorsPolicyGuardTest {
     void securityStillAnswersCorsAheadOfAuthentication() throws IOException {
         String security = new String(Files.readAllBytes(Paths.get("src", "main", "java", "process", "config", "SecurityConfig.java")),
             StandardCharsets.UTF_8);
-        assertThat(security).as("SecurityConfig's .cors() runs CorsConfig ahead of JwtAuthenticationFilter").contains(".cors()");
+        assertThat(security).as("SecurityConfig's .cors() runs CorsConfig ahead of JwtAuthenticationFilter").contains(".cors(Customizer.withDefaults())");
     }
 }

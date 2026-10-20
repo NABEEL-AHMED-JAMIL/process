@@ -1,6 +1,7 @@
 package process.identity;
 
 import org.barco.platform.tenancy.RowSecurity;
+import process.util.SqlTimes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -178,7 +179,7 @@ public class InternalBillingDirectoryRestApi {
     /** A timestamptz as the driver hands it back: an instant either way. */
     private static Instant instant(Object value) {
         if (value instanceof Timestamp) {
-            return ((Timestamp) value).toInstant();
+            return SqlTimes.timestamp(value).toInstant();
         }
         if (value instanceof OffsetDateTime) {
             return ((OffsetDateTime) value).toInstant();

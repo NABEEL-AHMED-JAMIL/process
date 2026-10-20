@@ -6,7 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,7 +31,7 @@ import process.model.service.impl.SourceTaskServiceImpl;
 import process.schema.ScratchEtlJob;
 import process.security.TenantContext;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Opt-in: needs NOTIFICATIONS_TEST_DB_URL (see ScratchPostgres).
  */
+@SuppressWarnings("removal") // Spring's Jackson 2 support / MockMvc client factory, kept on purpose (MIG-389)
 class TimestampWireFormatPostgresTest {
 
     private static final long TENANT = 3101L;
@@ -75,7 +76,7 @@ class TimestampWireFormatPostgresTest {
     static void build() throws Exception {
         db = ScratchEtlJob.buildUpTo("wire_format", TimestamptzMigrationPostgresTest.V100);
         AtomicReference<ObjectMapper> mapper = new AtomicReference<>();
-        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(Jackson2AutoConfiguration.class))
             .withPropertyValues("spring.jackson.serialization.fail-on-empty-beans=false")
             .run(context -> mapper.set(context.getBean(ObjectMapper.class)));
         json = mapper.get();

@@ -1,6 +1,7 @@
 package process.model.service.impl;
 
 import process.identity.WorkspaceNames;
+import process.util.SqlTimes;
 import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.Locale;
@@ -25,7 +26,6 @@ import process.security.TenantContext;
 import process.util.BusinessTime;
 import process.util.ProcessTimeUtil;
 import process.util.ProcessUtil;
-import java.sql.Timestamp;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobDto;
 import process.model.dto.SourceTaskDto;
@@ -272,7 +272,7 @@ public class DashboardServiceImpl implements DashboardService {
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {
-                    sourceJobQueueDto.setDateCreated((Timestamp) obj[index]);
+                    sourceJobQueueDto.setDateCreated(SqlTimes.timestamp(obj[index]));
                 }
                 index++;
                 if (!ProcessUtil.isNull(obj[index])) {

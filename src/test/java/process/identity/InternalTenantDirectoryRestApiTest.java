@@ -45,8 +45,8 @@ class InternalTenantDirectoryRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.resolve(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.resolve("wrong", Collections.singletonMap("ids", Arrays.asList(1))).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.resolve(null, Collections.singletonMap("ids", Arrays.asList(1))).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.resolve("wrong", Collections.singletonMap("ids", Arrays.asList(1))).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.tenants);
     }
 
@@ -81,7 +81,7 @@ class InternalTenantDirectoryRestApiTest {
         for (int i = 1; i <= 501; i++) {
             many.add(i);
         }
-        assertThat(this.api.resolve(TOKEN, Collections.singletonMap("ids", new ArrayList<>(many))).getStatusCodeValue())
+        assertThat(this.api.resolve(TOKEN, Collections.singletonMap("ids", new ArrayList<>(many))).getStatusCode().value())
             .isEqualTo(400);
         verifyNoInteractions(this.tenants);
     }

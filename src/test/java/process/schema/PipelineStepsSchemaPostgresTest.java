@@ -170,7 +170,7 @@ class PipelineStepsSchemaPostgresTest {
             }
             assertThat(tenants).containsExactly(A);
             assertThatThrownBy(() -> connection.createStatement().execute("INSERT INTO pipeline_definition (pipeline_key, version, "
-                + "definition) VALUES (" + B * 10 + ", 21, '" + STEPS + "'::json)")).hasMessageContaining("row-level security");
+                + "definition) VALUES (" + B * 10 + ", 21, '" + STEPS + "'::json)")).hasStackTraceContaining("row-level security");
         }
         assertThat(RowSecurity.OWNED_ROWS).isNotEmpty();
     }

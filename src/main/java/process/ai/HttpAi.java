@@ -140,7 +140,7 @@ public class HttpAi implements AiPort {
                     null);
             }
             Map<String, Integer> days = new LinkedHashMap<>();
-            answer.path("data").fields().forEachRemaining(e -> days.put(e.getKey(), e.getValue().canConvertToInt() && !e.getValue().isNull()
+            answer.path("data").properties().iterator().forEachRemaining(e -> days.put(e.getKey(), e.getValue().canConvertToInt() && !e.getValue().isNull()
                 ? e.getValue().asInt() : null));
             return days;
         } catch (IOException unreachable) {

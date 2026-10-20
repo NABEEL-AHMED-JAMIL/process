@@ -333,14 +333,14 @@ public class ReportExportServiceImpl {
                 URI.create(target), HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
 
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("status", response.getStatusCodeValue());
+            data.put("status", response.getStatusCode().value());
             data.put("response", trim(response.getBody()));
             return new ResponseDto(SUCCESS,
-                String.format("Submitted to %s (HTTP %s).", target, response.getStatusCodeValue()), data);
+                String.format("Submitted to %s (HTTP %s).", target, response.getStatusCode().value()), data);
         } catch (Exception ex) {
             logger.error("Report export: submit to {} failed", target, ex);
             return new ResponseDto(ERROR, FailureReference.sentence(ex instanceof HttpStatusCodeException
-                ? "The endpoint did not accept it (HTTP " + ((HttpStatusCodeException) ex).getRawStatusCode() + ")."
+                ? "The endpoint did not accept it (HTTP " + ((HttpStatusCodeException) ex).getStatusCode().value() + ")."
                 : "The endpoint did not accept it."));
         }
     }

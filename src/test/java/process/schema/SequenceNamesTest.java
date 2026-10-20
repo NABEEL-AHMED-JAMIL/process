@@ -50,7 +50,7 @@ class SequenceNamesTest {
     void theAuditLogUpsertDrawsFromTheEntitysSequence() throws IOException {
         String entity = new String(Files.readAllBytes(Paths.get("src/main/java/process/model/pojo/JobAuditLogs.java")), StandardCharsets.UTF_8);
         String repository = new String(Files.readAllBytes(Paths.get("src/main/java/process/model/repository/JobAuditLogRepository.java")), StandardCharsets.UTF_8);
-        Matcher declared = Pattern.compile("value\\s*=\\s*\"(job_audit_logs[^\"]*)\"").matcher(entity);
+        Matcher declared = Pattern.compile("(?:value|sequenceName)\\s*=\\s*\"(job_audit_logs[^\"]*)\"").matcher(entity);
         assertThat(declared.find()).isTrue();
         assertThat(repository).contains("nextval('" + declared.group(1) + "')");
     }

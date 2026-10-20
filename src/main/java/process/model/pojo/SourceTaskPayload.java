@@ -6,13 +6,12 @@ import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.Filter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.Id;
-import javax.persistence.Column;
-import javax.persistence.GeneratedValue;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
 
 /**
  * @author Nabeel Ahmed
@@ -21,19 +20,11 @@ import javax.persistence.GeneratedValue;
 @Table(name = "source_task_payload")
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class SourceTaskPayload {
 
-    @GenericGenerator(
-        name = "sourceTaskPayloadSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "source_task_payload_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "sourceTaskPayloadSequenceGenerator", sequenceName = "source_task_payload_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "task_payload_id")
     @GeneratedValue(generator = "sourceTaskPayloadSequenceGenerator")

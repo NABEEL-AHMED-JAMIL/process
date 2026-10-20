@@ -293,7 +293,7 @@ class StepAnswerContractTest {
         }
         assertThat(api).as("the request fields Core sends").contains("public String modelProfile;").contains("public Long sourceTaskId;");
         String advice = new String(Files.readAllBytes(root.resolve("config/AiExceptionAdvice.java")), StandardCharsets.UTF_8);
-        assertThat(advice).as("a refused model is 422").contains("HttpStatus.UNPROCESSABLE_ENTITY");
+        assertThat(advice).as("a refused model is 422").contains("HttpStatus.UNPROCESSABLE_CONTENT");
     }
 
     @Test

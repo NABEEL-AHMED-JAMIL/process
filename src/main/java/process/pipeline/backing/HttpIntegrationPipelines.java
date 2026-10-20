@@ -261,7 +261,7 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
         result.rows = new ArrayList<>();
         for (JsonNode row : data.path("rows")) {
             Map<String, Object> values = new LinkedHashMap<>();
-            Iterator<Map.Entry<String, JsonNode>> fields = row.fields();
+            Iterator<Map.Entry<String, JsonNode>> fields = row.properties().iterator();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
                 values.put(field.getKey(), Values.scalar(field.getValue()));

@@ -1,6 +1,6 @@
 package process.settings;
 
-import java.sql.Timestamp;
+import process.util.SqlTimes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -248,7 +248,7 @@ public class EngineSettingsService {
                 o.put("tenantId", tenantId);
                 o.put("value", dial.clamp(own));
                 Object[] stamp = stamps.getOrDefault(tenantId, Collections.emptyMap()).get(dial.key());
-                o.put("updatedAt", stamp == null ? null : ActingWorkspace.iso((Timestamp) stamp[0]));
+                o.put("updatedAt", stamp == null ? null : ActingWorkspace.iso(SqlTimes.timestamp(stamp[0])));
                 o.put("updatedByName", stamp == null || stamp[1] == null ? null : byId.get((Long) stamp[1]));
                 overrides.add(o);
             });

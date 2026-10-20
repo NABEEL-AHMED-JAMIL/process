@@ -54,7 +54,7 @@ public final class Values {
     public static Map<String, Object> row(JsonNode node) {
         Map<String, Object> row = new LinkedHashMap<>();
         if (node != null && node.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+            Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
                 row.put(field.getKey(), scalar(field.getValue()));

@@ -1,16 +1,11 @@
 package process.config;
 
-import com.fasterxml.classmate.TypeResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.web.servlet.mvc.method.RequestMappingInfoHandlerMapping;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import org.springframework.web.util.pattern.PathPatternParser;
-import springfox.documentation.spring.web.plugins.WebMvcRequestHandlerProvider;
-import springfox.documentation.spring.web.readers.operation.HandlerMethodResolver;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PropertiesLoaderUtils;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,30 +42,11 @@ class ApiDocsSettingTest {
         assertThat(SwaggerConfig.isDocumented("/internalNotes.json/list")).as("only the /internal segment itself").isTrue();
     }
 
-    /**
-     * Boot 2.6+ (MIG-204): the actuator's mapping parses with PathPatternParser, which springfox 2.9.2 cannot
-     * read -- start-up failed in documentationPluginsBootstrapper. Only the Ant-style mappings reach it.
-     */
+    /** springdoc's own switches follow process.api-docs.enabled: with it off, nothing is generated or served. */
     @Test
-    void springfoxIsHandedOnlyTheAntStyleMappings() {
-        RequestMappingHandlerMapping controllers = new RequestMappingHandlerMapping();
-        RequestMappingHandlerMapping actuatorLike = new RequestMappingHandlerMapping();
-        actuatorLike.setPatternParser(new PathPatternParser());
-        List<RequestMappingInfoHandlerMapping> mappings = new ArrayList<>();
-        mappings.add(controllers);
-        mappings.add(actuatorLike);
-        WebMvcRequestHandlerProvider provider =
-            new WebMvcRequestHandlerProvider(new HandlerMethodResolver(new TypeResolver()), mappings);
-
-        Object after = SwaggerConfig.springfoxAntPathMappingsOnly().postProcessAfterInitialization(provider, "provider");
-
-        assertThat(after).isSameAs(provider);
-        assertThat(SwaggerConfig.handlerMappings(provider)).containsExactly(controllers);
-    }
-
-    @Test
-    void otherBeansPassThroughUntouched() {
-        Object bean = new Object();
-        assertThat(SwaggerConfig.springfoxAntPathMappingsOnly().postProcessAfterInitialization(bean, "bean")).isSameAs(bean);
+    void springdocFollowsTheSwitch() throws Exception {
+        Properties shipped = PropertiesLoaderUtils.loadProperties(new ClassPathResource("application.properties"));
+        assertThat(shipped.getProperty("springdoc.api-docs.enabled")).isEqualTo("${process.api-docs.enabled:false}");
+        assertThat(shipped.getProperty("springdoc.swagger-ui.enabled")).isEqualTo("${process.api-docs.enabled:false}");
     }
 }

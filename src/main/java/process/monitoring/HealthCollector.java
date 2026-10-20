@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -267,6 +267,9 @@ public class HealthCollector {
             free / 1e9, total / 1e9));
     }
 
+    // Kafka 4.2 marks listConsumerGroups (and ConsumerGroupListing) for removal in favour of listGroups; it answers the
+    // same against the platform's 3.x brokers, so it stays until the brokers move (MIG-389).
+    @SuppressWarnings("removal")
     void kafkaLag(Instant now) {
         if (this.kafka == null) {
             return;

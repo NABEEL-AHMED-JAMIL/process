@@ -2,19 +2,18 @@ package process.model.pojo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
 import process.model.enums.TenantStatus;
 import java.sql.Timestamp;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Transient;
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Enumerated;
-import javax.persistence.EnumType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 
 /**
  * @author Nabeel Ahmed
@@ -37,15 +36,7 @@ public class Tenant implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @GenericGenerator(
-        name = "tenantSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "tenant_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "tenantSequenceGenerator", sequenceName = "tenant_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "tenant_id")
     @GeneratedValue(generator = "tenantSequenceGenerator")

@@ -31,7 +31,7 @@ public class MethodSecurityConfigRoleHierarchyTest {
     private static final String TENANT_ADMIN = "ROLE_TENANT_ADMIN";
     private static final String TENANT_USER = "ROLE_TENANT_USER";
 
-    private final RoleHierarchy hierarchy = new MethodSecurityConfig().roleHierarchy();
+    private final RoleHierarchy hierarchy = MethodSecurityConfig.roleHierarchy();
 
     /**
      * What hasRole(required) decides for a caller holding held: the expression handler asks the

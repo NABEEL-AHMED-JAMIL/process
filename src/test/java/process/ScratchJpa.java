@@ -1,18 +1,19 @@
 package process;
 
-import org.hibernate.dialect.PostgreSQL10Dialect;
-import org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy;
-import org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy;
+import org.hibernate.dialect.PostgreSQLDialect;
+import org.springframework.boot.hibernate.SpringImplicitNamingStrategy;
+import org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
+import process.config.RegexNativeQueries;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import javax.sql.DataSource;
-import javax.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityManagerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,9 +50,10 @@ public final class ScratchJpa implements AutoCloseable {
         this.factoryBean.setPackagesToScan("process.model.pojo");
         this.factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
         Map<String, Object> properties = new HashMap<>();
-        properties.put("hibernate.dialect", PostgreSQL10Dialect.class.getName());
+        properties.put("hibernate.dialect", PostgreSQLDialect.class.getName());
         properties.put("hibernate.hbm2ddl.auto", "none");
-        properties.put("hibernate.physical_naming_strategy", SpringPhysicalNamingStrategy.class.getName());
+        properties.put("hibernate.query.native.prefer_jdbc_datetime_types", "true");
+        properties.put("hibernate.physical_naming_strategy", PhysicalNamingStrategySnakeCaseImpl.class.getName());
         properties.put("hibernate.implicit_naming_strategy", SpringImplicitNamingStrategy.class.getName());
         properties.putAll(overrides);
         this.factoryBean.setJpaPropertyMap(properties);
@@ -61,6 +63,7 @@ public final class ScratchJpa implements AutoCloseable {
         this.transactionManager.setDataSource(pool);
         EntityManager shared = SharedEntityManagerCreator.createSharedEntityManager(this.factory);
         this.repositories = new JpaRepositoryFactory(shared);
+        this.repositories.setQueryEnhancerSelector(new RegexNativeQueries());
     }
 
     /** An entity manager bound to the current transaction, as @PersistenceContext injects one. */

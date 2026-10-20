@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.18</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -31,34 +31,17 @@
           and component scan would have failed the same way at startup. Spring Boot 2.7 reads 17.
         -->
         <java.version>17</java.version>
-        <swagger.version>2.9.2</swagger.version>
         <!--
-          MIG-323: patched releases inside the lines Spring Boot 2.7 supports, overriding 2.7.18's managed
-          versions until the Boot 3 migration (after the 12 October demo). What each fixes and what stays
-          open: etl-platform/docs/security/dependency-vulnerabilities-2026-10-05.md.
+          MIG-389 (vulnerabilities review 2026-10-13, group C): Spring Boot 4.1.1, overriding its managed versions with
+          Tomcat 11.0.25 (Boot's 11.0.24 has 3 critical authenticator advisories), Jackson 3.1.7 (3.1.5 has 4 highs;
+          kept off the class path, so only should one arrive), Jackson 2 at 2.18.11 (the release Core ran on Boot 2.7;
+          Boot 4.1.1's 2.21.5 has 5 highs) and Liquibase 4.33.0 (Boot's 5.x changed its licence; 4.33 is the last Apache
+          line). spring-kafka 4.1.1 with kafka-clients 4.2.1, as Boot 4.1.1 manages them.
         -->
-        <tomcat.version>9.0.122</tomcat.version>
-        <netty.version>4.1.138.Final</netty.version>
-        <postgresql.version>42.7.13</postgresql.version>
-        <logback.version>1.2.13</logback.version>
-        <spring-framework.version>5.3.39</spring-framework.version>
-        <spring-security.version>5.7.14</spring-security.version>
-        <!--
-          Vulnerabilities review 2026-10-13, group A (etl-platform/docs/reviews/vulnerabilities-2026-10-13.md):
-          newer releases inside lines that run on Spring Boot 2.7, until the Boot 4.1 migration.
-          Jackson 2.18 enforces StreamReadConstraints (20 MB strings, depth 1000, 1000-digit numbers);
-          the review doc lists the large-body tests.
-        -->
-        <jackson-bom.version>2.18.11</jackson-bom.version>
-        <log4j2.version>2.25.5</log4j2.version>
-        <commons-lang3.version>3.18.0</commons-lang3.version>
-        <!-- SnakeYAML 2.4 (CVE-2022-1471) needs Liquibase 4.22+: 4.9.1 (Boot 2.7's) calls SafeConstructor(), which
-             SnakeYAML 2 removed. 4.33.0 is the last Apache-licensed line (5.x changed the license). -->
-        <snakeyaml.version>2.4</snakeyaml.version>
+        <tomcat.version>11.0.25</tomcat.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <jackson-2-bom.version>2.18.11</jackson-2-bom.version>
         <liquibase.version>4.33.0</liquibase.version>
-        <!-- spring-kafka 2.9 needs kafka-clients 3.2 or later; 3.9.2 is the newest 3.x (4.0 drops deprecated client APIs). -->
-        <spring-kafka.version>2.9.13</spring-kafka.version>
-        <kafka.version>3.9.2</kafka.version>
     </properties>
 
     <dependencies>
@@ -76,7 +59,13 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-jackson</artifactId>
+        </exclusion>
+      </exclusions>
         </dependency>
 
         <dependency>
@@ -99,40 +88,28 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        <!-- Swagger -->
-        <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-swagger2</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-
         <!--
-          MIG-323: only the UI moves, to 2.10.5: 2.9.2 bundles a Swagger UI with an XSS (CVE-2019-17495). The jar is
-          static files (swagger-ui.html and webjars/springfox-swagger-ui/), the same paths in both, reading the
-          same /v2/api-docs and /swagger-resources that springfox-swagger2 2.9.2 serves. springfox 2.10 and 3.0
-          change the Java API and its handler mappings, which SwaggerConfig works around for 2.9.2.
+          MIG-389: the API documentation is springdoc 3.0.3 (OpenAPI 3, /v3/api-docs and /swagger-ui.html), replacing
+          springfox 2.9.2 / 2.10.5, which does not run on Spring 6+ (and brought guava 20.0). Still generated only where
+          process.api-docs.enabled is true (dev) and readable only by a platform admin (SecurityConfig). Boot's Jackson 3
+          module is left out: springdoc writes with swagger-core's Jackson 2, and with Jackson 3 present Spring 7 would
+          pick it for every RestTemplate Core builds.
         -->
         <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-swagger-ui</artifactId>
-            <version>2.10.5</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-bean-validators</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-
-        <!-- Kafka: spring-kafka 2.9.13 with kafka-clients 3.9.2, as every other service (properties above). MIG-323 kept
-             Core on Boot 2.7.18's 2.8.11 and 3.1.2 until the SASL matrix (run-kafka-matrix.sh) had passed on the new
-             client; it did for the vulnerabilities review of 2026-10-13 (CVE-2023-34040 and kafka-clients' advisories). -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>3.0.3</version>
             <exclusions>
-                <!-- MIG-323: org.lz4 1.8.0 has two highs (CVE-2025-12183, CVE-2025-66566) and the project moved to
-                     at.yawk.lz4, same net.jpountz classes; 1.12.0 below has every method kafka-clients 3.9.2 calls. -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-jackson</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+            <exclusions>
                 <exclusion>
                     <groupId>org.lz4</groupId>
                     <artifactId>lz4-java</artifactId>
@@ -145,7 +122,6 @@
             <version>1.12.0</version>
             <scope>runtime</scope>
         </dependency>
-        <!-- MIG-323: kafka-clients 3.1.2's snappy-java 1.1.8.4 has two highs (CVE-2023-34455, CVE-2023-43642). -->
         <dependency>
             <groupId>org.xerial.snappy</groupId>
             <artifactId>snappy-java</artifactId>
@@ -188,8 +164,8 @@
         </dependency>
 
         <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-liquibase</artifactId>
         </dependency>
 
         <!-- Query Engine: CSV streaming (CsvExportService) and read-only SQL validation
@@ -220,17 +196,14 @@
         <dependency>
             <groupId>net.javacrumbs.shedlock</groupId>
             <artifactId>shedlock-spring</artifactId>
-            <version>4.9.3</version>
+            <version>6.3.1</version>
         </dependency>
 
         <dependency>
             <groupId>net.javacrumbs.shedlock</groupId>
             <artifactId>shedlock-provider-jdbc-template</artifactId>
-            <version>4.7.1</version>
+            <version>6.3.1</version>
         </dependency>
-
-        <!-- Apache POI 5.4.1 since MIG-323: 3.15 has a DoS (CVE-2017-12626) and its xmlbeans 2.6.0 an
-             entity-expansion critical (CVE-2021-23926); 5.4.1 brings xmlbeans 5.3.0. -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
@@ -247,14 +220,12 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <!-- MIG-323: 2.20.0; 2.7 has CVE-2024-47554 (XmlStreamReader DoS). -->
             <version>2.20.0</version>
         </dependency>
 
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <!-- MIG-323: Boot 2.7's 2.9.1, as every other service; 2.8.6 has CVE-2022-25647. -->
         </dependency>
 
         <!-- MIG-230: a pipeline definition is JSON; YAML is a view of the same definition, read and written with
@@ -296,17 +267,41 @@
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>platform-commons</artifactId>
-            <version>1.16.0</version>
+            <version>2.0.4</version>
         </dependency>
         <!-- The platform's envelope contract suite (MIG-103): the same rows every service's build runs. -->
         <dependency>
             <groupId>org.barco</groupId>
             <artifactId>platform-commons</artifactId>
-            <version>1.16.0</version>
+            <version>2.0.4</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
+      <!-- MVC, every HTTP client and the service's own JSON stay on Jackson 2, the only Jackson on the class path
+           (platform-commons Boot2CompatibleDefaults: preferred-json-mapper=jackson2). Jackson 3 answers
+           JsonNode.asText()/asInt() differently and orders properties and writes dates differently by default,
+           which would change what the API answers (MIG-389). -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-jackson2</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-jackson-test</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

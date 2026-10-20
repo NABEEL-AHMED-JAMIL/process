@@ -21,8 +21,8 @@ import process.security.TenantFilterHelper;
 import process.util.ProcessUtil;
 import process.util.FailureReference;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.util.stream.Collectors;
 import java.util.List;

@@ -103,8 +103,8 @@ class InternalRunVerificationRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.verifyCallback(null, 900L, body(77L, "w", "callback")).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.verifyCallback("wrong", 900L, body(77L, "w", "callback")).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.verifyCallback(null, 900L, body(77L, "w", "callback")).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.verifyCallback("wrong", 900L, body(77L, "w", "callback")).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.tokens, this.runs);
     }
 
@@ -167,7 +167,7 @@ class InternalRunVerificationRestApiTest {
 
     @Test
     void anUnknownVariantIsRefusedBeforeAnyTokenIsChecked() {
-        assertThat(this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "anything")).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.verifyCallback(SERVICE, 900L, body(77L, "w", "anything")).getStatusCode().value()).isEqualTo(400);
         verifyNoInteractions(this.tokens);
     }
 
@@ -179,8 +179,8 @@ class InternalRunVerificationRestApiTest {
         when(this.pipelines.countUsingPrompt(eq(6L))).thenReturn(2L);
         Map<String, Object> answer = (Map<String, Object>) this.api.countUsingPrompt(SERVICE, Collections.singletonMap("promptId", 6)).getBody();
         assertThat(answer).containsEntry("promptId", 6L).containsEntry("count", 2L);
-        assertThat(this.api.countUsingPrompt(null, Collections.singletonMap("promptId", 6)).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.countUsingPrompt(SERVICE, Collections.emptyMap()).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.countUsingPrompt(null, Collections.singletonMap("promptId", 6)).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.countUsingPrompt(SERVICE, Collections.emptyMap()).getStatusCode().value()).isEqualTo(400);
     }
 
     /** Review 2026-10-07: with PipelineUsage wired, the count is its count -- step-engine pipelines included. */
@@ -212,10 +212,10 @@ class InternalRunVerificationRestApiTest {
 
         assertThat(answer).containsEntry("tenantId", 2960L);
         assertThat((List<Object>) answer.get("users")).containsExactly(row);
-        assertThat(this.api.apiRequestUsers(null, body).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.apiRequestUsers("wrong", body).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("tenantId", 2960)).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("requestIds", Collections.emptyList())).getStatusCodeValue())
+        assertThat(this.api.apiRequestUsers(null, body).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.apiRequestUsers("wrong", body).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("tenantId", 2960)).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.api.apiRequestUsers(SERVICE, Collections.singletonMap("requestIds", Collections.emptyList())).getStatusCode().value())
             .isEqualTo(400);
     }
 
@@ -365,8 +365,8 @@ class InternalRunVerificationRestApiTest {
         RunReaders readers = mock(RunReaders.class);
         this.api.setReaders(readers);
         TenantContext.set(2960L, "TENANT_USER", 4641L, "reviewer");
-        assertThat(this.api.readable(null, 900L).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.readable("wrong", 900L).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.readable(null, 900L).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.readable("wrong", 900L).getStatusCode().value()).isEqualTo(401);
         TenantContext.clear();
         // A bearer token the filter refused leaves no caller: nobody reads the run, and RunReaders is not asked.
         assertThat(this.api.readable(SERVICE, 900L).getBody()).isEqualTo(Collections.singletonMap("readable", false));

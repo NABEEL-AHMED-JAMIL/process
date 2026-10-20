@@ -14,7 +14,7 @@ import org.springframework.kafka.core.KafkaProducerException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.concurrent.SettableListenableFuture;
+import java.util.concurrent.CompletableFuture;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -98,15 +98,15 @@ class OutboxPostgresTest {
         // The relay sends a ProducerRecord, so the event's traceId can travel as its X-Correlation-Id header (MIG-94).
         when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
             ProducerRecord<String, String> record = call.getArgument(0);
-            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
+            CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
             String key = record.key();
             if (key.equals(failOnKey)) {
-                future.setException(new IllegalStateException("broker unavailable"));
+                future.completeExceptionally(new IllegalStateException("broker unavailable"));
             } else {
                 synchronized (this.sent) {
                     this.sent.add(record.topic() + " " + key + " " + record.value());
                 }
-                future.set(null);
+                future.complete(null);
             }
             return future;
         });
@@ -183,12 +183,12 @@ class OutboxPostgresTest {
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
             ProducerRecord<String, String> record = call.getArgument(0);
-            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
+            CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
             if ("huge".equals(record.key())) {
-                future.setException(new KafkaProducerException(record, "Failed to send", new RecordTooLargeException("1500000 bytes")));
+                future.completeExceptionally(new KafkaProducerException(record, "Failed to send", new RecordTooLargeException("1500000 bytes")));
             } else {
                 this.sent.add(record.key());
-                future.set(null);
+                future.complete(null);
             }
             return future;
         });
@@ -216,8 +216,8 @@ class OutboxPostgresTest {
         this.sql.update("UPDATE platform_outbox SET attempts = 99");
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
-            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
-            future.setException(new NetworkException("broker unreachable"));
+            CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
+            future.completeExceptionally(new NetworkException("broker unreachable"));
             return future;
         });
 

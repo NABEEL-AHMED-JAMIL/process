@@ -4,21 +4,20 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import java.sql.Timestamp;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.UniqueConstraint;
-import javax.persistence.Index;
-import javax.persistence.Id;
-import javax.persistence.Column;
-import javax.persistence.GeneratedValue;
-import javax.persistence.ManyToOne;
-import javax.persistence.FetchType;
-import javax.persistence.JoinColumn;
-import javax.persistence.PrePersist;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Index;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.PrePersist;
 
 @Entity
 @Table(name = "tenant_task_type_kafka_route",
@@ -32,7 +31,7 @@ import javax.persistence.PrePersist;
 /**
  * @author Nabeel Ahmed
  * */
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 // A route always belongs to one tenant -- the column is not nullable and there is no shared
 // row to admit -- so the plain condition is the whole rule here.
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
@@ -40,15 +39,7 @@ import javax.persistence.PrePersist;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TenantTaskTypeKafkaRoute {
 
-    @GenericGenerator(
-        name = "tenantTaskTypeKafkaRouteSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "tenant_task_type_kafka_route_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "tenantTaskTypeKafkaRouteSequenceGenerator", sequenceName = "tenant_task_type_kafka_route_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "tenant_task_type_kafka_route_id")
     @GeneratedValue(generator = "tenantTaskTypeKafkaRouteSequenceGenerator")

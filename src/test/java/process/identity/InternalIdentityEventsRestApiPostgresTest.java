@@ -81,13 +81,13 @@ class InternalIdentityEventsRestApiPostgresTest {
             event("e-3", IdentityTopics.TENANT, "2901", "tenant.deleted"));
 
         ResponseEntity<?> first = this.api.events(TOKEN, body);
-        assertThat(first.getStatusCodeValue()).isEqualTo(200);
+        assertThat(first.getStatusCode().value()).isEqualTo(200);
         assertThat((Map<String, Object>) first.getBody()).containsEntry("accepted", 3).containsEntry("duplicates", 0);
         assertThat(outbox()).containsExactly("e-1 platform.identity.tenant.v1 2901", "e-2 platform.identity.user.v1 7001",
             "e-3 platform.identity.tenant.v1 2901");
 
         ResponseEntity<?> again = this.api.events(TOKEN, body);
-        assertThat(again.getStatusCodeValue()).isEqualTo(200);
+        assertThat(again.getStatusCode().value()).isEqualTo(200);
         assertThat((Map<String, Object>) again.getBody()).containsEntry("accepted", 0).containsEntry("duplicates", 3);
         assertThat(outbox()).hasSize(3);
     }
@@ -95,8 +95,8 @@ class InternalIdentityEventsRestApiPostgresTest {
     @Test
     void withoutTheServiceTokenNothingIsWritten() {
         Map<String, Object> body = batch(event("e-1", IdentityTopics.USER, "7001", "user.created"));
-        assertThat(this.api.events(null, body).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.events("wrong", body).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.events(null, body).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.events("wrong", body).getStatusCode().value()).isEqualTo(401);
         assertThat(outbox()).isEmpty();
     }
 
@@ -104,14 +104,14 @@ class InternalIdentityEventsRestApiPostgresTest {
     void anythingButTheTwoIdentityTopicsRefusesTheWholeBatch() {
         assertThat(this.api.events(TOKEN, batch(
             event("e-1", IdentityTopics.USER, "7001", "user.created"),
-            event("e-2", "platform.notification.job-status.v1", "1", "user.created"))).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.api.events(TOKEN, batch(event("e-3", IdentityTopics.USER, "7001", "tenant.deleted"))).getStatusCodeValue())
+            event("e-2", "platform.notification.job-status.v1", "1", "user.created"))).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.api.events(TOKEN, batch(event("e-3", IdentityTopics.USER, "7001", "tenant.deleted"))).getStatusCode().value())
             .as("a workspace event on the people topic").isEqualTo(400);
-        assertThat(this.api.events(TOKEN, batch(event("e-4", IdentityTopics.USER, "", "user.created"))).getStatusCodeValue())
+        assertThat(this.api.events(TOKEN, batch(event("e-4", IdentityTopics.USER, "", "user.created"))).getStatusCode().value())
             .isEqualTo(400);
-        assertThat(this.api.events(TOKEN, batch(event(null, IdentityTopics.USER, "7", "user.created"))).getStatusCodeValue())
+        assertThat(this.api.events(TOKEN, batch(event(null, IdentityTopics.USER, "7", "user.created"))).getStatusCode().value())
             .isEqualTo(400);
-        assertThat(this.api.events(TOKEN, Collections.singletonMap("events", "no")).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.events(TOKEN, Collections.singletonMap("events", "no")).getStatusCode().value()).isEqualTo(400);
         assertThat(outbox()).isEmpty();
     }
 }

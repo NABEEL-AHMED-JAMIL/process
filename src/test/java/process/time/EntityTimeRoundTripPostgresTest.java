@@ -10,10 +10,10 @@ import process.ScratchPostgres;
 import process.model.pojo.UserPageAccess;
 import process.util.BusinessTime;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.EntityManager;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Table;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.sql.Timestamp;

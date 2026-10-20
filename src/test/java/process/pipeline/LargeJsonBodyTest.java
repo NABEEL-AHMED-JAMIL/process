@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * (DefinitionCodec, JSON and YAML -- SnakeYAML 2.4). DefinitionCodec's own 256 KB cap is far below Jackson's limits, so
  * nothing is raised in configuration; only a body past Jackson's limits is refused, as an unreadable request (400).
  */
+@SuppressWarnings("removal") // Spring's Jackson 2 support / MockMvc client factory, kept on purpose (MIG-389)
 class LargeJsonBodyTest {
 
     static final ObjectMapper MVC = Jackson2ObjectMapperBuilder.json().build();

@@ -158,7 +158,7 @@ public class OpenSearchAuditLogClient {
                 String externalId = (String) entry[0];
                 Long jobQueueId = (Long) entry[1];
                 String logDetail = (String) entry[2];
-                Timestamp dateCreated = (Timestamp) entry[3];
+                Timestamp dateCreated = SqlTimes.timestamp(entry[3]);
                 body.append("{\"index\":{\"_index\":\"").append(INDEX_NAME)
                     .append("\",\"_id\":\"").append(externalId).append("\"}}\n");
                 Map<String, Object> doc = new HashMap<>();

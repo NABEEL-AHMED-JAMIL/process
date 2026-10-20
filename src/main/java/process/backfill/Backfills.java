@@ -284,7 +284,7 @@ public class Backfills {
         plan.rerun = Boolean.TRUE.equals(request.rerunCompleted);
         plan.values = RunParameters.resolve(plan.declared, request.parameters);
         if (!plan.values.ok()) {
-            throw new Refused(HttpStatus.UNPROCESSABLE_ENTITY, "invalid-parameters", "The runs' parameters do not stand: " + plan.values.sentence());
+            throw new Refused(HttpStatus.UNPROCESSABLE_CONTENT, "invalid-parameters", "The runs' parameters do not stand: " + plan.values.sentence());
         }
         plan.covered = plan.rerun ? Collections.<Instant>emptySet() : this.store.covered(plan.job.jobId, plan.periods);
         return plan;

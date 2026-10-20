@@ -57,7 +57,7 @@ public class BillingSloClient {
         }
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Service-Key", this.serviceKey);
-        String url = UriComponentsBuilder.fromHttpUrl(this.base + "/v1/slo")
+        String url = UriComponentsBuilder.fromUriString(this.base + "/v1/slo")
             .queryParam("from", from.toString()).queryParam("to", to.toString()).build().toUriString();
         Map<?, ?> body = this.http.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class).getBody();
         if (body == null || !(body.get("good") instanceof Number) || !(body.get("bad") instanceof Number)) {

@@ -107,7 +107,7 @@ public class HttpDocumentDatasets implements DocumentDatasets {
         page.name = data.path("name").asText(null);
         data.path("fields").forEach(f -> page.fields.add(f.asText()));
         data.path("tables").forEach(t -> page.tables.add(t.asText()));
-        Iterator<Map.Entry<String, JsonNode>> columns = data.path("tableColumns").fields();
+        Iterator<Map.Entry<String, JsonNode>> columns = data.path("tableColumns").properties().iterator();
         while (columns.hasNext()) {
             Map.Entry<String, JsonNode> table = columns.next();
             List<String> names = new ArrayList<>();

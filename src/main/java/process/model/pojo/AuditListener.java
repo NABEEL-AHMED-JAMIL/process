@@ -2,8 +2,8 @@ package process.model.pojo;
 
 import process.security.TenantContext;
 
-import javax.persistence.PrePersist;
-import javax.persistence.PreUpdate;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 
 /**
  * Stamps the acting user onto anything that is saved.

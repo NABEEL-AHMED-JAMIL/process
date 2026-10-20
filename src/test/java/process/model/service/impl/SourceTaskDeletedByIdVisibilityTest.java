@@ -23,7 +23,7 @@ import process.util.TaskPayloadLocationUtil;
 import process.util.UserNameResolver;
 import process.util.excel.BulkExcel;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.util.Optional;
 

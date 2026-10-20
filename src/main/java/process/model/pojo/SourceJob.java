@@ -7,27 +7,26 @@ import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.FilterDefs;
 import org.hibernate.annotations.Filters;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import process.model.enums.Execution;
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Index;
-import javax.persistence.Transient;
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.ManyToOne;
-import javax.persistence.JoinColumn;
-import javax.persistence.Enumerated;
-import javax.persistence.EnumType;
-import javax.persistence.PrePersist;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Index;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.PrePersist;
 
 @Entity
 @Table(name = "source_job", indexes = {
@@ -44,8 +43,8 @@ import javax.persistence.PrePersist;
 // jobOwnerFilter: a TENANT_USER's JPQL reads of jobs, cut to the jobs that name them (process.security.JobOwnership,
 // owner decision 2026-09-24). TenantFilterHelper turns it on beside tenantFilter, for a restricted caller only.
 @FilterDefs({
-    @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long")),
-    @FilterDef(name = "jobOwnerFilter", parameters = @ParamDef(name = "appUserId", type = "long"))
+    @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class)),
+    @FilterDef(name = "jobOwnerFilter", parameters = @ParamDef(name = "appUserId", type = Long.class))
 })
 @Filters({
     @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId"),
@@ -67,15 +66,7 @@ public class SourceJob implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @GenericGenerator(
-        name = "sourceJobSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "source_job_source_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "sourceJobSequenceGenerator", sequenceName = "source_job_source_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "job_id")
     @GeneratedValue(generator = "sourceJobSequenceGenerator")

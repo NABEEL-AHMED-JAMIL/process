@@ -8,8 +8,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import process.model.dto.ResponseDto;
 import process.identity.IdentityPort;
 import process.util.ProcessUtil;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * The server-side half of page access: refuses an API call that belongs to a page the caller's

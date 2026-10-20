@@ -61,7 +61,7 @@ class MeterVerifyRunContractTest {
 
         ResponseEntity<?> answer = this.api.verifyRun("tok", run(2600L, 6000L));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(this.json.readTree(this.body(answer)).path("status").asText()).isEqualTo("SUCCESS");
         assertThat(this.json.readTree(this.body(answer)).path("message").asText()).isEqualTo("Run verified.");
         assertThat(this.json.readTree(this.body(answer)).path("data").path("tenantId").asLong()).isEqualTo(2905L);
@@ -76,7 +76,7 @@ class MeterVerifyRunContractTest {
 
             ResponseEntity<?> answer = this.api.verifyRun("wrong", run(2600L, 6000L));
 
-            assertThat(answer.getStatusCodeValue()).as(refusal.name()).isEqualTo(401);
+            assertThat(answer.getStatusCode().value()).as(refusal.name()).isEqualTo(401);
             assertThat(this.json.readTree(this.body(answer)).path("status").asText()).isEqualTo("ERROR");
             assertThat(this.json.readTree(this.body(answer)).path("message").asText()).as(refusal.name()).isEqualTo("Unauthorized worker callback.");
             assertThat(this.json.readTree(this.body(answer)).path("data").isMissingNode() || this.json.readTree(this.body(answer)).path("data").isNull()).isTrue();
@@ -90,7 +90,7 @@ class MeterVerifyRunContractTest {
 
         ResponseEntity<?> answer = this.api.verifyRun("tok", run(2600L, 6000L));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(401);
+        assertThat(answer.getStatusCode().value()).isEqualTo(401);
         assertThat(this.json.readTree(this.body(answer)).path("message").asText()).isEqualTo("This run belongs to no workspace.");
     }
 
@@ -113,7 +113,7 @@ class MeterVerifyRunContractTest {
 
         ResponseEntity<?> answer = this.api.verifyRun("tok", run(2600L, 6000L));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(this.json.readTree(this.body(answer)).path("data").path("tenantId").asLong()).isEqualTo(2905L);
     }
 
@@ -124,7 +124,7 @@ class MeterVerifyRunContractTest {
 
         ResponseEntity<?> answer = this.api.verifyRun("tok", run(2600L, 6000L));
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(401);
+        assertThat(answer.getStatusCode().value()).isEqualTo(401);
         assertThat(this.json.readTree(this.body(answer)).path("message").asText()).isEqualTo("This run belongs to no workspace.");
     }
 }

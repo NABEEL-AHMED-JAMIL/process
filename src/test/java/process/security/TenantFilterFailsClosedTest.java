@@ -19,8 +19,8 @@ import process.api.SourceTaskRestApi;
 import process.model.repository.SourceTaskRepository;
 import process.model.service.impl.SourceTaskServiceImpl;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

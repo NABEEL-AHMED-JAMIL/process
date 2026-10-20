@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import process.config.RegexNativeQueries;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -59,7 +60,7 @@ import process.util.TaskPayloadLocationUtil;
 import process.util.UserNameResolver;
 import process.util.excel.BulkExcel;
 
-import javax.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
@@ -88,6 +89,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * Opt-in: needs NOTIFICATIONS_TEST_DB_URL (see ScratchEtlJob).
  */
+@SuppressWarnings("removal") // Spring's Jackson 2 support / MockMvc client factory, kept on purpose (MIG-389)
 class OpenInViewOffWebPostgresTest {
 
     private static final long TENANT = 2905L;
@@ -106,7 +108,7 @@ class OpenInViewOffWebPostgresTest {
 
     @Configuration
     @EnableTransactionManagement(proxyTargetClass = true)
-    @EnableJpaRepositories(basePackages = "process.model.repository")
+    @EnableJpaRepositories(basePackages = "process.model.repository", queryEnhancerSelector = RegexNativeQueries.class)
     @Import({SourceJobServiceImpl.class, SourceTaskServiceImpl.class, PipelineServiceImpl.class, QueryService.class,
         SourceJobRestApi.class, SourceTaskRestApi.class, PipelineRestApi.class, MeterRestApi.class, LazyEntityProbe.class})
     static class Slice {
@@ -126,8 +128,9 @@ class OpenInViewOffWebPostgresTest {
             properties.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
             properties.put("hibernate.enable_lazy_load_no_trans", "false");
             properties.put("hibernate.hbm2ddl.auto", "none");
-            properties.put("hibernate.physical_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy");
-            properties.put("hibernate.implicit_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy");
+            properties.put("hibernate.query.native.prefer_jdbc_datetime_types", "true");
+            properties.put("hibernate.physical_naming_strategy", "org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl");
+            properties.put("hibernate.implicit_naming_strategy", "org.springframework.boot.hibernate.SpringImplicitNamingStrategy");
             factory.setJpaPropertyMap(properties);
             return factory;
         }

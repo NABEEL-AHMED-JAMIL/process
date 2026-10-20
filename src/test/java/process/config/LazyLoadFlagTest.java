@@ -7,9 +7,9 @@ import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
+import org.springframework.boot.transaction.autoconfigure.TransactionAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.orm.jpa.support.OpenEntityManagerInViewInterceptor;
 
@@ -89,7 +89,7 @@ class LazyLoadFlagTest {
 
     /** Boots Boot's JPA and MVC auto-configuration over a DataSource nobody connects to; returns the WARN lines. */
     private List<String> boot(String openInView, boolean expectInterceptor) {
-        Logger logger = (Logger) LoggerFactory.getLogger("org.springframework.boot.autoconfigure.orm.jpa");
+        Logger logger = (Logger) LoggerFactory.getLogger("org.springframework.boot.jpa.autoconfigure");
         Level before = logger.getLevel();
         boolean additive = logger.isAdditive();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -104,7 +104,11 @@ class LazyLoadFlagTest {
                 .withBean(DataSource.class, () -> mock(DataSource.class))
                 .withPropertyValues(
                     "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect",
-                    "spring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false");
+                    "spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect",
+                    // Hibernate 7 (MIG-389) boots without JDBC metadata only when it is also told the database it talks to.
+                    "spring.jpa.properties.jakarta.persistence.database-product-name=PostgreSQL",
+                    "spring.jpa.properties.jakarta.persistence.database-major-version=16",
+                    "spring.jpa.properties.hibernate.boot.allow_jdbc_metadata_access=false");
             if (openInView != null) {
                 runner = runner.withPropertyValues(openInView);
             }

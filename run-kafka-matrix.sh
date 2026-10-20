@@ -16,6 +16,8 @@
 # a newer JVM fails every SASL case on something that cannot happen in production.
 #
 # Author: Nabeel Ahmed
+# KafkaSecurityMatrixIT reads kafka-it/secrets and kafka-it/.env relative to the project: kafka-it is mounted there,
+# or every case is skipped and the run still says BUILD SUCCESS with 0 tests (MIG-389).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -33,6 +35,7 @@ exec docker run --rm \
   --network "${NETWORK}" \
   --add-host host.docker.internal:host-gateway \
   -v "${PWD}":/w -v "${HOME}/.m2":/root/.m2 -w /w \
+  -v "${PWD}/../kafka-it":/w/kafka-it:ro \
   maven:3.9-eclipse-temurin-17 \
   sh -c '
     # The repository pins the build to a JDK 17 at a macOS path, which does not exist in here.

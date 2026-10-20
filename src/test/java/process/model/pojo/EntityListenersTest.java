@@ -2,8 +2,8 @@ package process.model.pojo;
 
 import org.junit.jupiter.api.Test;
 
-import javax.persistence.Entity;
-import javax.persistence.EntityListeners;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.nio.file.Files;

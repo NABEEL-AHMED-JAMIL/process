@@ -27,7 +27,7 @@ import process.util.BusinessTime;
 import process.util.OpenSearchAuditLogClient;
 import process.util.UserNameResolver;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.time.DayOfWeek;
 import java.time.LocalDate;

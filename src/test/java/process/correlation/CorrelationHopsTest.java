@@ -25,7 +25,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.kafka.support.SendResult;
-import org.springframework.util.concurrent.SettableListenableFuture;
+import java.util.concurrent.CompletableFuture;
 import process.ai.HttpAi;
 import process.config.KafkaConnectionResolver;
 import process.model.pojo.KafkaConnectionProfile;
@@ -147,9 +147,9 @@ class CorrelationHopsTest {
         AtomicReference<ProducerRecord<String, String>> sent = new AtomicReference<>();
         when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
             sent.set(call.getArgument(0));
-            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
-            future.set(new SendResult<>(call.getArgument(0),
-                new RecordMetadata(new TopicPartition("analytics.query.completed", 0), 0L, 0L, 0L, 0L, 0, 0)));
+            CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
+            future.complete(new SendResult<>(call.getArgument(0),
+                new RecordMetadata(new TopicPartition("analytics.query.completed", 0), 0L, 0, 0L, 0, 0)));
             return future;
         });
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);

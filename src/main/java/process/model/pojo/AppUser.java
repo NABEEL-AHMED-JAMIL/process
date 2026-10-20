@@ -5,25 +5,24 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.ParamDef;
-import org.hibernate.annotations.Parameter;
 import process.model.enums.Status;
 import process.model.enums.UserRole;
 import java.sql.Timestamp;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Index;
-import javax.persistence.Transient;
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.ManyToOne;
-import javax.persistence.FetchType;
-import javax.persistence.JoinColumn;
-import javax.persistence.Enumerated;
-import javax.persistence.EnumType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Index;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 
 @Entity
 @Table(name = "app_user", indexes = {
@@ -36,7 +35,7 @@ import javax.persistence.EnumType;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @EntityListeners(AuditListener.class)
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 // MIG-13: a person belongs to exactly one tenant and a platform admin's row to none, so a plain
 // equality -- a tenant caller never sees a platform row through a filtered query. The reads that
 // must cross tenants (sign-in, "is this name taken", created-by names, the internal user directory)
@@ -56,15 +55,7 @@ public class AppUser implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @GenericGenerator(
-        name = "appUserSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "app_user_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "appUserSequenceGenerator", sequenceName = "app_user_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "app_user_id")
     @GeneratedValue(generator = "appUserSequenceGenerator")

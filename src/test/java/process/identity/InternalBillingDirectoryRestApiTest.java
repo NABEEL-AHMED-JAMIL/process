@@ -45,11 +45,11 @@ class InternalBillingDirectoryRestApiTest {
 
     @Test
     void withoutTheServiceTokenNothingIsAnswered() {
-        assertThat(this.api.usageFacts(null, 2905L).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.usageFacts("wrong", 2905L).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.usageFacts(" ", 2905L).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.runs(null, body(2905L, 8201L)).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.runs("wrong", body(2905L, 8201L)).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.usageFacts(null, 2905L).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.usageFacts("wrong", 2905L).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.usageFacts(" ", 2905L).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.runs(null, body(2905L, 8201L)).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.runs("wrong", body(2905L, 8201L)).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.tenants, this.users, this.taskTypes, this.runs);
     }
 
@@ -57,8 +57,8 @@ class InternalBillingDirectoryRestApiTest {
     void anUnsetTokenAdmitsNobody() {
         InternalBillingDirectoryRestApi unset = new InternalBillingDirectoryRestApi(TestIdentity.over(this.users, this.tenants), this.taskTypes,
             this.runs, this.definitions, " ");
-        assertThat(unset.usageFacts("", 2905L).getStatusCodeValue()).isEqualTo(401);
-        assertThat(unset.usageFacts(" ", 2905L).getStatusCodeValue()).isEqualTo(401);
+        assertThat(unset.usageFacts("", 2905L).getStatusCode().value()).isEqualTo(401);
+        assertThat(unset.usageFacts(" ", 2905L).getStatusCode().value()).isEqualTo(401);
     }
 
     @Test
@@ -148,15 +148,15 @@ class InternalBillingDirectoryRestApiTest {
 
     @Test
     void runsNeedAWorkspaceAndAtMostTenThousandIds() {
-        assertThat(this.api.runs(TOKEN, null).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.api.runs(TOKEN, body(null, 1L)).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.api.runs(TOKEN, body(0L, 1L)).getStatusCodeValue()).isEqualTo(400);
+        assertThat(this.api.runs(TOKEN, null).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.api.runs(TOKEN, body(null, 1L)).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.api.runs(TOKEN, body(0L, 1L)).getStatusCode().value()).isEqualTo(400);
         Long[] many = new Long[InternalBillingDirectoryRestApi.MAX_RUN_IDS + 1];
         for (int i = 0; i < many.length; i++) {
             many[i] = i + 1L;
         }
-        assertThat(this.api.runs(TOKEN, body(2960L, many)).getStatusCodeValue()).isEqualTo(400);
-        assertThat(this.api.runs(TOKEN, body(2960L)).getStatusCodeValue()).isEqualTo(200);
+        assertThat(this.api.runs(TOKEN, body(2960L, many)).getStatusCode().value()).isEqualTo(400);
+        assertThat(this.api.runs(TOKEN, body(2960L)).getStatusCode().value()).isEqualTo(200);
         verifyNoInteractions(this.runs);
     }
 }

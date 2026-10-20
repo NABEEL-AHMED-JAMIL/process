@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
+import process.config.RegexNativeQueries;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -24,8 +25,8 @@ import process.model.pojo.Tenant;
 import process.model.pojo.TenantTaskTypeKafkaRoute;
 import process.model.repository.SourceTaskRepository;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -85,13 +86,15 @@ class LazyLoadOutsideTransactionPostgresTest {
         Map<String, Object> properties = new HashMap<>();
         properties.put("hibernate.enable_lazy_load_no_trans", "false");
         properties.put("hibernate.hbm2ddl.auto", "none");
-        properties.put("hibernate.physical_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy");
-        properties.put("hibernate.implicit_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy");
+        properties.put("hibernate.query.native.prefer_jdbc_datetime_types", "true");
+        properties.put("hibernate.physical_naming_strategy", "org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl");
+        properties.put("hibernate.implicit_naming_strategy", "org.springframework.boot.hibernate.SpringImplicitNamingStrategy");
         factoryBean.setJpaPropertyMap(properties);
         factoryBean.afterPropertiesSet();
         EntityManagerFactory factory = factoryBean.getObject();
         EntityManager shared = SharedEntityManagerCreator.createSharedEntityManager(factory);
         JpaRepositoryFactory repositories = new JpaRepositoryFactory(shared);
+        repositories.setQueryEnhancerSelector(new RegexNativeQueries());
         tasks = repositories.getRepository(SourceTaskRepository.class);
         detached = shared;
     }

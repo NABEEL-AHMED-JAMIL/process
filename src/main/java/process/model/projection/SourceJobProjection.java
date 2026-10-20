@@ -2,7 +2,7 @@ package process.model.projection;
 
 import process.model.enums.JobStatus;
 import process.model.enums.Status;
-import java.sql.Timestamp;
+import java.time.Instant;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -20,7 +20,8 @@ public interface SourceJobProjection {
     JobStatus getJobRunningStatus();
 
     /** The instant; BusinessTime.wallClockOf gives what the event carries. */
-    Timestamp getLastJobRun();
+    /** Hibernate 6+ answers the timestamptz column as an Instant (MIG-389); the same instant Hibernate 5's Timestamp held. */
+    Instant getLastJobRun();
 
     String getNextRunAt();
 

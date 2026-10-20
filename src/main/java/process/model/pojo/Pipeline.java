@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
-import org.hibernate.annotations.Parameter;
 import org.hibernate.annotations.ParamDef;
 import process.model.enums.Status;
 
@@ -14,19 +12,20 @@ import process.util.BusinessTime;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Transient;
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Enumerated;
-import javax.persistence.EnumType;
-import javax.persistence.OneToMany;
-import javax.persistence.CascadeType;
-import javax.persistence.FetchType;
-import javax.persistence.OrderBy;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.OrderBy;
 
 /**
  * A pipeline a task can run: its public id (what the worker routes on), the topic it publishes
@@ -41,7 +40,7 @@ import javax.persistence.OrderBy;
  */
 @Entity
 @Table(name = "pipeline")
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 // Declared for consistency with every other tenant-scoped entity, but currently inert:
 // PipelineServiceImpl has no EntityManager/TenantFilterHelper and never enables this filter --
 // the actual rule lives in PipelineRepository's own @Query methods (findVisibleToTenant,
@@ -59,14 +58,7 @@ public class Pipeline implements Audited {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @GenericGenerator(
-        name = "pipelineSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "pipeline_source_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        })
+    @SequenceGenerator(name = "pipelineSequenceGenerator", sequenceName = "pipeline_source_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @GeneratedValue(generator = "pipelineSequenceGenerator")
     @Column(name = "pipeline_key")

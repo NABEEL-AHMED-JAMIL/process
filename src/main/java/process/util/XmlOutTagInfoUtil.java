@@ -9,7 +9,7 @@ import org.w3c.dom.Element;
 import process.model.dto.ConfigurationMakerRequest;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;

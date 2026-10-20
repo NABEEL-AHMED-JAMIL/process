@@ -239,7 +239,7 @@ public class RunIntake {
     static byte[] fileOf(PipelineCatalogue.Entry pipeline, Start start, OffsetDateTime received) {
         Map<String, Object> file = new LinkedHashMap<>();
         if (start.record != null && start.record.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> fields = start.record.fields();
+            Iterator<Map.Entry<String, JsonNode>> fields = start.record.properties().iterator();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
                 file.put(field.getKey(), field.getValue());

@@ -24,6 +24,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -203,7 +204,7 @@ class StalledRunSweepPostgresTest {
         Duration atLeast = shedLockDuration(annotation.lockAtLeastFor());
         assertThat(atMost).isEqualTo(Duration.ofMinutes(5));
         assertThat(atLeast).isEqualTo(Duration.ofSeconds(30));
-        LockConfiguration config = new LockConfiguration(annotation.name(), atMost, atLeast);
+        LockConfiguration config = new LockConfiguration(Instant.now(), annotation.name(), atMost, atLeast);
 
         Optional<SimpleLock> first = instance().lock(config);
         assertThat(first).as("the first instance takes the sweep").isPresent();

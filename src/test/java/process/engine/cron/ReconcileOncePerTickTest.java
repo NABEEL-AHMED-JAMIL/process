@@ -4,7 +4,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.support.CronSequenceGenerator;
+import process.util.LegacyCronSequence;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -67,7 +67,7 @@ class ReconcileOncePerTickTest {
     private static List<Long> firings(Scheduled scheduled, long bootMillis, long skewMillis, long horizonMillis) {
         List<Long> at = new ArrayList<>();
         if (!scheduled.cron().isEmpty()) {
-            CronSequenceGenerator cron = new CronSequenceGenerator(defaultOf(scheduled.cron()), TimeZone.getTimeZone("UTC"));
+            LegacyCronSequence cron = new LegacyCronSequence(defaultOf(scheduled.cron()), TimeZone.getTimeZone("UTC"));
             // The replica reads its own clock, which is the true time plus its skew.
             Date next = cron.next(new Date(bootMillis + skewMillis));
             while (next.getTime() - skewMillis < horizonMillis) {
@@ -117,7 +117,7 @@ class ReconcileOncePerTickTest {
     @Test
     void productionTicksEveryFifteenMinutesAsBefore() throws Exception {
         Scheduled scheduled = sweep().getAnnotation(Scheduled.class);
-        CronSequenceGenerator cron = new CronSequenceGenerator(defaultOf(scheduled.cron()), TimeZone.getTimeZone("UTC"));
+        LegacyCronSequence cron = new LegacyCronSequence(defaultOf(scheduled.cron()), TimeZone.getTimeZone("UTC"));
         Date first = cron.next(new Date(0));
         Date second = cron.next(first);
         assertThat(Duration.ofMillis(second.getTime() - first.getTime())).isEqualTo(PROD_TICK);

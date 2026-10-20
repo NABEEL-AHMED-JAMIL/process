@@ -114,7 +114,7 @@ class RunOutputSchemaPostgresTest {
             assertThat(tenants).doesNotContain(B);
             assertThatThrownBy(() -> connection.createStatement().execute("INSERT INTO run_output (step_execution_id, tenant_id, kind, "
                 + "name, format, bucket_alias, object_key) VALUES (" + stepOfB + ", " + B + ", 'bucket', 'c.csv', 'csv', 'x', 'c.csv')"))
-                .hasMessageContaining("row-level security");
+                .hasStackTraceContaining("row-level security");
             assertThat(connection.createStatement().executeUpdate("DELETE FROM run_output WHERE tenant_id = " + B))
                 .as("B's manifest is not A's to remove").isZero();
         }

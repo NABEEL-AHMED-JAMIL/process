@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import process.ScratchPostgres;
 
+import java.time.Instant;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -43,14 +44,14 @@ class ShedLockInstantPostgresTest {
     void aLockHeldForTenMinutesEndsTenMinutesFromNow() {
         JdbcTemplateLockProvider provider = new JdbcTemplateLockProvider(
             JdbcTemplateLockProvider.Configuration.builder().withJdbcTemplate(db.jdbc()).build());
-        Optional<SimpleLock> lock = provider.lock(new LockConfiguration("v100-instant", Duration.ofMinutes(10), Duration.ZERO));
+        Optional<SimpleLock> lock = provider.lock(new LockConfiguration(Instant.now(), "v100-instant", Duration.ofMinutes(10), Duration.ZERO));
         assertThat(lock).isPresent();
         Double minutes = db.jdbc().queryForObject("SELECT extract(epoch FROM (lock_until - now())) / 60 FROM shedlock WHERE name = 'v100-instant'",
             Double.class);
         assertThat(minutes).isBetween(9.0, 11.0);
         // A second taker sees it held, and once released it is free again.
-        assertThat(provider.lock(new LockConfiguration("v100-instant", Duration.ofMinutes(10), Duration.ZERO))).isEmpty();
+        assertThat(provider.lock(new LockConfiguration(Instant.now(), "v100-instant", Duration.ofMinutes(10), Duration.ZERO))).isEmpty();
         lock.get().unlock();
-        assertThat(provider.lock(new LockConfiguration("v100-instant", Duration.ofMinutes(10), Duration.ZERO))).isPresent();
+        assertThat(provider.lock(new LockConfiguration(Instant.now(), "v100-instant", Duration.ofMinutes(10), Duration.ZERO))).isPresent();
     }
 }

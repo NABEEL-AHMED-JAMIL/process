@@ -133,8 +133,8 @@ class TaskRegistryControlsPostgresTest {
         assertThat(store.audits(A, null, 10)).extracting(a -> a.taskCode + " " + a.action + " " + a.actorRole).containsExactly("dedupe block PLATFORM_ADMIN");
         assertThat(store.audits(B, null, 10)).isEmpty();
         assertThat(store.unblock(B, "pivot")).as("A cannot lift B's block").isFalse();
-        assertThatThrownBy(() -> app.update("UPDATE task_registry_audit SET note = 'x'")).hasMessageContaining("permission denied");
-        assertThatThrownBy(() -> app.update("DELETE FROM task_registry_audit")).hasMessageContaining("permission denied");
+        assertThatThrownBy(() -> app.update("UPDATE task_registry_audit SET note = 'x'")).hasStackTraceContaining("permission denied");
+        assertThatThrownBy(() -> app.update("DELETE FROM task_registry_audit")).hasStackTraceContaining("permission denied");
         TenantContext.clear();
 
         assertThat(login.queryForObject("SELECT count(*) FROM task_registry_block WHERE tenant_id = ?", Integer.class, B)).isEqualTo(1);

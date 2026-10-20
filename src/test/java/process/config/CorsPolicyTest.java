@@ -26,8 +26,8 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import process.identity.IdentityPort;
 
-import javax.servlet.Filter;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;

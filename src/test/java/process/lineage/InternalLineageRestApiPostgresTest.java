@@ -77,7 +77,7 @@ class InternalLineageRestApiPostgresTest {
     void aCompletedRunWithWhatItReadAndWhatItWrote() {
         Map<String, Object> ask = new HashMap<>();
         ask.put("afterRunId", 88710000L);
-        assertThat(api.runs("wrong", ask).getStatusCodeValue()).isEqualTo(401);
+        assertThat(api.runs("wrong", ask).getStatusCode().value()).isEqualTo(401);
         List<Map<String, Object>> runs = (List<Map<String, Object>>) api.runs("t0k", ask).getBody();
         assertThat(runs).extracting(r -> r.get("runId")).containsExactly(88710001L, 88720001L);
 

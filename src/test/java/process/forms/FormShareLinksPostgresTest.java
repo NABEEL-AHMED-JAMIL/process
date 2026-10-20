@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -101,7 +100,7 @@ class FormShareLinksPostgresTest {
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(this.redis.opsForValue()).thenReturn(values);
         when(values.increment(anyString())).thenAnswer(call -> this.counters.merge(call.getArgument(0), 1L, Long::sum));
-        when(values.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class)))
+        when(values.setIfAbsent(anyString(), anyString(), any(Duration.class)))
             .thenAnswer(call -> this.counters.putIfAbsent(call.getArgument(0), 1L) == null);
         this.forms = this.publicForms(new PublicForms.Limits());
         TenantContext.clear();

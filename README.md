@@ -41,7 +41,7 @@ Concurrency comes from Spring's own scheduling pool, sized by `spring.task.sched
 
 | | |
 |---|---|
-| **Java 17 / Spring Boot 2.7.18** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204) |
+| **Java 17 / Spring Boot 4.1.1** | Core engine. Java 17 bytecode, JDK 17 runtime (MIG-204); Boot 4.1.1 since MIG-389 (2026-10-20) |
 | **Apache Kafka** (`cp-kafka` 7.5.0 + ZooKeeper) | Messaging and stream processing |
 | **PostgreSQL 15** | Required, not optional. Schema managed by **Liquibase** (`src/main/resources/db/changelog/`): the V50.0 baseline, then V51.0 → V209.0 as of 2026-10-12 (V1–V49 are kept under `archive/` and no longer run). Row-level security on every tenant table (V181, below) |
 | **Redis** | Caching, token revocations shared with Identity, locks and one-time secrets |
@@ -82,7 +82,7 @@ docker-compose down
 | | URL |
 |---|---|
 | API | `http://localhost:9098/api/v1` |
-| Swagger UI | `http://localhost:9098/api/v1/swagger-ui.html` (a platform administrator only) |
+| Swagger UI | `http://localhost:9098/api/v1/swagger-ui.html`, OpenAPI 3 at `/api/v1/v3/api-docs` (springdoc; a platform administrator only, dev only) |
 | Health | `http://localhost:9098/api/v1/actuator/health` |
 
 Core listens on 9098 inside its container. Under etl-platform (and this compose file) the host's 9098 is the API gateway's, and Core itself is on `127.0.0.1:9099`.
@@ -431,3 +431,12 @@ so the first pass after the mute tells the ones still open. The rules list adds 
 ## Note on the wider documentation
 
 Eight further markdown files exist under `ext-detail/md/` (seven) and `docs/design/` (one) that are not linked from here and have not been verified. Treat them as unknown. The superseded content of this README — the bootstrap SQL and the actuator endpoint dump — is preserved in [`../.ai/old-scope/`](../.ai/old-scope/).
+
+## Platform versions
+
+Spring Boot 4.1.1 on Java 17 (MIG-389, 2026-10-20): Spring Framework 7.0.9, Spring Security 7.1.1, Tomcat 11.0.25
+(overriding Boot's 11.0.24), platform-commons 2.0.4, Liquibase 4.33.0 (pinned), Hibernate 7.4.5, kafka-clients 4.2.1 with spring-kafka 4.1.1 (SASL matrix: KafkaSecurityMatrixIT 17 of 17), springdoc 3.0.3 in place of springfox. Hibernate 5 compatibility kept where it showed: native queries through Spring Data's regex enhancer (RegexNativeQueries; JSqlParser 4.6 stays for QueryValidator), timestamptz cells read as before (SqlTimes; the two projections answer Instant), Spring 5.3's cron stepping kept as LegacyCronSequence. Request paths match with PathPatternParser (the AntPathMatcher setting was springfox's). JSON is Jackson 2 (2.18.11, as on Boot 2.7) only: Boot's Jackson 3 starter is
+excluded and MVC prefers Jackson 2 (platform-commons Boot2CompatibleDefaults), so every answer keeps its Boot 2.7 shape.
+The image runs Boot 4's launcher (`org.springframework.boot.loader.launch.JarLauncher`, layers extracted with
+`-Djarmode=tools`). Tests and builds on the host fork javac (`maven.compiler.fork`): the JDK 25 that Maven runs on crashes
+in-process on Boot 4's class path.

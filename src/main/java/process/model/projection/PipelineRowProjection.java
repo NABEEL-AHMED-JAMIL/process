@@ -1,6 +1,6 @@
 package process.model.projection;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 
 /**
  * One pipeline as the list screens read it: the row's own columns plus how many fields it
@@ -24,8 +24,11 @@ public interface PipelineRowProjection {
 
     String getStatus();
 
-    /** The instant; PipelineRowDto carries its Chicago wall-clock. */
-    Timestamp getDateCreated();
+    /**
+     * The instant; PipelineRowDto carries its Chicago wall-clock. Hibernate 6+ answers the timestamptz column as an
+     * Instant (MIG-389), the same instant Hibernate 5's Timestamp held.
+     */
+    Instant getDateCreated();
 
     Long getCreatedBy();
 

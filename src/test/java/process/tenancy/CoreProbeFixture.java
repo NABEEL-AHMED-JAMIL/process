@@ -853,7 +853,7 @@ final class CoreProbeFixture implements AutoCloseable {
             // A streamed download (Wave 4): what the caller would receive.
             ByteArrayOutputStream streamed = new ByteArrayOutputStream();
             ((StreamingResponseBody) body).writeTo(streamed);
-            return "HTTP " + answer.getStatusCodeValue() + " " + answer.getHeaders().getFirst("Content-Disposition") + "\n"
+            return "HTTP " + answer.getStatusCode().value() + " " + answer.getHeaders().getFirst("Content-Disposition") + "\n"
                 + new String(streamed.toByteArray(), StandardCharsets.UTF_8);
         }
         return JSON.writeValueAsString(body);

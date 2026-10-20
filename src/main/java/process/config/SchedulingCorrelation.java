@@ -2,8 +2,8 @@ package process.config;
 
 import org.barco.platform.correlation.CorrelatedTaskScheduler;
 import org.barco.platform.correlation.CorrelationTaskDecorator;
-import org.springframework.boot.task.TaskExecutorBuilder;
-import org.springframework.boot.task.TaskSchedulerBuilder;
+import org.springframework.boot.task.ThreadPoolTaskExecutorBuilder;
+import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -27,7 +27,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class SchedulingCorrelation {
 
     @Bean
-    public ThreadPoolTaskScheduler taskScheduler(TaskSchedulerBuilder builder) {
+    public ThreadPoolTaskScheduler taskScheduler(ThreadPoolTaskSchedulerBuilder builder) {
         return builder.configure(new CorrelatedTaskScheduler());
     }
 
@@ -44,7 +44,7 @@ public class SchedulingCorrelation {
      */
     @Lazy
     @Bean(name = {"applicationTaskExecutor", "taskExecutor"})
-    public ThreadPoolTaskExecutor applicationTaskExecutor(TaskExecutorBuilder builder) {
+    public ThreadPoolTaskExecutor applicationTaskExecutor(ThreadPoolTaskExecutorBuilder builder) {
         return builder.build();
     }
 }

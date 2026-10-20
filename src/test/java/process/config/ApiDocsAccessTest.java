@@ -20,7 +20,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import process.identity.IdentityPort;
 
-import javax.servlet.Filter;
+import jakarta.servlet.Filter;
 import java.util.Optional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,8 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApiDocsAccessTest {
 
     private static final String[] DOCS = {
-        "/v2/api-docs", "/swagger-ui.html", "/swagger-resources", "/swagger-resources/configuration/ui",
-        "/swagger-ui/index.html", "/webjars/springfox-swagger-ui/springfox.js"
+        "/v3/api-docs", "/v3/api-docs/process", "/v3/api-docs/swagger-config", "/swagger-ui.html", "/swagger-ui/index.html"
     };
 
     @Configuration
@@ -71,8 +70,8 @@ class ApiDocsAccessTest {
 
     @RestController
     static class Docs {
-        @GetMapping({"/v2/api-docs", "/swagger-ui.html", "/swagger-resources", "/swagger-resources/configuration/ui",
-            "/swagger-ui/index.html", "/webjars/springfox-swagger-ui/springfox.js"})
+        @GetMapping({"/v3/api-docs", "/v3/api-docs/process", "/v3/api-docs/swagger-config", "/swagger-ui.html",
+            "/swagger-ui/index.html"})
         String docs() {
             return "{}";
         }

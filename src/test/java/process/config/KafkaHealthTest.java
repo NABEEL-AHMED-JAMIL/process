@@ -49,6 +49,9 @@ import static org.mockito.Mockito.when;
  * Kafka &amp; Topics' live health (UI review U2): one look at a profile's brokers reports the caller's topics, the groups
  * reading them and their lag -- and nothing of any other topic on a shared broker.
  */
+// kafka-clients 4.2 marks the consumer-group model KafkaHealth reads (ConsumerGroupListing, ConsumerGroupDescription's
+// state constructor) for removal; the test builds what the 3.x brokers still answer (MIG-389).
+@SuppressWarnings("removal")
 class KafkaHealthTest {
 
     private static final Node BROKER = new Node(1, "kafka", 9092);
@@ -89,7 +92,7 @@ class KafkaHealthTest {
         described.put("missing", failed(new UnknownTopicOrPartitionException("no such topic")));
         described.put("unused", done(new TopicDescription("unused", false, Collections.singletonList(
             new TopicPartitionInfo(0, BROKER, Collections.singletonList(BROKER), Collections.singletonList(BROKER))))));
-        when(topics.values()).thenReturn(described);
+        when(topics.topicNameValues()).thenReturn(described);
         when(admin.describeTopics(anyCollection())).thenReturn(topics);
 
         when(admin.listOffsets(anyMap())).thenAnswer(call -> {

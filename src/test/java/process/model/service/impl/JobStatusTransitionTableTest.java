@@ -21,7 +21,7 @@ import process.model.repository.JobQueueRepository;
 import process.notifications.JobMail;
 import process.notifications.TestNotifications;
 
-import javax.persistence.Converter;
+import jakarta.persistence.Converter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;

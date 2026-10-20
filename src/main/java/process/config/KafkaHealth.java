@@ -106,6 +106,9 @@ public class KafkaHealth {
         return report;
     }
 
+    // Kafka 4.2 marks listConsumerGroups (and ConsumerGroupListing) for removal in favour of listGroups; it answers the
+    // same against the platform's 3.x brokers, so it stays until the brokers move (MIG-389).
+    @SuppressWarnings("removal")
     private Map<String, Object> measure(KafkaConnectionProfile profile, Set<String> allTopics) {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("checkedAt", Instant.ofEpochMilli(this.clock.millis()).toString());
@@ -136,8 +139,7 @@ public class KafkaHealth {
             Map<String, TopicDescription> described = new LinkedHashMap<>();
             Set<String> missing = new LinkedHashSet<>();
             if (!topics.isEmpty()) {
-                @SuppressWarnings("deprecation")
-                Map<String, KafkaFuture<TopicDescription>> futures = admin.describeTopics(topics).values();
+                Map<String, KafkaFuture<TopicDescription>> futures = admin.describeTopics(topics).topicNameValues();
                 for (String t : topics) {
                     try {
                         described.put(t, await(futures.get(t), deadline));
@@ -229,7 +231,7 @@ public class KafkaHealth {
                 if (read.isEmpty()) {
                     continue;
                 }
-                String state = d == null ? "Unknown" : stateName(d.state().name());
+                String state = d == null ? "Unknown" : stateName(d.groupState().name());
                 long lag = 0;
                 for (Long l : lagByTopic.values()) {
                     lag += l;

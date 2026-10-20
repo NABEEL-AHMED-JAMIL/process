@@ -402,6 +402,9 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
      * in the log for whoever runs the server.
      */
     /** The consumer groups with a live member assigned a partition of this topic; empty when none. */
+    // Kafka 4.2 marks listConsumerGroups (and ConsumerGroupListing) for removal in favour of listGroups; it answers the
+    // same against the platform's 3.x brokers, so it stays until the brokers move (MIG-389).
+    @SuppressWarnings("removal")
     private List<String> consumerGroupsOf(AdminClient adminClient, String topicName) {
         List<String> reading = new ArrayList<>();
         try {
@@ -484,7 +487,7 @@ public class KafkaConnectionProfileServiceImpl implements KafkaConnectionProfile
         }
         try (AdminClient adminClient = AdminClient.create(adminProps)) {
             DescribeTopicsResult result = adminClient.describeTopics(Collections.singleton(topicName));
-            TopicDescription description = result.values().get(topicName).get(10, TimeUnit.SECONDS);
+            TopicDescription description = result.topicNameValues().get(topicName).get(10, TimeUnit.SECONDS);
             // Reachable is not the same as consumed. A run dispatched to a topic no worker reads
             // sits at Start until the stall sweep closes it hours later, and nothing on the way
             // says why; two of today's runs went that way. The groups with a member assigned a

@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionOperations;
-import org.springframework.util.concurrent.SettableListenableFuture;
+import java.util.concurrent.CompletableFuture;
 import process.config.KafkaConnectionResolver;
 import process.config.KafkaTemplateProvider;
 import process.model.pojo.KafkaConnectionProfile;
@@ -47,9 +47,9 @@ class DispatchRelayCorrelationTest {
         AtomicReference<String> atSend = new AtomicReference<>();
         when(kafka.send(any(ProducerRecord.class))).thenAnswer(call -> {
             atSend.set(CorrelationId.current());
-            SettableListenableFuture<SendResult<String, String>> future = new SettableListenableFuture<>();
-            future.set(new SendResult<>(call.getArgument(0),
-                new RecordMetadata(new TopicPartition("etl.jobs", 0), 41L, 0L, 0L, 0L, 0, 0)));
+            CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
+            future.complete(new SendResult<>(call.getArgument(0),
+                new RecordMetadata(new TopicPartition("etl.jobs", 0), 41L, 0, 0L, 0, 0)));
             return future;
         });
         KafkaTemplateProvider templates = mock(KafkaTemplateProvider.class);

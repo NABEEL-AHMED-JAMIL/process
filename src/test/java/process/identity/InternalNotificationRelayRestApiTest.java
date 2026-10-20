@@ -41,9 +41,9 @@ class InternalNotificationRelayRestApiTest {
     @Test
     void withoutTheServiceTokenNothingIsRelayed() {
         Map<String, Object> body = Collections.singletonMap("appUserId", 7);
-        assertThat(this.api.notice(null, body).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.mail("wrong", body).getStatusCodeValue()).isEqualTo(401);
-        assertThat(this.api.forgetRecipient("", body).getStatusCodeValue()).isEqualTo(401);
+        assertThat(this.api.notice(null, body).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.mail("wrong", body).getStatusCode().value()).isEqualTo(401);
+        assertThat(this.api.forgetRecipient("", body).getStatusCode().value()).isEqualTo(401);
         verifyNoInteractions(this.port);
     }
 
@@ -54,7 +54,7 @@ class InternalNotificationRelayRestApiTest {
         body.put("notice", this.asMap(new NotificationCreated().setAppUserId(7L).setType("USER_CREATED").setSeverity("INFO")
             .setTitle("Welcome").setBody("Your account is ready.").setLink("/profile")));
 
-        assertThat(this.api.notice(TOKEN, body).getStatusCodeValue()).isEqualTo(200);
+        assertThat(this.api.notice(TOKEN, body).getStatusCode().value()).isEqualTo(200);
 
         ArgumentCaptor<NotificationCreated> notice = ArgumentCaptor.forClass(NotificationCreated.class);
         verify(this.port).notificationCreated(eq(2901L), notice.capture());
@@ -74,7 +74,7 @@ class InternalNotificationRelayRestApiTest {
 
         ResponseEntity<?> answer = this.api.mail(TOKEN, body);
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(200);
+        assertThat(answer.getStatusCode().value()).isEqualTo(200);
         assertThat(((Map<?, ?>) answer.getBody()).get("result")).isEqualTo("Mail queued.");
         ArgumentCaptor<MailRequested> mail = ArgumentCaptor.forClass(MailRequested.class);
         ArgumentCaptor<MailExtras> extras = ArgumentCaptor.forClass(MailExtras.class);
@@ -106,14 +106,14 @@ class InternalNotificationRelayRestApiTest {
 
         ResponseEntity<?> answer = this.api.mail(TOKEN, body);
 
-        assertThat(answer.getStatusCodeValue()).isEqualTo(400);
+        assertThat(answer.getStatusCode().value()).isEqualTo(400);
         assertThat(String.valueOf(((Map<?, ?>) answer.getBody()).get("result"))).startsWith("Error");
         verifyNoInteractions(this.port);
     }
 
     @Test
     void forgettingARecipientReachesTheOutbox() {
-        assertThat(this.api.forgetRecipient(TOKEN, Collections.singletonMap("appUserId", 7)).getStatusCodeValue()).isEqualTo(200);
+        assertThat(this.api.forgetRecipient(TOKEN, Collections.singletonMap("appUserId", 7)).getStatusCode().value()).isEqualTo(200);
         verify(this.port).forgetRecipient(7L);
     }
 }

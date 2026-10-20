@@ -320,7 +320,7 @@ public class OpenSearchRagClientTest {
 
     private static void collectTermLevelFields(JsonNode node, List<String> into) {
         if (node.isObject()) {
-            node.fields().forEachRemaining(entry -> {
+            node.properties().iterator().forEachRemaining(entry -> {
                 if (("term".equals(entry.getKey()) || "terms".equals(entry.getKey())) && entry.getValue().isObject()) {
                     entry.getValue().fieldNames().forEachRemaining(into::add);
                 } else {

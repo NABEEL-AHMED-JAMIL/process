@@ -285,7 +285,7 @@ class BackfillPostgresTest {
         wrong.parameters = Collections.singletonMap("region", "east");
         assertThatThrownBy(() -> this.backfills.preview(wrong)).isInstanceOf(Backfills.Refused.class)
             .hasMessage("The runs' parameters do not stand: region: one of north, south.")
-            .extracting(t -> ((Backfills.Refused) t).getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            .extracting(t -> ((Backfills.Refused) t).getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         Backfills.Request today = request(JOB_A, "2026-10-13", "2026-10-13");
         today.step = "hourly";
         // 00:00 to 10:00 Chicago have begun.
@@ -564,7 +564,7 @@ class BackfillPostgresTest {
         // ... and B cannot write a row of A's.
         assertThatThrownBy(() -> app.update("INSERT INTO backfill (tenant_id, job_id, step, range_from, range_to, zone, concurrency, total) "
             + "VALUES (?, ?, 'DAILY', '2026-10-01', '2026-10-01', 'UTC', 1, 1)", A, JOB_A)).isInstanceOf(DataAccessException.class)
-            .hasMessageContaining("row-level security");
+            .hasStackTraceContaining("row-level security");
         TenantContext.clear();
         verify(this.notifications, never()).notificationCreated(eq(B), any());
     }

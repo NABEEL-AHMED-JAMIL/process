@@ -5,7 +5,7 @@ import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -87,7 +87,7 @@ public class KafkaSecretE2EIT extends E2ESupport {
         registry.add("lookup.encryption.key", () -> E2E_ENCRYPTION_KEY);
     }
 
-    @MockBean private TrustedStorageOperations storageBrowserService;
+    @MockitoBean private TrustedStorageOperations storageBrowserService;
 
     /** The bucket. Enough to be the storage layer for a workflow that only puts and gets. */
     private final Map<String, byte[]> objects = new LinkedHashMap<>();

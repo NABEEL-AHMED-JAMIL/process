@@ -1,6 +1,7 @@
 package process.pipeline.review;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.util.SqlTimes;
 import org.springframework.stereotype.Component;
 import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
@@ -110,8 +111,8 @@ public class PipelineRunHistory implements RunHistory {
             List<RunReviewStore.Decision> made = decisions.getOrDefault(run.getJobQueueId(), Collections.emptyList());
             RunReviewStore.Decision last = made.isEmpty() ? null : made.get(made.size() - 1);   // oldest first
             RunReviewStatus review = statuses.get(run.getJobQueueId());
-            Timestamp started = (Timestamp) fact.get("started");
-            Timestamp ended = (Timestamp) fact.get("ended");
+            Timestamp started = SqlTimes.timestamp(fact.get("started"));
+            Timestamp ended = SqlTimes.timestamp(fact.get("ended"));
             String key = (String) fact.get("input_key");
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("run_id", run.getJobQueueId());
@@ -123,7 +124,7 @@ public class PipelineRunHistory implements RunHistory {
             row.put("input_key", key);
             Object arrived = fact.get("file_name");
             row.put("input_name", arrived != null ? arrived : key == null ? null : key.substring(key.lastIndexOf('/') + 1));
-            LocalDateTime created = BusinessTime.wallClockOf((Timestamp) fact.get("created"));
+            LocalDateTime created = BusinessTime.wallClockOf(SqlTimes.timestamp(fact.get("created")));
             row.put("run_date", created == null ? null : created.format(DAY));
             row.put("created_at", text(created));
             row.put("started_at", text(BusinessTime.wallClockOf(started)));

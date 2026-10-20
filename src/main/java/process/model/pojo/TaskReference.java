@@ -2,20 +2,19 @@ package process.model.pojo;
 
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.ParamDef;
-import org.hibernate.annotations.Parameter;
 
 import java.sql.Timestamp;
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.EntityListeners;
-import javax.persistence.Id;
-import javax.persistence.Column;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Transient;
-import javax.persistence.PrePersist;
-import javax.persistence.PreUpdate;
+import jakarta.persistence.Entity;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Transient;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 
 /**
  * A workspace's home page or task group (MIG-167): what source_task.home_page_id and group_id point at. Moved out of
@@ -25,22 +24,14 @@ import javax.persistence.PreUpdate;
 @Entity
 @Table(name = "task_reference")
 @EntityListeners(AuditListener.class)
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = "long"))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TaskReference implements Audited {
 
     public static final String HOME_PAGE = "HOME_PAGE";
     public static final String TASK_GROUP = "TASK_GROUP";
 
-    @GenericGenerator(
-        name = "taskReferenceSequenceGenerator",
-        strategy = "org.hibernate.id.enhanced.SequenceStyleGenerator",
-        parameters = {
-            @Parameter(name = "sequence_name", value = "task_reference_id_seq"),
-            @Parameter(name = "initial_value", value = "1000"),
-            @Parameter(name = "increment_size", value = "1")
-        }
-    )
+    @SequenceGenerator(name = "taskReferenceSequenceGenerator", sequenceName = "task_reference_id_seq", initialValue = 1000, allocationSize = 1)
     @Id
     @Column(name = "id")
     @GeneratedValue(generator = "taskReferenceSequenceGenerator")

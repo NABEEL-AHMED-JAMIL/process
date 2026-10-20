@@ -14,8 +14,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import process.model.dto.SearchTextDto;
 import process.security.TenantContext;
 
-import javax.persistence.EntityManager;
-import javax.persistence.Query;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;

@@ -95,7 +95,7 @@ class TaskRegistryOverrideSchemaPostgresTest {
             }
             assertThat(tenants).containsExactly(A);
             assertThatThrownBy(() -> connection.createStatement().execute("INSERT INTO task_registry_override (tenant_id, task_code, enabled) "
-                + "VALUES (" + B + ", 'aggregate', false)")).hasMessageContaining("row-level security");
+                + "VALUES (" + B + ", 'aggregate', false)")).hasStackTraceContaining("row-level security");
             assertThat(connection.createStatement().executeUpdate("DELETE FROM task_registry_override WHERE tenant_id = " + B))
                 .as("B's switches are not A's to remove").isZero();
         }

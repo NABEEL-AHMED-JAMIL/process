@@ -3,10 +3,11 @@ package process.schema;
 import com.zaxxer.hikari.HikariDataSource;
 import liquibase.integration.spring.SpringLiquibase;
 import org.hibernate.dialect.PostgreSQLDialect;
-import org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy;
-import org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy;
+import org.springframework.boot.hibernate.SpringImplicitNamingStrategy;
+import org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
+import process.config.RegexNativeQueries;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -15,8 +16,8 @@ import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StreamUtils;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -131,7 +132,8 @@ public final class IdentityPostgres implements AutoCloseable {
         Map<String, Object> properties = new HashMap<>();
         properties.put("hibernate.dialect", PostgreSQLDialect.class.getName());
         properties.put("hibernate.hbm2ddl.auto", "none");
-        properties.put("hibernate.physical_naming_strategy", SpringPhysicalNamingStrategy.class.getName());
+        properties.put("hibernate.query.native.prefer_jdbc_datetime_types", "true");
+        properties.put("hibernate.physical_naming_strategy", PhysicalNamingStrategySnakeCaseImpl.class.getName());
         properties.put("hibernate.implicit_naming_strategy", SpringImplicitNamingStrategy.class.getName());
         this.factoryBean.setJpaPropertyMap(properties);
         this.factoryBean.afterPropertiesSet();
@@ -151,7 +153,9 @@ public final class IdentityPostgres implements AutoCloseable {
     }
 
     public <R> R repository(Class<R> type) {
-        return new JpaRepositoryFactory(this.entityManager).getRepository(type);
+        JpaRepositoryFactory repositories = new JpaRepositoryFactory(this.entityManager);
+        repositories.setQueryEnhancerSelector(new RegexNativeQueries());
+        return repositories.getRepository(type);
     }
 
     @Override
