@@ -21,5 +21,7 @@ class ErrorEnvelopeTest {
             properties.load(in);
         }
         assertThat(properties.getProperty("server.error.include-message")).isEqualTo("always");
+        // Boot 4 reads its own /error answer's settings from spring.web.error.* (MIG-389).
+        assertThat(properties.getProperty("spring.web.error.include-message")).isEqualTo("always");
     }
 }
