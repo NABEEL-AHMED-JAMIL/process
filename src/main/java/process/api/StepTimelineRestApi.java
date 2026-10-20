@@ -1,7 +1,7 @@
 package process.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import process.model.dto.ResponseDto;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -60,18 +60,18 @@ public class StepTimelineRestApi {
      */
     @RequestMapping(value = "/sourceJob.json/runDataset", method = RequestMethod.GET)
     public ResponseEntity<StreamingResponseBody> runDataset(@RequestParam Long runDatasetId,
-        @RequestParam(required = false) String format) {
+        @RequestParam(required = false) String format) throws JsonProcessingException {
         // Declared as ResponseEntity<StreamingResponseBody>: only then does Spring stream the body. A ResponseEntity<?>
         // hands it to the message converters instead ("{}" for JSON, a 500 "No converter" for CSV -- live, run 7405).
         // So a refusal is streamed too, as its JSON envelope.
         StepTimelineService.Download download = this.service.download(runDatasetId, format);
         this.accessLog.runDataset(runDatasetId, format, download);
         if (download.refusal != null) {
-            ResponseDto refusal = download.refusal;
-            return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON)
-                // Written as bytes: writeValue(out) closes the response's stream itself, and on Tomcat 11 a stream closed
-                // under Spring's async streaming left the chunked answer unterminated (MIG-389).
-                .body(out -> out.write(REFUSALS.writeValueAsBytes(refusal)));
+            byte[] refusal = REFUSALS.writeValueAsBytes(download.refusal);
+            // Its length declared and written whole (MIG-389): on Tomcat 11 a streamed 4xx with no length was left
+            // unterminated (curl: partial file; api-check: no answer). The same JSON envelope.
+            return ResponseEntity.status(download.status).contentType(MediaType.APPLICATION_JSON).contentLength(refusal.length)
+                .body(out -> out.write(refusal));
         }
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName + "\"")
