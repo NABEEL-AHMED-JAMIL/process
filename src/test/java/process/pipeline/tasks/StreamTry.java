@@ -160,6 +160,8 @@ final class StreamTry implements StreamContext {
 
     /** MIG-364: the run's job, and the approved documents it was started for. */
     Long jobId;
+    /** The run's pipeline's name; null when it has none. */
+    String pipelineName;
     long runId = 2;
     List<RunDocuments.Document> documents = new ArrayList<>();
     long tenant = 1;
@@ -175,6 +177,8 @@ final class StreamTry implements StreamContext {
     @Override public List<String> inputKeys() { return this.inputKeys; }
 
     @Override public Long jobId() { return this.jobId; }
+
+    @Override public String pipelineName() { return this.pipelineName; }
 
     @Override public List<RunDocuments.Document> documents() { return this.documents; }
 

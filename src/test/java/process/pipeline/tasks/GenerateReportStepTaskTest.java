@@ -122,6 +122,7 @@ class GenerateReportStepTaskTest {
         StreamTry context = new StreamTry(config("design", "STEP", "templateId", DESIGN, "templateVersion", "latest",
             "reportName", "Wound clinic weekly · run {{run}}", "period", "{{date}}"), wounds(), 64L << 20, this.dir, 2);
         context.jobId = 77L;
+        context.pipelineName = "  Wound clinic weekly  ";
 
         var result = new GenerateReportStepTask(studio, d -> { }).stream(context);
 
@@ -134,6 +135,8 @@ class GenerateReportStepTaskTest {
         assertThat(head.path("pipeline").path("jobQueueId").asLong()).isEqualTo(2);
         assertThat(head.path("pipeline").path("jobId").asLong()).isEqualTo(77);
         assertThat(head.path("pipeline").path("stepKey").asText()).isEqualTo("step");
+        assertThat(head.path("pipeline").path("pipelineName").asText()).as("the lineage names the pipeline, trimmed")
+            .isEqualTo("Wound clinic weekly");
         assertThat(studio.sent).hasSize(4);
         assertThat(JSON.readTree(studio.sent.get(3)).path("patient").asText()).isEqualTo("P-1093");
         assertThat(studio.polls).as("followed until done").isEqualTo(2);
@@ -142,6 +145,28 @@ class GenerateReportStepTaskTest {
         assertThat(pdf.getFormat()).isEqualTo("pdf");
         assertThat(pdf.getPages()).isEqualTo(3);
         assertThat(context.lines).anyMatch(l -> l.contains("Report RPT-0007 version 1") && l.contains("REPEAT_CAPPED"));
+    }
+
+    /** A run whose pipeline has no name sends none (media then keeps none); a long one is cut to 160 characters. */
+    @Test
+    void theHeadNamesThePipelineOnlyWhenItHasAName() throws Exception {
+        for (String none : new String[] {null, "", "   "}) {
+            FakeStudio studio = new FakeStudio();
+            Path at = Files.createDirectories(this.dir.resolve("none" + (none == null ? "" : none.length())));
+            StreamTry context = new StreamTry(config("templateId", DESIGN), wounds(), 64L << 20, at, 2);
+            context.pipelineName = none;
+            new GenerateReportStepTask(studio, d -> { }).stream(context);
+            JsonNode pipeline = JSON.readTree(studio.sent.get(0)).path("head").path("pipeline");
+            assertThat(pipeline.has("pipelineName")).as("no name for %s", none == null ? "null" : "'" + none + "'").isFalse();
+            assertThat(pipeline.path("jobQueueId").asLong()).isEqualTo(2);
+            assertThat(pipeline.path("attempt").asInt()).isEqualTo(1);
+        }
+
+        FakeStudio studio = new FakeStudio();
+        StreamTry context = new StreamTry(config("templateId", DESIGN), wounds(), 64L << 20, Files.createDirectories(this.dir.resolve("long")), 2);
+        context.pipelineName = "W".repeat(200);
+        new GenerateReportStepTask(studio, d -> { }).stream(context);
+        assertThat(JSON.readTree(studio.sent.get(0)).path("head").path("pipeline").path("pipelineName").asText()).isEqualTo("W".repeat(160));
     }
 
     @Test

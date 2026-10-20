@@ -34,6 +34,7 @@ class PipelineUsagePostgresTest {
     private static ScratchJpa jpa;
     private static JdbcTemplate login;
     private static PipelineUsage usage;
+    private static PipelineDefinitionStore definitions;
 
     @BeforeAll
     static void build() throws Exception {
@@ -73,7 +74,11 @@ class PipelineUsagePostgresTest {
         pipeline(79521, OTHER, "THEIRS", "Active");
         definition(79521, 1, "{\"version\":1,\"steps\":[{\"key\":\"r\",\"task\":\"read_api\",\"config\":{\"requestId\":" + REQUEST + "}},"
             + "{\"key\":\"p\",\"task\":\"ai_prompt\",\"config\":{\"promptId\":" + PROMPT + "}}]}");
-        usage = new PipelineUsage(jpa.repository(PipelineRepository.class), new PipelineDefinitionStore(db.appJdbc()),
+        // A pipeline whose name is blank (generate_report's head then names none).
+        login.update("INSERT INTO pipeline (pipeline_key, tenant_id, pipeline_id, pipeline_name, status) VALUES (79516, ?, 'BLANK', '   ', "
+            + "'Active')", TENANT);
+        definitions = new PipelineDefinitionStore(db.appJdbc());
+        usage = new PipelineUsage(jpa.repository(PipelineRepository.class), definitions,
             new StepReferences(new AllTasks().tasks()));
     }
 
@@ -94,6 +99,17 @@ class PipelineUsagePostgresTest {
         if (db != null) {
             db.close();
         }
+    }
+
+    /** generate_report's lineage: a run's pipeline's name by its key, in the run's workspace only. */
+    @Test
+    void aPipelinesNameIsReadByItsKeyInItsOwnWorkspace() {
+        assertThat(RowSecurity.forTenant(TENANT, () -> definitions.pipelineName(TENANT, 79512L))).contains("ENGINE name");
+        assertThat(RowSecurity.forTenant(TENANT, () -> definitions.pipelineName(TENANT, 79516L))).as("a blank name is none").isEmpty();
+        assertThat(RowSecurity.forTenant(TENANT, () -> definitions.pipelineName(TENANT, 99999L))).isEmpty();
+        assertThat(RowSecurity.forTenant(TENANT, () -> definitions.pipelineName(OTHER, 79521L))).as("not the workspace asked as").isEmpty();
+        assertThat(RowSecurity.forTenant(OTHER, () -> definitions.pipelineName(TENANT, 79512L))).as("row security hides it").isEmpty();
+        assertThat(RowSecurity.forTenant(OTHER, () -> definitions.pipelineName(OTHER, 79521L))).contains("THEIRS name");
     }
 
     @Test

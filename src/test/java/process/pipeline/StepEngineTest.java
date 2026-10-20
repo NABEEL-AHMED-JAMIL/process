@@ -43,6 +43,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static process.pipeline.Definitions.config;
 import static process.pipeline.Definitions.row;
@@ -62,6 +64,7 @@ class StepEngineTest {
     private static final long JOB_ID = 2834L;
     private static final long RUN_ID = 7401L;
     private static final long DEFINITION_ID = 1001L;
+    private static final long PIPELINE_KEY = 5501L;
 
     private final InMemoryStepStore steps = new InMemoryStepStore();
     private final InMemoryDatasetStore datasets = new InMemoryDatasetStore();
@@ -235,6 +238,7 @@ class StepEngineTest {
         PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
         stored.id = DEFINITION_ID;
         stored.tenantId = TENANT;
+        stored.pipelineKey = PIPELINE_KEY;
         stored.version = 3;
         stored.json = DefinitionCodec.toJson(definition);
         when(this.definitions.latestFor(TENANT, "CLAIMS")).thenReturn(Optional.of(stored));
@@ -779,6 +783,64 @@ class StepEngineTest {
 
         assertThat(this.statuses()).containsExactly(entry("claim", "Failed"));
         assertThat(this.steps.outputsOfRun(RUN_ID)).isEmpty();
+    }
+
+    /** A step is told its pipeline's name (generate_report's lineage), read once a run however many steps ask. */
+    @Test
+    void aStepIsToldItsPipelinesNameReadOnceARun() {
+        List<String> told = Collections.synchronizedList(new ArrayList<>());
+        StepTask names = new StepTask() {
+
+            @Override public String code() { return "names_its_pipeline"; }
+
+            @Override public String description() { return "says its pipeline's name"; }
+
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
+            @Override public StepResult run(StepContext context) {
+                told.add(context.pipelineName());
+                return StepResult.nothing(0L);
+            }
+        };
+        this.tasks = Definitions.builtInTasks(names);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+        when(this.definitions.pipelineName(TENANT, PIPELINE_KEY)).thenReturn(Optional.of("Wound clinic weekly"));
+
+        this.runs(Definitions.of(step("first", "names_its_pipeline"), step("second", "names_its_pipeline")));
+
+        assertThat(this.statuses()).containsExactly(entry("first", "Completed"), entry("second", "Completed"));
+        assertThat(told).containsExactly("Wound clinic weekly", "Wound clinic weekly");
+        verify(this.definitions, times(1)).pipelineName(TENANT, PIPELINE_KEY);
+    }
+
+    /** A pipeline without a name (or no longer there) is no name: null, not an empty string. */
+    @Test
+    void aPipelineWithoutANameIsNull() {
+        List<String> told = Collections.synchronizedList(new ArrayList<>());
+        StepTask names = new StepTask() {
+
+            @Override public String code() { return "names_its_pipeline"; }
+
+            @Override public String description() { return "says its pipeline's name"; }
+
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
+            @Override public StepResult run(StepContext context) {
+                told.add(String.valueOf(context.pipelineName()));
+                return StepResult.nothing(0L);
+            }
+        };
+        this.tasks = Definitions.builtInTasks(names);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+        when(this.definitions.pipelineName(TENANT, PIPELINE_KEY)).thenReturn(Optional.empty());
+
+        this.runs(Definitions.of(step("only", "names_its_pipeline")));
+
+        assertThat(told).containsExactly("null");
     }
 
     private static Map.Entry<String, String> entry(String key, String value) {
