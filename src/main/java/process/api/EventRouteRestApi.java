@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import process.customer.EventRouteRequest;
 import process.customer.EventRoutes;
@@ -28,27 +29,27 @@ public class EventRouteRestApi {
     }
 
     @RequestMapping(value = "/list", method = RequestMethod.GET)
-    public ResponseEntity<?> list() {
-        return new ResponseEntity<>(this.routes.list(), HttpStatus.OK);
+    public ResponseEntity<?> list(@RequestParam(value = "tenantId", required = false) Long tenantId) {
+        return new ResponseEntity<>(this.routes.list(tenantId), HttpStatus.OK);
     }
 
     /** The pipelines a route may start. */
     @RequestMapping(value = "/targets", method = RequestMethod.GET)
-    public ResponseEntity<?> targets() {
-        return new ResponseEntity<>(this.routes.targets(), HttpStatus.OK);
+    public ResponseEntity<?> targets(@RequestParam(value = "tenantId", required = false) Long tenantId) {
+        return new ResponseEntity<>(this.routes.targets(tenantId), HttpStatus.OK);
     }
 
-    /** Body {routeId?, eventType, targetKind PIPELINE|WORKFLOW, jobId | workflowKey, contractId | contractName, contractVersion, active}. */
+    /** Body {tenantId?, routeId?, eventType, targetKind PIPELINE|WORKFLOW, jobId | workflowKey, contractId | contractName, contractVersion, active}. */
     @BuilderAction
     @RequestMapping(value = "/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody EventRouteRequest request) {
         return new ResponseEntity<>(this.routes.save(request), HttpStatus.OK);
     }
 
-    /** Body {routeId}. */
+    /** Body {routeId, tenantId?}. */
     @BuilderAction
     @RequestMapping(value = "/delete", method = RequestMethod.POST)
     public ResponseEntity<?> delete(@RequestBody EventRouteRequest request) {
-        return new ResponseEntity<>(this.routes.delete(request == null ? null : request.getRouteId()), HttpStatus.OK);
+        return new ResponseEntity<>(this.routes.delete(request), HttpStatus.OK);
     }
 }

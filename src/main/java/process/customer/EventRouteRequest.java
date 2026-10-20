@@ -1,9 +1,13 @@
 package process.customer;
 
-/** An event route as the console saves it (MIG-332): a new one has no routeId. */
+/**
+ * An event route as the console saves it (MIG-332): a new one has no routeId. tenantId names the workspace for a platform
+ * administrator; anyone else's is ignored (EventRoutes.workspace).
+ */
 public class EventRouteRequest {
 
     private Long routeId;
+    private Long tenantId;
     private String eventType;
     /** PIPELINE or WORKFLOW. */
     private String targetKind;
@@ -20,6 +24,14 @@ public class EventRouteRequest {
 
     public void setRouteId(Long routeId) {
         this.routeId = routeId;
+    }
+
+    public Long getTenantId() {
+        return this.tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getEventType() {

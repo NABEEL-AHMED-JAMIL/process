@@ -1,5 +1,6 @@
 package process.customer;
 
+import org.barco.platform.tenancy.RowSecurity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import process.forms.FormWorkflows;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -22,6 +24,10 @@ import java.util.regex.Pattern;
  * Event routes): the organisation names its own event types, and each route says what one starts -- a pipeline or a
  * workflow -- optionally checking the event's data against a data contract first. POST /v1/events follows them. Generic:
  * nothing here knows any type.
+ *
+ * A workspace administrator works in their own workspace, whatever tenantId they send. A platform administrator has no
+ * workspace of his own and names the one he acts for (tenantId); the work then runs as that workspace alone
+ * (RowSecurity.forTenant), so his all-workspaces grant never widens what one call reads or changes.
  */
 @Service
 public class EventRoutes {
@@ -45,46 +51,42 @@ public class EventRoutes {
     }
 
     /** The workspace's routes, with the pipeline's name for a pipeline route. */
-    public ResponseDto list() {
-        Long tenantId = TenantContext.getTenantId();
-        if (tenantId == null) {
-            return new ResponseDto(ProcessUtil.ERROR, "Event routes belong to a workspace.");
-        }
-        Map<Long, String> names = this.pipelineNames(tenantId);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (EventRouteStore.Route route : this.store.list(tenantId)) {
-            rows.add(view(route, names));
-        }
-        return new ResponseDto(ProcessUtil.SUCCESS, "Event routes.", rows);
+    public ResponseDto list(Long askedTenant) {
+        return this.inWorkspace(askedTenant, tenantId -> {
+            Map<Long, String> names = this.pipelineNames(tenantId);
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (EventRouteStore.Route route : this.store.list(tenantId)) {
+                rows.add(view(route, names));
+            }
+            return new ResponseDto(ProcessUtil.SUCCESS, "Event routes.", rows);
+        });
     }
 
     /** The pipelines a route may start: the workspace's jobs that are not deleted, newest first. */
-    public ResponseDto targets() {
-        Long tenantId = TenantContext.getTenantId();
-        if (tenantId == null) {
-            return new ResponseDto(ProcessUtil.ERROR, "Event routes belong to a workspace.");
-        }
-        List<Map<String, Object>> pipelines = new ArrayList<>();
-        this.pipelineNames(tenantId).forEach((id, name) -> {
-            Map<String, Object> one = new LinkedHashMap<>();
-            one.put("jobId", id);
-            one.put("name", name);
-            pipelines.add(one);
+    public ResponseDto targets(Long askedTenant) {
+        return this.inWorkspace(askedTenant, tenantId -> {
+            List<Map<String, Object>> pipelines = new ArrayList<>();
+            this.pipelineNames(tenantId).forEach((id, name) -> {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("jobId", id);
+                one.put("name", name);
+                pipelines.add(one);
+            });
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("pipelines", pipelines);
+            return new ResponseDto(ProcessUtil.SUCCESS, "Targets.", data);
         });
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("pipelines", pipelines);
-        return new ResponseDto(ProcessUtil.SUCCESS, "Targets.", data);
     }
 
     /** A new route (no routeId) or a change to one; each field checked, the target and the contract the workspace's own. */
     public ResponseDto save(EventRouteRequest request) {
-        Long tenantId = TenantContext.getTenantId();
-        if (tenantId == null) {
-            return new ResponseDto(ProcessUtil.ERROR, "Event routes belong to a workspace.");
-        }
         if (request == null) {
             return new ResponseDto(ProcessUtil.ERROR, "Name the event type and what it starts.");
         }
+        return this.inWorkspace(request.getTenantId(), tenantId -> this.saveIn(tenantId, request));
+    }
+
+    private ResponseDto saveIn(long tenantId, EventRouteRequest request) {
         EventRouteStore.Route route = new EventRouteStore.Route();
         route.tenantId = tenantId;
         String refused = this.fill(route, request, tenantId);
@@ -108,13 +110,37 @@ public class EventRoutes {
         return new ResponseDto(ProcessUtil.SUCCESS, "Event route saved.", view(saved, this.pipelineNames(tenantId)));
     }
 
-    public ResponseDto delete(Long routeId) {
-        Long tenantId = TenantContext.getTenantId();
-        if (tenantId == null || routeId == null) {
+    /** Body {routeId, tenantId?}. */
+    public ResponseDto delete(EventRouteRequest request) {
+        Long routeId = request == null ? null : request.getRouteId();
+        if (routeId == null) {
             return new ResponseDto(ProcessUtil.ERROR, "Name the event route.");
         }
-        return this.store.delete(tenantId, routeId) ? new ResponseDto(ProcessUtil.SUCCESS, "Event route removed.")
-            : new ResponseDto(ProcessUtil.ERROR, "No such event route in this workspace.");
+        return this.inWorkspace(request.getTenantId(), tenantId -> this.store.delete(tenantId, routeId)
+            ? new ResponseDto(ProcessUtil.SUCCESS, "Event route removed.")
+            : new ResponseDto(ProcessUtil.ERROR, "No such event route in this workspace."));
+    }
+
+    /**
+     * The workspace a call acts on: the caller's own; a platform administrator's, the one he names (any other caller's
+     * tenantId is ignored). Null when there is none.
+     */
+    static Long workspace(Long asked) {
+        Long own = TenantContext.getTenantId();
+        if (own != null && own > 0) {
+            return own;
+        }
+        return TenantContext.isPlatformAdmin() && asked != null && asked > 0 ? asked : null;
+    }
+
+    /** The work as the call's workspace alone, or why there is none. */
+    private ResponseDto inWorkspace(Long asked, Function<Long, ResponseDto> work) {
+        Long tenantId = workspace(asked);
+        if (tenantId == null) {
+            return new ResponseDto(ProcessUtil.ERROR, TenantContext.isPlatformAdmin()
+                ? "Name the workspace: a platform administrator acts for one workspace at a time." : "Event routes belong to a workspace.");
+        }
+        return RowSecurity.forTenant(tenantId, () -> work.apply(tenantId));
     }
 
     /** The request's fields into the route; why not, or null. */

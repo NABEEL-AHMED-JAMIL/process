@@ -58,6 +58,7 @@ import static process.tenancy.CoreProbeFixture.A_RUN;
 import static process.tenancy.CoreProbeFixture.B;
 import static process.tenancy.CoreProbeFixture.B_JOB;
 import static process.tenancy.CoreProbeFixture.Caller;
+import static process.tenancy.CoreProbeFixture.PLATFORM;
 import static process.tenancy.CoreProbeFixture.REFUSED;
 import static process.tenancy.CoreProbeFixture.SUCCEEDED;
 
@@ -217,14 +218,60 @@ class CoreCrossTenantProbeCustomerApiPostgresTest {
         aimedAtBsJob.setTargetKind("PIPELINE");
         aimedAtBsJob.setJobId(B_JOB);
 
-        assertThat(fx.probe("GET eventRoute.json/list", ADMIN_OF_A, routes::list)).contains(SUCCEEDED).doesNotContain("bravo.secret.event");
-        assertThat(fx.probe("GET eventRoute.json/targets", ADMIN_OF_A, routes::targets)).contains(SUCCEEDED)
+        assertThat(fx.probe("GET eventRoute.json/list", ADMIN_OF_A, () -> routes.list(null))).contains(SUCCEEDED)
+            .doesNotContain("bravo.secret.event");
+        assertThat(fx.probe("GET eventRoute.json/targets", ADMIN_OF_A, () -> routes.targets(null))).contains(SUCCEEDED)
             .doesNotContain("\"jobId\":" + B_JOB);
         assertThat(fx.probe("POST eventRoute.json/save", ADMIN_OF_A, () -> routes.save(theirs))).contains(REFUSED);
         assertThat(fx.probe("POST eventRoute.json/save(B's pipeline)", ADMIN_OF_A, () -> routes.save(aimedAtBsJob))).contains(REFUSED);
         assertThat(fx.probe("POST eventRoute.json/delete", ADMIN_OF_A, () -> routes.delete(theirs))).contains(REFUSED);
+        // B's tenantId from A's administrator is ignored: every call is still A's, so B's rows stay out of reach.
+        assertThat(fx.probe("GET eventRoute.json/list?tenantId=B", ADMIN_OF_A, () -> routes.list(B))).contains(SUCCEEDED)
+            .doesNotContain("bravo.secret.event");
+        assertThat(fx.probe("GET eventRoute.json/targets?tenantId=B", ADMIN_OF_A, () -> routes.targets(B))).contains(SUCCEEDED)
+            .doesNotContain("\"jobId\":" + B_JOB);
+        theirs.setTenantId(B);
+        aimedAtBsJob.setTenantId(B);
+        assertThat(fx.probe("POST eventRoute.json/save(tenantId B)", ADMIN_OF_A, () -> routes.save(theirs))).contains(REFUSED);
+        assertThat(fx.probe("POST eventRoute.json/save(B's pipeline, tenantId B)", ADMIN_OF_A, () -> routes.save(aimedAtBsJob)))
+            .contains(REFUSED);
+        assertThat(fx.probe("POST eventRoute.json/delete(tenantId B)", ADMIN_OF_A, () -> routes.delete(theirs))).contains(REFUSED);
 
         assertThat(fx.leaks).isEmpty();
+        assertThat(fx.foreignRows()).as("B's route is as it was").isEqualTo(before);
+        assertThat(fx.db.jdbc().queryForObject("SELECT event_type FROM event_route WHERE route_id = ?", String.class, B_ROUTE_ID))
+            .isEqualTo("bravo.secret.event");
+    }
+
+    @Test
+    void aPlatformAdministratorWorksInTheWorkspaceHeNamesAndNoOther() throws Exception {
+        String before = fx.foreignRows();
+        EventRouteRequest bsRouteAsA = new EventRouteRequest();
+        bsRouteAsA.setTenantId(A);
+        bsRouteAsA.setRouteId(B_ROUTE_ID);
+        bsRouteAsA.setEventType("taken.over");
+        bsRouteAsA.setTargetKind("PIPELINE");
+        bsRouteAsA.setJobId(A_JOB);
+        EventRouteRequest bsJobForA = new EventRouteRequest();
+        bsJobForA.setTenantId(A);
+        bsJobForA.setEventType("acme.order");
+        bsJobForA.setTargetKind("PIPELINE");
+        bsJobForA.setJobId(B_JOB);
+
+        assertThat(fx.probe("GET eventRoute.json/list(no tenantId)", PLATFORM, () -> routes.list(null))).contains(REFUSED)
+            .contains("Name the workspace").doesNotContain("bravo.secret.event");
+        assertThat(fx.probe("GET eventRoute.json/list?tenantId=A", PLATFORM, () -> routes.list(A))).contains(SUCCEEDED)
+            .doesNotContain("bravo.secret.event");
+        assertThat(fx.probe("GET eventRoute.json/targets?tenantId=A", PLATFORM, () -> routes.targets(A))).contains(SUCCEEDED)
+            .contains("\"jobId\":" + A_JOB).doesNotContain("\"jobId\":" + B_JOB);
+        assertThat(fx.probe("GET eventRoute.json/list?tenantId=B", PLATFORM, () -> routes.list(B))).contains(SUCCEEDED)
+            .contains("bravo.secret.event");
+        assertThat(fx.probe("POST eventRoute.json/save(B's route, tenantId A)", PLATFORM, () -> routes.save(bsRouteAsA))).contains(REFUSED);
+        assertThat(fx.probe("POST eventRoute.json/save(B's pipeline, tenantId A)", PLATFORM, () -> routes.save(bsJobForA)))
+            .contains(REFUSED);
+        assertThat(fx.probe("POST eventRoute.json/delete(B's route, tenantId A)", PLATFORM, () -> routes.delete(bsRouteAsA)))
+            .contains(REFUSED);
+
         assertThat(fx.foreignRows()).as("B's route is as it was").isEqualTo(before);
         assertThat(fx.db.jdbc().queryForObject("SELECT event_type FROM event_route WHERE route_id = ?", String.class, B_ROUTE_ID))
             .isEqualTo("bravo.secret.event");
