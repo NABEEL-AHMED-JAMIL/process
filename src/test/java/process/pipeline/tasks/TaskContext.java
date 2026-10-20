@@ -31,6 +31,13 @@ final class TaskContext implements StepContext {
     List<RunDocuments.Document> documents = new ArrayList<>();
     Map<String, Object> documentValues = new LinkedHashMap<>();
     int documentReads;
+    /** MIG-347: the run's {{param.*}} and {{run.*}} values; empty for a run without parameters. */
+    Map<String, Object> runValues = new LinkedHashMap<>();
+
+    @Override
+    public Map<String, Object> runValues() {
+        return this.runValues;
+    }
 
     @Override
     public List<RunDocuments.Document> documents() {

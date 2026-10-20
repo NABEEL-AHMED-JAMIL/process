@@ -2,6 +2,7 @@ package process.pipeline.tasks;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import process.pipeline.Dataset;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.RunDocuments;
 import process.pipeline.StepResult;
@@ -155,6 +156,19 @@ class ReadDocumentsStepTaskTest {
         StreamTry none = this.run(config(), 902);
         assertThatThrownBy(() -> this.task.stream(none)).isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("not started by an approved document");
+    }
+
+    /** The in-memory path (StreamingStepTask.run) is handed the documents that started the run, as a streamed try is. */
+    @Test
+    void inMemoryWithNoTypeItReadsTheDocumentsWhoseApprovalStartedTheRun() throws Exception {
+        long one = this.documents.approve(TaskContext.TENANT, TYPE, "INV-1", "V-1", 10, 1);
+        this.documents.approve(TaskContext.TENANT, TYPE, "INV-2", "V-1", 20, 1);
+        TaskContext context = new TaskContext(config(), Dataset.EMPTY);
+        context.documents = Collections.singletonList(new RunDocuments.Document(this.documents.extractionOf(one), TYPE, 1));
+
+        StepResult result = this.task.run(context);
+
+        assertThat(result.getOutput().getRows()).extracting(r -> r.get("invoice_number")).containsExactly("INV-1");
     }
 
     @Test

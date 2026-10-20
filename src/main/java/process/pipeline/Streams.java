@@ -170,7 +170,8 @@ public final class Streams {
             return new KeptFile(bytes.size(), hex(digest.digest()));
         }
 
-        // ---- the rest is the context's ----
+        // ---- the rest is the context's: every StepContext accessor, or the task sees "outside a run" defaults
+        // (StepContextDelegationTest reflects over the interface, so a new accessor cannot be left out) ----
 
         @Override public long tenantId() { return this.context.tenantId(); }
 
@@ -183,6 +184,20 @@ public final class Streams {
         @Override public int tryNumber() { return this.context.tryNumber(); }
 
         @Override public Map<String, Object> config() { return this.context.config(); }
+
+        @Override public Map<String, Object> configAsWritten() { return this.context.configAsWritten(); }
+
+        @Override public Map<String, Object> runValues() { return this.context.runValues(); }
+
+        @Override public String modelProfile() { return this.context.modelProfile(); }
+
+        @Override public String modelProfileSource() { return this.context.modelProfileSource(); }
+
+        @Override public Long sourceTaskId() { return this.context.sourceTaskId(); }
+
+        @Override public List<RunDocuments.Document> documents() { return this.context.documents(); }
+
+        @Override public Map<String, Object> documentValues() throws Exception { return this.context.documentValues(); }
 
         @Override public Dataset input() { return this.context.input(); }
 

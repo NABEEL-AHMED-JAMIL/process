@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.Definitions;
+import process.pipeline.RunDocuments;
 import process.pipeline.StepResult;
 import process.pipeline.backing.Fakes;
 import process.pipeline.backing.PipelineNotifier;
@@ -40,6 +41,24 @@ class OutputStepTasksTest {
         new SaveFileStepTask().run(json);
         assertThat(new String(json.files.get("claims.jsonl"), StandardCharsets.UTF_8))
             .isEqualTo("{\"id\":1,\"name\":\"Acme, Inc\",\"note\":null}\n{\"id\":2,\"name\":\"Beta\",\"note\":\"x\"}\n");
+    }
+
+    /**
+     * A streaming task run in memory (StreamingStepTask.run, the path a preview or a caller other than the engine takes)
+     * names its file from the run's parameters and the document that started it, as the engine's streamed try does: the
+     * in-memory wrapper once dropped runValues and documents, so the name read "-.csv".
+     */
+    @Test
+    void saveFileInMemoryNamesItsFileFromTheRunsParameterAndDocument() throws Exception {
+        TaskContext context = TaskContext.of(config("fileName", "{{document.mrn}}-{{param.site}}.csv"), this.rows);
+        context.runValues.put("param.site", "riverside");
+        context.documents = Collections.singletonList(new RunDocuments.Document(1180L, 1007L, 1));
+        context.documentValues.put("mrn", "MRN1001");
+
+        new SaveFileStepTask().run(context);
+
+        assertThat(context.files).containsOnlyKeys("MRN1001-riverside.csv");
+        assertThat(context.documentReads).isEqualTo(1);
     }
 
     @Test
