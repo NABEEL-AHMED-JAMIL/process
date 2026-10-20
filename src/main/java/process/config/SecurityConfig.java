@@ -36,7 +36,10 @@ public class SecurityConfig {
             .exceptionHandling(handling -> handling.authenticationEntryPoint((request, response, ex) ->
                 response.sendError(401, "Unauthorized")))
             .authorizeHttpRequests(requests -> requests
-                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
+                // ASYNC (MIG-389): a streamed answer (runDataset, a file's signed link) ends with an ASYNC dispatch that
+                // JwtAuthenticationFilter does not run for; the request itself was authorized. Refusing it left the
+                // chunked file unterminated. Boot 2.7 never re-checked it. StreamedAnswerSecurityTest.
+                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD, DispatcherType.ASYNC).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // Service to service (MIG-22): InternalSecretRestApi checks INTERNAL_SERVICE_TOKEN itself,
                 // and the gateway refuses /api/v1/internal from outside.
