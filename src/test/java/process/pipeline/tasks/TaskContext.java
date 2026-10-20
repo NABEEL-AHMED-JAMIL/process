@@ -57,9 +57,12 @@ final class TaskContext implements StepContext {
         return TENANT;
     }
 
+    /** The run's id; RUN unless a test runs several. */
+    long runId = RUN;
+
     @Override
     public long jobQueueId() {
-        return RUN;
+        return this.runId;
     }
 
     @Override

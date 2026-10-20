@@ -150,7 +150,8 @@ public class StorageServiceClient {
         List<TrustedStorageOperations.ListedObject> objects = new ArrayList<>();
         if (answer != null) {
             for (JsonNode object : answer.path("objects")) {
-                objects.add(new TrustedStorageOperations.ListedObject(object.path("key").asText(), object.path("size").asLong()));
+                objects.add(new TrustedStorageOperations.ListedObject(object.path("key").asText(), object.path("size").asLong(),
+                    object.path("lastModified").isTextual() ? object.path("lastModified").asText() : null));
             }
         }
         return new TrustedStorageOperations.ObjectListing(objects, answer != null && answer.path("truncated").asBoolean());

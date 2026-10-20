@@ -164,6 +164,16 @@ final class StreamTry implements StreamContext {
     List<RunDocuments.Document> documents = new ArrayList<>();
     long tenant = 1;
 
+    /** The run's own files (an inbox arrival) and their bucket. */
+    String inputBucket;
+    List<String> inputKeys = new ArrayList<>();
+
+    @Override public String inputBucket() { return this.inputBucket; }
+
+    @Override public String inputKey() { return this.inputKeys.isEmpty() ? null : this.inputKeys.get(0); }
+
+    @Override public List<String> inputKeys() { return this.inputKeys; }
+
     @Override public Long jobId() { return this.jobId; }
 
     @Override public List<RunDocuments.Document> documents() { return this.documents; }

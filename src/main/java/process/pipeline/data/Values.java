@@ -50,6 +50,26 @@ public final class Values {
         }
     }
 
+    /**
+     * A cell that holds JSON text of a list or an object (an AI answer's field, an API's nested value) as that list or
+     * object, for a file or a report that shows it as one; any other value as it is.
+     */
+    public static Object structured(Object value) {
+        if (!(value instanceof String)) {
+            return value;
+        }
+        String text = ((String) value).trim();
+        if (text.isEmpty() || (text.charAt(0) != '[' && text.charAt(0) != '{')) {
+            return value;
+        }
+        try {
+            JsonNode node = JSON.readTree(text);
+            return node != null && node.isContainerNode() ? node : value;
+        } catch (JsonProcessingException notJson) {
+            return value;
+        }
+    }
+
     /** A JSON value as a row: an object's fields as columns (nested values as JSON text); anything else as {value}. */
     public static Map<String, Object> row(JsonNode node) {
         Map<String, Object> row = new LinkedHashMap<>();

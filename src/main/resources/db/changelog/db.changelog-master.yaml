@@ -251,3 +251,6 @@ databaseChangeLog:
   # V215: owner #16 -- task_registry_block (a platform administrator's block of a registry task for a workspace), task_registry_audit (insert-only), task_registry_override.updated_by_role (row security).
   - include:
       file: db/changelog/yaml/V215.0-task-registry-controls.yaml
+  # V216: read_s3 "only new files since the last run" -- run_object_read (the newest object a step read per run, bucket and prefix; a completed run's is the job's watermark) (row security).
+  - include:
+      file: db/changelog/yaml/V216.0-object-read-marks.yaml

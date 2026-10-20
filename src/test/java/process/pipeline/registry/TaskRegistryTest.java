@@ -46,7 +46,9 @@ class TaskRegistryTest {
             // 2026-10-19: imaging review -- a segmentation mask measured in pixels, and a pipeline's runs with their reviews.
             entry("measure_mask", "Process"), entry("read_runs", "Read"),
             // Report Studio phase 5: a Report Studio report from the rows, with the step's own design or a template.
-            entry("generate_report", "Output"));
+            entry("generate_report", "Output"),
+            // A file a row: a recording to text, a document to another format (media-service's transcriber and converter).
+            entry("transcribe_audio", "Process"), entry("convert_file", "Process"));
     }
 
     /**

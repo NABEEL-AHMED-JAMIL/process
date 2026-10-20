@@ -18,6 +18,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /** The other services a pipeline's tasks call, in memory: each remembers what it was asked and answers as told. */
 public final class Fakes {
@@ -144,6 +148,105 @@ public final class Fakes {
             this.lastTenant = tenantId;
             this.objects.put(bucket + "/" + key, content);
             this.uploads.add(bucket + "/" + key + " " + contentType);
+        }
+    }
+
+    /** A bucket store that keeps each workspace's objects apart: tenant -> "bucket/key" -> bytes. */
+    public static final class TenantBuckets implements BucketStore {
+        public final Map<Long, Map<String, byte[]>> objects = new LinkedHashMap<>();
+        public final List<String> reads = new ArrayList<>();
+        public final List<String> uploads = new ArrayList<>();
+
+        public TenantBuckets put(long tenantId, String bucketAndKey, byte[] content) {
+            this.objects.computeIfAbsent(tenantId, t -> new LinkedHashMap<>()).put(bucketAndKey, content);
+            return this;
+        }
+
+        @Override
+        public Optional<String> unavailable() {
+            return Optional.empty();
+        }
+
+        @Override
+        public Listing list(long tenantId, String bucket, String prefix, int limit) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public byte[] read(long tenantId, String bucket, String key, long maxBytes) {
+            this.reads.add(tenantId + ":" + bucket + "/" + key);
+            byte[] content = this.objects.getOrDefault(tenantId, Collections.emptyMap()).get(bucket + "/" + key);
+            if (content == null) {
+                throw new IllegalStateException("No object at " + bucket + "/" + key + " in this workspace.");
+            }
+            if (content.length > maxBytes) {
+                throw new IllegalStateException(String.format("%s/%s is %,d bytes; a step reads at most %,d.", bucket, key, content.length, maxBytes));
+            }
+            return content;
+        }
+
+        @Override
+        public void upload(long tenantId, String bucket, String key, byte[] content, String contentType) {
+            this.objects.computeIfAbsent(tenantId, t -> new LinkedHashMap<>()).put(bucket + "/" + key, content);
+            this.uploads.add(tenantId + ":" + bucket + "/" + key + " " + contentType);
+        }
+    }
+
+    /** media-service's pipeline files: remembers each call; answers as told, busy {@code busyFor} times first. */
+    public static final class Media implements MediaFiles {
+        public final List<String> calls = new ArrayList<>();
+        public final List<byte[]> sent = new ArrayList<>();
+        public String unavailable;
+        public int busyFor;
+        /** fileName -> a refusal's status and sentence for that file. */
+        public final Map<String, MediaFiles.Refused> refusals = new LinkedHashMap<>();
+        public double seconds = 75.0;
+
+        @Override
+        public Optional<String> unavailable() {
+            return Optional.ofNullable(this.unavailable);
+        }
+
+        private void asked(String what, long tenantId, String usageKey, Path file, String fileName) throws IOException {
+            this.calls.add(what + " " + tenantId + " " + usageKey + " " + fileName);
+            this.sent.add(Files.readAllBytes(file));
+            if (this.busyFor > 0) {
+                this.busyFor--;
+                throw new MediaFiles.Refused(503, "The transcriber is busy.", 7);
+            }
+            MediaFiles.Refused refused = this.refusals.get(fileName);
+            if (refused != null) {
+                throw refused;
+            }
+        }
+
+        @Override
+        public Transcript transcribe(long tenantId, String usageKey, Path file, String fileName, boolean timestamps)
+            throws IOException {
+            this.asked("transcribe", tenantId, usageKey, file, fileName);
+            Transcript t = new Transcript();
+            t.text = "text of " + fileName;
+            t.durationSeconds = this.seconds;
+            t.language = "en";
+            t.model = "whisper-small";
+            if (timestamps) {
+                Map<String, Object> segment = new LinkedHashMap<>();
+                segment.put("startMs", 0L);
+                segment.put("endMs", 1500L);
+                segment.put("text", "text of " + fileName);
+                t.segments = new ArrayList<>(Collections.singletonList(segment));
+            }
+            return t;
+        }
+
+        @Override
+        public Converted convert(long tenantId, String usageKey, Path file, String fileName, String outputFormat,
+            Path out) throws IOException {
+            this.asked("convert", tenantId, usageKey, file, fileName);
+            byte[] bytes = ("%PDF-converted " + fileName).getBytes(StandardCharsets.UTF_8);
+            Files.write(out, bytes);
+            String stem = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+            return new Converted(stem + "." + outputFormat, "pdf".equals(outputFormat) ? 3 : null, bytes.length);
         }
     }
 

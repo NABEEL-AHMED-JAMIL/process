@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 216.0-object-read-marks
+      author: nabeel.amd93
+      description: "read_s3 'only new files since the last run': run_object_read (the newest object -- last-modified time and key -- a read_s3 step read per run, bucket and prefix; a completed run's is the job's watermark for that step); a tenant table under row security as V181/V207; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V216.0-object-read-marks/V216__object_read_marks.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V216.0-object-read-marks/V216__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

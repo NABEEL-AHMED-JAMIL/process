@@ -62,7 +62,7 @@ public class TrustedBucketStore implements BucketStore {
             bucket, prefix, limit);
         List<Listed> objects = new ArrayList<>();
         for (TrustedStorageOperations.ListedObject object : listing.objects) {
-            objects.add(new Listed(object.key, object.size));
+            objects.add(new Listed(object.key, object.size, Listed.instant(object.lastModified)));
         }
         return new Listing(objects, listing.truncated);
     }

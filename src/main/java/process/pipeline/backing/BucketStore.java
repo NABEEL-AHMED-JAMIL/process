@@ -5,6 +5,11 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
 import java.io.ByteArrayOutputStream;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 
 /**
  * A workspace's buckets, as a pipeline's steps reach them (MIG-231: Read S3, Read CSV/JSON/Parquet, Upload to bucket):
@@ -77,10 +82,37 @@ public interface BucketStore {
     final class Listed {
         public final String key;
         public final long size;
+        /** When the object was last written; null when storage does not say. */
+        public final Instant lastModified;
 
         public Listed(String key, long size) {
+            this(key, size, null);
+        }
+
+        public Listed(String key, long size, Instant lastModified) {
             this.key = key;
             this.size = size;
+            this.lastModified = lastModified;
+        }
+
+        /** Storage's ISO-8601 time (an instant, or a local time read as UTC); null when it is absent or unreadable. */
+        public static Instant instant(String text) {
+            if (text == null || text.trim().isEmpty()) {
+                return null;
+            }
+            try {
+                return OffsetDateTime.parse(text.trim()).toInstant();
+            } catch (DateTimeParseException notOffset) {
+                try {
+                    return Instant.parse(text.trim());
+                } catch (DateTimeParseException notInstant) {
+                    try {
+                        return LocalDateTime.parse(text.trim()).toInstant(ZoneOffset.UTC);
+                    } catch (DateTimeParseException unreadable) {
+                        return null;
+                    }
+                }
+            }
         }
     }
 }

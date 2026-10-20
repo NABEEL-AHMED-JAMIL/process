@@ -45,6 +45,8 @@ import process.pipeline.tasks.FillMissingStepTask;
 import process.pipeline.tasks.PivotStepTask;
 import process.pipeline.tasks.SplitColumnStepTask;
 import process.pipeline.tasks.UnpivotStepTask;
+import process.pipeline.tasks.TranscribeAudioStepTask;
+import process.pipeline.tasks.ConvertFileStepTask;
 
 import static org.mockito.Mockito.mock;
 
@@ -62,6 +64,7 @@ public final class AllTasks {
     public final Fakes.Webhooks webhooks = new Fakes.Webhooks();
     public final Fakes.Documents documents = new Fakes.Documents();
     public final Fakes.Runs runs = new Fakes.Runs();
+    public final Fakes.Media media = new Fakes.Media();
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -74,7 +77,8 @@ public final class AllTasks {
             new LimitStepTask(), new ApprovalStepTask(),
             new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents),
             new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
-            new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio)));
+            new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio),
+            new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets)));
     }
 
     public StepTasks tasks() {

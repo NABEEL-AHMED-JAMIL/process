@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
+import java.util.Collection;
 
 /**
  * Rows to and from the files a pipeline reads and writes (MIG-231): CSV, JSON (an array of objects, or an object with
@@ -461,6 +462,49 @@ public final class FileFormats {
         }
         bytes.flush();
         return written;
+    }
+
+    /**
+     * One row as a file of its own (Save File and Upload with "One file per row"): csv a header and the row, jsonl one
+     * line, json the row's object itself (not a list of one). The columns in {@code json} that hold JSON text (an AI
+     * answer's list) are written as the lists and objects they hold. The stream is left open.
+     */
+    @SuppressWarnings("deprecation")
+    public static void writeRow(List<String> columns, Map<String, Object> row, String format, Collection<String> json,
+        OutputStream target) throws Exception {
+        Map<String, Object> ordered = ordered(row, columns);
+        if (json != null) {
+            for (String column : json) {
+                if (ordered.containsKey(column)) {
+                    ordered.put(column, Values.structured(ordered.get(column)));
+                }
+            }
+        }
+        switch (format) {
+            case "csv": {
+                Writer writer = new BufferedWriter(new OutputStreamWriter(target, StandardCharsets.UTF_8));
+                CSVPrinter printer = new CSVPrinter(writer, CSVFormat.RFC4180.withHeader(columns.toArray(new String[0])));
+                List<Object> cells = new ArrayList<>(columns.size());
+                for (String column : columns) {
+                    cells.add(Values.text(row.get(column)));
+                }
+                printer.printRecord(cells);
+                printer.flush();
+                writer.flush();
+                break;
+            }
+            case "json":
+                target.write(Values.JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(ordered));
+                target.write('\n');
+                break;
+            case "jsonl":
+                target.write(Values.JSON.writeValueAsBytes(ordered));
+                target.write('\n');
+                break;
+            default:
+                throw new IllegalArgumentException("A file is written as csv, json or jsonl, not " + format + ".");
+        }
+        target.flush();
     }
 
     private static void stopIfInterrupted() throws InterruptedException {

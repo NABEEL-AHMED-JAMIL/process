@@ -78,6 +78,9 @@ class EnvelopeContractTest extends EnvelopeContract {
             + "request fails closed with the fixed 500 sentence and nothing of the cause (MIG-11)");
         internal.put(KafkaRouteUnresolvedException.class, "caught where require() is called: DispatchRelay fails the run "
             + "with its sentence, the internal publish answers 422 with it, the topic test answers it in words (MIG-45)");
+        internal.put(declared("process.pipeline.backing.MediaFiles$Refused"), "thrown by HttpMediaFiles to transcribe_audio and "
+            + "convert_file only, inside a step's try: a busy answer is asked again, any other is the row's failure (onError) or "
+            + "the step's error in media's words; no request thread meets it");
         internal.put(DefinitionException.class, "caught in PipelineDefinitionService: a definition that does not read or "
             + "validate is answered in words, every problem at its path (MIG-230)");
         internal.put(declared("process.pipeline.StepEngine$StepFailure"), "carries a step task's checked exception off its try "

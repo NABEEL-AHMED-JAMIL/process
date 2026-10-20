@@ -41,10 +41,17 @@ public interface TrustedStorageOperations {
     final class ListedObject {
         public final String key;
         public final long size;
+        /** When the object was last written, as storage says it (ISO-8601); null when it does not. */
+        public final String lastModified;
 
         public ListedObject(String key, long size) {
+            this(key, size, null);
+        }
+
+        public ListedObject(String key, long size, String lastModified) {
             this.key = key;
             this.size = size;
+            this.lastModified = lastModified;
         }
     }
 }
