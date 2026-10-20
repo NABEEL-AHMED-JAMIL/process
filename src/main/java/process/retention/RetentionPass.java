@@ -49,7 +49,7 @@ public class RetentionPass {
 
     /** The order classes are taken in: Core's own first, the other services' after, the audit last (it records the rest). */
     static final DataClass[] ORDER = {DataClass.RUN_OUTPUTS, DataClass.RUN_LOGS, DataClass.FORM_SUBMISSIONS, DataClass.FILES,
-        DataClass.DOCUMENTS, DataClass.AI_CONVERSATIONS, DataClass.NOTIFICATIONS, DataClass.AUDIT};
+        DataClass.DOCUMENTS, DataClass.AI_CONVERSATIONS, DataClass.NOTIFICATIONS, DataClass.REPORTS, DataClass.AUDIT};
 
     private static final Logger logger = LoggerFactory.getLogger(RetentionPass.class);
 

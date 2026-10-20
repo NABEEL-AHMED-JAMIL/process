@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
  * POST {ai}/api/v1/internal/ai/retention                       AI_CONVERSATIONS, DOCUMENTS
  * POST {storage}/api/v1/internal/storage/retention             FILES
  * POST {notifications}/api/v1/internal/notifications/retention NOTIFICATIONS
+ * POST {media}/api/v1/internal/media/retention                 REPORTS (Report Studio phase 7)
  *   {"action": "preview" | "purge", "tenantId": 2960, "dataClass": "FILES", "cutoff": "2025-10-13T07:00:00Z",
  *    "limit": 500, "keepRunIds": [..]}
  *   preview -> {"count", "bytes" (or null), "oldest" (an instant or null), "total"}
@@ -50,20 +51,24 @@ public class RemoteRetention {
     private final String ai;
     private final String storage;
     private final String notifications;
+    private final String media;
     private final String serviceToken;
 
     @Autowired
     public RemoteRetention(@Value("${ai.url:http://ai:9150}") String aiUrl, @Value("${storage.service-url:http://storage:9120}") String storageUrl,
-        @Value("${notifications.url:http://notifications:9100}") String notificationsUrl, @Value("${internal.service-token:}") String serviceToken) {
+        @Value("${notifications.url:http://notifications:9100}") String notificationsUrl, @Value("${media.url:http://media:9110}") String mediaUrl,
+        @Value("${internal.service-token:}") String serviceToken) {
         this(new OkHttpClient.Builder().addInterceptor(new CorrelationInterceptor()).connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(2, TimeUnit.MINUTES).writeTimeout(30, TimeUnit.SECONDS).build(), aiUrl, storageUrl, notificationsUrl, serviceToken);
+            .readTimeout(2, TimeUnit.MINUTES).writeTimeout(30, TimeUnit.SECONDS).build(), aiUrl, storageUrl, notificationsUrl, mediaUrl,
+            serviceToken);
     }
 
-    RemoteRetention(OkHttpClient http, String aiUrl, String storageUrl, String notificationsUrl, String serviceToken) {
+    RemoteRetention(OkHttpClient http, String aiUrl, String storageUrl, String notificationsUrl, String mediaUrl, String serviceToken) {
         this.http = http;
         this.ai = api(aiUrl) + "/internal/ai/retention";
         this.storage = api(storageUrl) + "/internal/storage/retention";
         this.notifications = api(notificationsUrl) + "/internal/notifications/retention";
+        this.media = api(mediaUrl) + "/internal/media/retention";
         this.serviceToken = serviceToken == null ? "" : serviceToken.trim();
     }
 
@@ -119,6 +124,8 @@ public class RemoteRetention {
                 return this.storage;
             case NOTIFICATIONS:
                 return this.notifications;
+            case MEDIA:
+                return this.media;
             default:
                 throw new IllegalArgumentException(dataClass + " is not another service's.");
         }

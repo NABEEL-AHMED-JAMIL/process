@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 218.0-retention-reports
+      author: nabeel.amd93
+      description: "Report Studio phase 7: retention_rule.data_class also allows REPORTS (media holds it); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V218.0-retention-reports/V218__retention_reports.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V218.0-retention-reports/V218__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

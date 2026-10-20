@@ -16,6 +16,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** MIG-354: the rules a pass and the console follow, without a database. */
 class RetentionRulesTest {
@@ -29,6 +32,28 @@ class RetentionRulesTest {
         assertThat(RetentionPass.cutoff(DataClass.AUDIT, 3000, 2190, now)).isEqualTo(now.minus(Duration.ofDays(3000)));
         assertThat(RetentionPass.cutoff(DataClass.FILES, 10, 2190, now)).isEqualTo(now.minus(Duration.ofDays(10)));
         assertThat(RetentionPass.cutoff(DataClass.FILES, null, 2190, now)).isNull();
+    }
+
+    /** Report Studio phase 7: REPORTS is media's, reached at its internal retention door, and pipeline holds reach it. */
+    @Test
+    void reportsAreMediasAndKnowTheirRuns() throws Exception {
+        assertThat(DataClass.of("reports")).contains(DataClass.REPORTS);
+        assertThat(DataClass.REPORTS.owner()).isEqualTo(DataClass.Owner.MEDIA);
+        assertThat(DataClass.REPORTS.configurable()).isTrue();
+        assertThat(DataClass.REPORTS.knowsRuns()).as("a run hold keeps the reports its runs made").isTrue();
+        RemoteRetention remote = new RemoteRetention(new okhttp3.OkHttpClient(), "http://ai:9150", "http://storage:9120",
+            "http://notifications:9100", "http://media:9110/", "t");
+        assertThat(remote.urlOf(DataClass.REPORTS)).isEqualTo("http://media:9110/api/v1/internal/media/retention");
+        Holds holds = new Holds(false, Set.of(2908L), Set.of(8071L, 8072L));
+        JsonNode body = remote.body("preview", 2960, DataClass.REPORTS,
+            Instant.parse("2026-09-20T05:00:00Z"), 0, holds);
+        assertThat(body.path("dataClass").asText()).isEqualTo("REPORTS");
+        assertThat(body.path("keepRunIds")).hasSize(2);
+        // Taken after the other services' classes and before the audit, which records them.
+        List<DataClass> order = Arrays.asList(RetentionPass.ORDER);
+        assertThat(order.indexOf(DataClass.REPORTS)).isEqualTo(order.indexOf(DataClass.AUDIT) - 1);
+        assertThat(order).as("every class a pass removes").containsAll(Arrays.stream(DataClass.values())
+            .filter(DataClass::configurable).collect(Collectors.toList()));
     }
 
     @Test

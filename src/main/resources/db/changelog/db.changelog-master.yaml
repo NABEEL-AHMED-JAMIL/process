@@ -257,3 +257,6 @@ databaseChangeLog:
   # V217: convert_file -- run_output.format also allows the converter's targets (a converted file in a run's outputs).
   - include:
       file: db/changelog/yaml/V217.0-run-output-converted.yaml
+  # V218: Report Studio phase 7 -- retention_rule.data_class also allows REPORTS (old report versions, unused frozen data, failed generations' data; media holds it).
+  - include:
+      file: db/changelog/yaml/V218.0-retention-reports.yaml

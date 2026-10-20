@@ -31,6 +31,14 @@ public enum DataClass {
         "AI Assistant conversations and their messages, its tool runs, and prompt test runs. Pinned conversations are included."),
     NOTIFICATIONS(Owner.NOTIFICATIONS, true, false, "Notifications",
         "Bell notices, read or not."),
+    /*
+     * Report Studio phase 7 (ADR-028 section 17): media holds it. A pipeline or run hold keeps the reports its runs made.
+     * Never removed: a report's current version, any approved (signed) version, templates, assets and brand profiles.
+     */
+    REPORTS(Owner.MEDIA, true, true, "Reports",
+        "Report Studio: the files of report versions a newer version replaced, and the frozen data no kept version uses (a failed "
+            + "generation's after 7 days). Each report's current version, every approved or signed version, templates, assets and "
+            + "brand profiles stay; a removed version keeps its record, marked expired."),
     ANALYTICS(Owner.NONE, false, false, "Analytics copies and cache",
         "Bounded by the platform: Parquet copies are kept to 4 GB a workspace (least recently read go first) and query results 10 "
             + "minutes. Both are rebuilt from your sources on the next read."),
@@ -39,7 +47,7 @@ public enum DataClass {
             + "platform's minimum.");
 
     /** Who removes it: Core itself, or the owning service through its internal retention endpoint. */
-    public enum Owner { CORE, AI, STORAGE, NOTIFICATIONS, NONE }
+    public enum Owner { CORE, AI, STORAGE, NOTIFICATIONS, MEDIA, NONE }
 
     private final Owner owner;
     private final boolean configurable;
