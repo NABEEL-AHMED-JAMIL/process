@@ -94,7 +94,7 @@ public class HealthRestApi {
             s.put("branch", v == null ? null : v.branch);
             s.put("deployedAt", v == null || v.deployedAt == null ? null : v.deployedAt.toString());
         });
-        List<Map<String, Object>> deploys = this.markPlanned(services, now, dayAgo);
+        this.markPlanned(services, now, dayAgo);
         List<Map<String, Object>> probes = new ArrayList<>();
         this.collector.probes().values().forEach(p -> {
             if (p.name.startsWith(HealthCollector.DISK_PREFIX)) {
@@ -117,7 +117,6 @@ public class HealthRestApi {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("asOf", now.toString());
         data.put("services", new ArrayList<>(services.values()));
-        data.put("deploys", deploys);
         data.put("probes", probes);
         data.put("incidents", alerts);
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Platform health.", data), HttpStatus.OK);
@@ -133,22 +132,25 @@ public class HealthRestApi {
      * The 24 hours' planned deploys, newest first; and on each service that had one, its restarts and minutes not UP that
      * fell inside one (zero for the others).
      */
-    private List<Map<String, Object>> markPlanned(Map<String, Map<String, Object>> services, Instant now, Timestamp dayAgo) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private void markPlanned(Map<String, Map<String, Object>> services, Instant now, Timestamp dayAgo) {
         Map<String, List<DeployWindow>> byService = new LinkedHashMap<>();
         for (DeployWindow window : this.planned.recent(now)) {
             if (window.closes().isBefore(dayAgo.toInstant())) {
                 continue;
             }
-            out.add(window.toMap(now));
             byService.computeIfAbsent(window.service, k -> new ArrayList<>()).add(window);
         }
-        services.values().forEach(s -> {
+        services.forEach((name, s) -> {
             s.put("plannedRestarts24h", 0L);
             s.put("plannedMinutesNotUp24h", 0L);
+            // Owner 2026-10-19: no list of deploys on the page; each service says its own -- how many in 24 hours, and the
+            // newest one's state and outcome, so a deploy that failed or never closed its window is said on its row.
+            List<DeployWindow> mine = byService.getOrDefault(name, List.of());
+            s.put("deploys24h", (long) mine.size());
+            s.put("lastDeploy", mine.isEmpty() ? null : newest(mine).toMap(now));
         });
         if (byService.isEmpty()) {
-            return out;
+            return;
         }
         this.jdbc.query("SELECT DISTINCT service, started_at FROM service_health_sample WHERE sampled_at >= ? AND started_at >= ?", rs -> {
             Map<String, Object> s = services.get(rs.getString(1));
@@ -162,7 +164,17 @@ public class HealthRestApi {
                 s.put("plannedMinutesNotUp24h", (Long) s.get("plannedMinutesNotUp24h") + 1);
             }
         }, dayAgo);
-        return out;
+    }
+
+    /** The window that started last (recent() is newest first, but the row should not depend on that). */
+    static DeployWindow newest(List<DeployWindow> windows) {
+        DeployWindow best = windows.get(0);
+        for (DeployWindow w : windows) {
+            if (w.start.isAfter(best.start)) {
+                best = w;
+            }
+        }
+        return best;
     }
 
     private static String iso(ResultSet rs, String column) throws SQLException {
