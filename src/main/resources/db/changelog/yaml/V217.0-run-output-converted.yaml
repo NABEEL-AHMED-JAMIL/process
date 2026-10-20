@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 217.0-run-output-converted
+      author: nabeel.amd93
+      description: "convert_file: run_output.format also allows the converter's targets (docx, odt, rtf, txt, md, html, xlsx, ods, pptx, odp, png, jpg); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V217.0-run-output-converted/V217__run_output_converted.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V217.0-run-output-converted/V217__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

@@ -109,6 +109,14 @@ class ConvertFileStepTaskTest {
         assertThat(this.media.calls).isEmpty();
     }
 
+    /** Every target the step offers has its own content type for the bucket and the run's download. */
+    @Test
+    void everyTargetHasAContentType() {
+        for (String target : ConvertFileStepTask.TARGETS) {
+            assertThat(ConvertFileStepTask.contentType(target)).as(target).isNotEqualTo("application/octet-stream");
+        }
+    }
+
     @Test
     void theSavedKeyMayNotStartWithASlashOrClimb() {
         assertThat(this.task.check(config("outputKey", "/x/{{file_stem}}.pdf"))).hasSize(1);

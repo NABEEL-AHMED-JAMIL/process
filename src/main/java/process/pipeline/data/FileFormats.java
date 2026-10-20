@@ -75,6 +75,31 @@ public final class FileFormats {
                 return "application/x-ndjson; charset=utf-8";
             case "pdf":
                 return "application/pdf";
+            // convert_file's targets (a converted file in a run's outputs, or written to a bucket).
+            case "txt":
+                return "text/plain; charset=utf-8";
+            case "md":
+                return "text/markdown; charset=utf-8";
+            case "html":
+                return "text/html; charset=utf-8";
+            case "rtf":
+                return "application/rtf";
+            case "png":
+                return "image/png";
+            case "jpg":
+                return "image/jpeg";
+            case "docx":
+                return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xlsx":
+                return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "pptx":
+                return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "odt":
+                return "application/vnd.oasis.opendocument.text";
+            case "ods":
+                return "application/vnd.oasis.opendocument.spreadsheet";
+            case "odp":
+                return "application/vnd.oasis.opendocument.presentation";
             default:
                 return "application/octet-stream";
         }

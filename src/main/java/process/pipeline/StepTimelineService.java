@@ -538,10 +538,14 @@ public class StepTimelineService {
             });
         }
         byte[] content = this.datasets.readFile(dataset.storageKey);
-        // MIG-255: a report is a document, not rows -- it downloads as itself, and rows download as rows.
+        // MIG-255: a report is a document, not rows -- it downloads as itself, and rows download as rows. So does a file
+        // convert_file kept (a docx, a png...): it is no rows to write in another format.
         if ("pdf".equals(own) || "pdf".equals(wanted)) {
             return Download.refused(400, "pdf".equals(own) ? "A PDF report downloads as the PDF it is."
                 : "Only a report is a PDF; this file downloads as csv, json or jsonl.");
+        }
+        if (!FileFormats.READABLE.contains(own)) {
+            return Download.refused(400, String.format("This file downloads as the %s it is.", own));
         }
         RowCollector collector = new RowCollector("The file", null);
         FileFormats.read(content, own, new FileFormats.ReadOptions(), collector);

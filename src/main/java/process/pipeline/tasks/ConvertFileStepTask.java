@@ -10,6 +10,7 @@ import process.pipeline.StreamingStepTask;
 import process.pipeline.Streams;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.backing.MediaFiles;
+import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
@@ -288,22 +289,6 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
     }
 
     static String contentType(String format) {
-        switch (format) {
-            case "pdf": return "application/pdf";
-            case "txt": return "text/plain";
-            case "md": return "text/markdown";
-            case "html": return "text/html";
-            case "csv": return "text/csv";
-            case "rtf": return "application/rtf";
-            case "png": return "image/png";
-            case "jpg": return "image/jpeg";
-            case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-            case "odt": return "application/vnd.oasis.opendocument.text";
-            case "ods": return "application/vnd.oasis.opendocument.spreadsheet";
-            case "odp": return "application/vnd.oasis.opendocument.presentation";
-            default: return "application/octet-stream";
-        }
+        return FileFormats.contentType(format);
     }
 }
