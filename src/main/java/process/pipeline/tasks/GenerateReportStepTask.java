@@ -56,6 +56,8 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     static final Set<String> VALIDATION = Set.of("TEMPLATE_INVALID", "DATA_SCHEMA_MISMATCH", "DATA_REQUIRED_MISSING", "BINDING_INVALID",
         "EXPRESSION_INVALID", "DATA_UNREADABLE", "TEMPLATE_VERSION_NOT_PUBLISHED", "TEMPLATE_NOT_FOUND");
     static final Pattern VERSION = Pattern.compile("^(latest|[1-9][0-9]{0,5})$");
+    /** The longest pipeline name the head carries (media keeps it in the report version's lineage). */
+    static final int MAX_PIPELINE_NAME = 160;
 
     static final TaskSpec SPEC = TaskSpec.builder("generate_report", "Generate report", TaskKind.OUTPUT)
         .description("Makes a Report Studio report from the rows -- with a design made inside this step from its own data, or "
@@ -169,6 +171,10 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             pipeline.put("jobId", context.jobId());
             pipeline.put("stepKey", context.stepKey());
             pipeline.put("attempt", context.attempt());
+            String pipelineName = pipelineName(context);
+            if (pipelineName != null) {
+                pipeline.put("pipelineName", pipelineName); // the report version's lineage names the pipeline
+            }
             head.put("pipeline", pipeline);
             try (BufferedWriter w = Files.newBufferedWriter(lines, StandardCharsets.UTF_8)) {
                 w.write(JSON.writeValueAsString(Map.of("head", head)));
@@ -244,6 +250,16 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
 
     static boolean done(String status) {
         return "SUCCEEDED".equals(status) || "FAILED".equals(status) || "CANCELLED".equals(status);
+    }
+
+    /** The pipeline's name for the head: trimmed, at most {@value #MAX_PIPELINE_NAME} characters; null when it has none. */
+    static String pipelineName(StreamContext context) {
+        String name = context.pipelineName();
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        name = name.trim();
+        return name.length() > MAX_PIPELINE_NAME ? name.substring(0, MAX_PIPELINE_NAME) : name;
     }
 
     /** Who the report says made it: the pipeline's run. */

@@ -194,6 +194,8 @@ public final class Streams {
 
         @Override public String pipelineId() { return this.context.pipelineId(); }
 
+        @Override public String pipelineName() { return this.context.pipelineName(); }
+
         @Override public Long jobOwnerUserId() { return this.context.jobOwnerUserId(); }
 
         @Override public String inputBucket() { return this.context.inputBucket(); }

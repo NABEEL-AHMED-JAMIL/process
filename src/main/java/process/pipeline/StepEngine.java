@@ -490,6 +490,8 @@ public class StepEngine {
         private volatile Map<String, Object> documentValues;
         /** MIG-347: the run's parameter and run.* values, worked out once, when the attempt starts or a step first asks. */
         private volatile RunValuesResolver.Outcome values;
+        /** The pipeline's name (pipeline.pipeline_name), read once, when a step first asks; empty when it has none. */
+        private volatile Optional<String> pipelineName;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -516,6 +518,22 @@ public class StepEngine {
         Map<String, Object> placeholders() {
             RunValuesResolver.Outcome found = this.values();
             return found.values == null ? Collections.<String, Object>emptyMap() : found.values.placeholders();
+        }
+
+        /**
+         * The name of the pipeline this run's definition belongs to -- one query, the first time a step asks, in the run's
+         * workspace (a step runs inside RowSecurity.forTenant); null when the plan has no stored definition or the
+         * pipeline has no name.
+         */
+        String pipelineName() {
+            Optional<String> found = this.pipelineName;
+            if (found == null) {
+                found = this.plan.stored == null || definitions == null ? Optional.<String>empty()
+                    : definitions.pipelineName(this.tenantId, this.plan.stored.pipelineKey);
+                this.pipelineName = found == null ? Optional.<String>empty() : found;
+                found = this.pipelineName;
+            }
+            return found.orElse(null);
         }
 
         /** MIG-360: the run's files -- the batch it took, else its own file, else none. One query, the first time. */
@@ -1674,6 +1692,11 @@ public class StepEngine {
         @Override
         public Long jobOwnerUserId() {
             return this.execution.plan.job.getCreatedBy();
+        }
+
+        @Override
+        public String pipelineName() {
+            return this.execution.pipelineName();
         }
 
         @Override

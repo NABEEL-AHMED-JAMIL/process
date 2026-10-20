@@ -53,6 +53,11 @@ public interface StepContext {
         return null;
     }
 
+    /** The name of the pipeline the run's job runs (pipeline.pipeline_name); null outside a run or when it has none. */
+    default String pipelineName() {
+        return null;
+    }
+
     /**
      * The model this run asks this step to run on (MIG-242, for the engine since the console review of 2026-10-07): an
      * ai-service model option id from the run's "Run with a different AI model...", else the schedule's setting; null for

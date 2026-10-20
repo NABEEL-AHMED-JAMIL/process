@@ -217,6 +217,19 @@ public class PipelineDefinitionStore {
             }, args.toArray());
     }
 
+    /**
+     * The name of a workspace's pipeline by its key (pipeline.pipeline_name), trimmed; empty when there is no such pipeline
+     * or it has no name. Under row-level security: read in the pipeline's workspace.
+     */
+    public Optional<String> pipelineName(long tenantId, long pipelineKey) {
+        List<String> found = this.jdbc.query("SELECT p.pipeline_name FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_key = ?",
+            (rs, n) -> rs.getString(1), tenantId, pipelineKey);
+        if (found.isEmpty() || found.get(0) == null || found.get(0).trim().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(found.get(0).trim());
+    }
+
     public Optional<Stored> byId(long pipelineDefinitionId) {
         return first(this.jdbc.query("SELECT " + COLUMNS + " FROM pipeline_definition d WHERE d.pipeline_definition_id = ?",
             PipelineDefinitionStore::row, pipelineDefinitionId));
