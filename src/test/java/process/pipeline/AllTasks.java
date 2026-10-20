@@ -2,6 +2,7 @@ package process.pipeline;
 
 import process.ai.AiPort;
 import process.pipeline.backing.ReportRenderer;
+import process.pipeline.backing.ReportStudio;
 
 import process.pipeline.backing.Fakes;
 import process.pipeline.tasks.AggregateStepTask;
@@ -37,6 +38,7 @@ import process.pipeline.tasks.ApprovalStepTask;
 import process.pipeline.tasks.LimitStepTask;
 import process.pipeline.tasks.SendWebhookStepTask;
 import process.pipeline.tasks.ReadDocumentsStepTask;
+import process.pipeline.tasks.GenerateReportStepTask;
 import process.pipeline.tasks.SortStepTask;
 import process.pipeline.tasks.DedupeStepTask;
 import process.pipeline.tasks.FillMissingStepTask;
@@ -56,6 +58,7 @@ public final class AllTasks {
     public final Fakes.Notifier notifier = new Fakes.Notifier();
     public final AiPort ai = mock(AiPort.class);
     public final ReportRenderer reports = mock(ReportRenderer.class);
+    public final ReportStudio studio = mock(ReportStudio.class);
     public final Fakes.Webhooks webhooks = new Fakes.Webhooks();
     public final Fakes.Documents documents = new Fakes.Documents();
     public final Fakes.Runs runs = new Fakes.Runs();
@@ -71,7 +74,7 @@ public final class AllTasks {
             new LimitStepTask(), new ApprovalStepTask(),
             new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents),
             new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
-            new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs)));
+            new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio)));
     }
 
     public StepTasks tasks() {

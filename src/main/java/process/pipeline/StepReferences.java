@@ -40,6 +40,12 @@ public class StepReferences {
     /** The schema format of a config property naming a media-service report template (AI hard-workflow test, 2026-10-13). */
     public static final String REPORT_TEMPLATE = "report-template";
 
+    /**
+     * Report Studio phase 5: the schema format of a config property naming a Report Studio template or a step's own design
+     * (a media-service ULID, not the converter's numbered report-template).
+     */
+    public static final String REPORT_STUDIO_TEMPLATE = "report-studio-template";
+
     private final Logger logger = LoggerFactory.getLogger(StepReferences.class);
 
     private final StepTasks tasks;

@@ -44,7 +44,9 @@ class TaskRegistryTest {
             entry("dedupe", "Process"), entry("split_column", "Process"), entry("pivot", "Process"), entry("unpivot", "Process"),
             entry("fill_missing", "Process"),
             // 2026-10-19: imaging review -- a segmentation mask measured in pixels, and a pipeline's runs with their reviews.
-            entry("measure_mask", "Process"), entry("read_runs", "Read"));
+            entry("measure_mask", "Process"), entry("read_runs", "Read"),
+            // Report Studio phase 5: a Report Studio report from the rows, with the step's own design or a template.
+            entry("generate_report", "Output"));
     }
 
     /**

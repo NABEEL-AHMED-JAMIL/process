@@ -1,11 +1,13 @@
 package process.pipeline;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.ai.AiPort;
 import process.pipeline.backing.IntegrationNames;
+import process.pipeline.backing.ReportStudio;
 import process.pipeline.backing.ReportTemplates;
 import process.pipeline.registry.TaskSpec;
 
@@ -44,6 +46,7 @@ public class StepResourceCheck {
     private AiPort ai;
     private IntegrationNames integration;
     private ReportTemplates templates;
+    private ReportStudio studio;
 
     public StepResourceCheck(StepTasks tasks) {
         this.tasks = tasks;
@@ -62,6 +65,54 @@ public class StepResourceCheck {
     @Autowired(required = false)
     public void useTemplates(ReportTemplates templates) {
         this.templates = templates;
+    }
+
+    @Autowired(required = false)
+    public void useStudio(ReportStudio studio) {
+        this.studio = studio;
+    }
+
+    /**
+     * Report Studio phase 5: each setting naming a design or template (format report-studio-template) is one of the
+     * workspace's, and has a published version -- the one pinned, when a version is (templateVersion). Unanswered (media
+     * down): not checked, the run says.
+     */
+    private void studioDesigns(List<PipelineDefinition.Step> steps, long tenantId, List<DefinitionProblem> problems) {
+        if (this.studio == null) {
+            return;
+        }
+        for (int i = 0; i < steps.size(); i++) {
+            PipelineDefinition.Step step = steps.get(i);
+            Optional<StepTask> task = step == null ? Optional.empty() : this.tasks.find(step.getTask());
+            if (!task.isPresent()) {
+                continue;
+            }
+            for (String property : StepReferences.propertiesOfFormat(task.get().spec(), StepReferences.REPORT_STUDIO_TEMPLATE)) {
+                Object id = step.effectiveConfig().get(property);
+                if (!(id instanceof String) || ((String) id).isBlank()) {
+                    continue;
+                }
+                Object pinned = step.effectiveConfig().get("templateVersion");
+                String version = pinned == null ? null : String.valueOf(pinned);
+                String at = "steps[" + i + "].config." + property;
+                try {
+                    for (JsonNode t : this.studio.check(tenantId, Collections.singletonList((String) id), version, null)) {
+                        if (!t.path("found").asBoolean(false)) {
+                            problems.add(new DefinitionProblem(at, "not a report design or template of this workspace: design the report "
+                                + "in the step again, or pick a template"));
+                        } else if (t.path("currentPublishedVersion").isNull() || t.path("currentPublishedVersion").isMissingNode()) {
+                            problems.add(new DefinitionProblem(at, String.format("'%s' has no published version yet: publish it in the designer, "
+                                + "then the step can run it", t.path("name").asText())));
+                        } else if (t.path("versionMissing").asBoolean(false)) {
+                            problems.add(new DefinitionProblem("steps[" + i + "].config.templateVersion", String.format("'%s' has no "
+                                + "published version %s", t.path("name").asText(), version)));
+                        }
+                    }
+                } catch (IOException | RuntimeException unanswered) {
+                    this.logger.info("The report design a pipeline names was not checked: {}", unanswered.getMessage());
+                }
+            }
+        }
     }
 
     /** One setting naming a resource: the step's index, the setting, the id. */
@@ -107,6 +158,7 @@ public class StepResourceCheck {
                 }
             }
         }
+        this.studioDesigns(steps, tenantId, problems);
         if (byFormat.isEmpty()) {
             return problems;
         }

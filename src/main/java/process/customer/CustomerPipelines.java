@@ -43,7 +43,7 @@ public class CustomerPipelines {
     static final List<String> RUN_EVENTS = Collections.unmodifiableList(Arrays.asList("run.started", "run.completed", "run.failed"));
     static final List<String> REVIEW_EVENTS = Collections.unmodifiableList(Arrays.asList("run.review.requested", "run.review.decided"));
     /** MIG-333: the steps whose files a run lists (run_output), each announced as file.available. */
-    static final List<String> FILE_TASKS = Collections.unmodifiableList(Arrays.asList("save_file", "render_pdf", "upload_bucket"));
+    static final List<String> FILE_TASKS = Collections.unmodifiableList(Arrays.asList("save_file", "render_pdf", "generate_report", "upload_bucket"));
     /** The largest record a run takes, in bytes of JSON (ADR-025 decision 7: a JSON body is at most 1 MB). */
     static final int MAX_BODY_BYTES = 1024 * 1024;
     static final int MAX_REFERENCE = 128;
