@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -99,6 +100,14 @@ public interface StepStore {
      */
     default String fileIdOf(long runOutputId) {
         return null;
+    }
+
+    /**
+     * 2026-10-20: the manifest rows that recorded an upload of this object -- bucket alias and key -- newest first, at most
+     * {@code limit}, as the caller's session sees them (row-level security): which runs wrote a file in a bucket.
+     */
+    default List<OutputRow> bucketWritesOf(String bucketAlias, String objectKey, int limit) {
+        return Collections.emptyList();
     }
 
     /**

@@ -304,6 +304,14 @@ public class JdbcStepStore implements StepStore {
     }
 
     @Override
+    public List<OutputRow> bucketWritesOf(String bucketAlias, String objectKey, int limit) {
+        // The workspace's own rows (row-level security): idx_run_output_tenant narrows them first.
+        return this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE o.kind = ? AND o.bucket_alias = ? AND o.object_key = ? "
+            + "ORDER BY COALESCE(o.date_updated, o.date_created) DESC, o.run_output_id DESC LIMIT ?", JdbcStepStore::output,
+            RunOutput.BUCKET, bucketAlias, objectKey, Math.max(1, limit));
+    }
+
+    @Override
     public Optional<OutputRow> outputOfDataset(long runDatasetId) {
         List<OutputRow> found = this.jdbc.query("SELECT " + OUTPUT_COLUMNS + "WHERE o.run_dataset_id = ?", JdbcStepStore::output,
             runDatasetId);

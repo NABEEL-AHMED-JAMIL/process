@@ -241,6 +241,15 @@ public class InMemoryStepStore implements StepStore {
     }
 
     @Override
+    public synchronized List<OutputRow> bucketWritesOf(String bucketAlias, String objectKey, int limit) {
+        // Newest first: the later recorded row (the higher id on a tie, as JdbcStepStore orders them).
+        return this.outputs.values().stream()
+            .filter(o -> RunOutput.BUCKET.equals(o.kind) && bucketAlias.equals(o.bucketAlias) && objectKey.equals(o.objectKey))
+            .sorted((a, b) -> b.recordedAt.equals(a.recordedAt) ? Long.compare(b.runOutputId, a.runOutputId) : b.recordedAt.compareTo(a.recordedAt))
+            .limit(Math.max(1, limit)).collect(Collectors.toList());
+    }
+
+    @Override
     public synchronized Optional<OutputRow> outputOfDataset(long runDatasetId) {
         return this.outputs.values().stream().filter(o -> o.runDatasetId != null && o.runDatasetId == runDatasetId).findFirst();
     }

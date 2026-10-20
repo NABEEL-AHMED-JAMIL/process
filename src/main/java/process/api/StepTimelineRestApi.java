@@ -27,7 +27,8 @@ import process.pipeline.StepTimelineService;
  *       as its one legacy step;</li>
  *   <li>GET sourceJob.json/stepLogs?stepExecutionId=: one step's log lines;</li>
  *   <li>GET sourceJob.json/runDataset?runDatasetId=&amp;format=csv|json|jsonl: a run dataset as a file (Wave 4);</li>
- *   <li>GET sourceJob.json/runOutputs?jobQueueId=&amp;attempt=: the run's result manifest (Wave 4).</li>
+ *   <li>GET sourceJob.json/runOutputs?jobQueueId=&amp;attempt=: the run's result manifest (Wave 4);</li>
+ *   <li>GET sourceJob.json/objectWriter?bucket=&amp;key=: the run that wrote an object in a bucket, newest (2026-10-20).</li>
  * </ul>
  *
  * A missing id is Spring's 400; a run or step that is not the caller's is the envelope's "not found".
@@ -83,6 +84,15 @@ public class StepTimelineRestApi {
     @RequestMapping(value = "/sourceJob.json/runOutputs", method = RequestMethod.GET)
     public ResponseEntity<?> runOutputs(@RequestParam Long jobQueueId, @RequestParam(required = false) Integer attempt) {
         return new ResponseEntity<>(this.service.outputs(jobQueueId, attempt), HttpStatus.OK);
+    }
+
+    /**
+     * 2026-10-20: which run wrote an object in a bucket (the alias and key Storage's file panel names): the newest upload of
+     * it in the run manifests that the caller may read, or data null. A missing bucket or key is Spring's 400.
+     */
+    @RequestMapping(value = "/sourceJob.json/objectWriter", method = RequestMethod.GET)
+    public ResponseEntity<?> objectWriter(@RequestParam String bucket, @RequestParam String key) {
+        return new ResponseEntity<>(this.service.objectWriter(bucket, key), HttpStatus.OK);
     }
 
     /**

@@ -71,6 +71,11 @@ class CoreCrossTenantProbeRunDatasetsPostgresTest {
             fileKey);
         sql.update("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, run_dataset_id, expires_at) "
             + "VALUES (?, 'file', 'notes.csv', 'csv', 1, 30, ?, now() + interval '1 day')", step, file);
+        // An upload of the same object by every run (objectWriter), the run's marker in its name: B's newest, then the
+        // colleague's, then A's, so only the caller's own reading finds A's.
+        sql.update("INSERT INTO run_output (step_execution_id, kind, name, format, row_count, byte_count, bucket_alias, object_key, "
+            + "date_created) VALUES (?, 'bucket', ?, 'csv', 1, 30, 'shared-s3', 'reports/shared.csv', now() + make_interval(mins => ?))",
+            step, marker + ".csv", run == B_RUN ? 60 : run == COLLEAGUE_RUN ? 30 : 0);
         return new long[] {output, file};
     }
 
@@ -137,6 +142,35 @@ class CoreCrossTenantProbeRunDatasetsPostgresTest {
         for (Long none : NO_WORKSPACE) {
             assertThat(fx.probe("GET sourceJob.json/runOutputs", tenantlessUser(none), () -> fx.stepTimeline.runOutputs(A_RUN, null)))
                 .contains(REFUSED);
+        }
+        assertThat(fx.leaks).isEmpty();
+        assertThat(fx.foreignRows()).isEqualTo(before);
+    }
+
+    /**
+     * 2026-10-20: which run wrote an object -- every run uploaded reports/shared.csv to shared-s3, B's last. Workspace A's
+     * administrator is answered the newest of A's (the colleague's), A's tenant user their own; neither is answered B's,
+     * and a caller with no workspace none. An object only B wrote is nobody's here.
+     */
+    @Test
+    void anObjectsWriterIsTheCallersOwnRunNeverAnotherWorkspaces() {
+        // An object only B wrote (B's upload moved aside for the call, then back) is nobody's here.
+        fx.db.jdbc().update("UPDATE run_output SET object_key = 'reports/bravo-only.csv' WHERE kind = 'bucket' AND name = 'bravo payload marker.csv'");
+        try {
+            assertThat(fx.probe("GET sourceJob.json/objectWriter", ADMIN_OF_A, () -> fx.stepTimeline.objectWriter("shared-s3", "reports/bravo-only.csv")))
+                .contains("No run of yours wrote this file.").doesNotContain(String.valueOf(B_RUN));
+        } finally {
+            fx.db.jdbc().update("UPDATE run_output SET object_key = 'reports/shared.csv' WHERE kind = 'bucket' AND name = 'bravo payload marker.csv'");
+        }
+        String before = fx.foreignRows();
+        assertThat(fx.probe("GET sourceJob.json/objectWriter", ADMIN_OF_A, () -> fx.stepTimeline.objectWriter("shared-s3", "reports/shared.csv")))
+            .contains("\"jobQueueId\":" + COLLEAGUE_RUN).doesNotContain(String.valueOf(B_RUN));
+        assertThat(fx.probe("GET sourceJob.json/objectWriter", USER_OF_A, () -> fx.stepTimeline.objectWriter("shared-s3", "reports/shared.csv")))
+            .contains("\"jobQueueId\":" + A_RUN).doesNotContain(String.valueOf(B_RUN)).doesNotContain(String.valueOf(COLLEAGUE_RUN));
+        for (Long none : NO_WORKSPACE) {
+            assertThat(fx.probe("GET sourceJob.json/objectWriter", tenantlessUser(none),
+                () -> fx.stepTimeline.objectWriter("shared-s3", "reports/shared.csv")))
+                .doesNotContain(String.valueOf(A_RUN)).doesNotContain(String.valueOf(B_RUN)).doesNotContain(String.valueOf(COLLEAGUE_RUN));
         }
         assertThat(fx.leaks).isEmpty();
         assertThat(fx.foreignRows()).isEqualTo(before);

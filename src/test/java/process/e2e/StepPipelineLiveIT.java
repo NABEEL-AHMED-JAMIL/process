@@ -28,7 +28,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code mvn -o verify -Pit -Dit.test=StepPipelineLiveIT}. Nothing here prints the token.
  *
  * <ol>
- *   <li>The legacy wrap: LIVE_LEGACY_JOB_ID (default 2834, workspace 2924's known-good reference CSV job) is run now; its
+ *   <li>The legacy wrap, when LIVE_LEGACY_JOB_ID names a legacy job and a worker runs to take it (none on the rebuilt
+ *       platform: the workers are retired, ADR-009; 2834 went in the 2026-10-06 wipe): it is run now; its
  *       run goes Queue -> Start -> Running -> Completed through Kafka and the worker's callbacks exactly as before, and its
  *       step timeline is its one legacy step, Completed, whose log is the run's own.</li>
  *   <li>A step pipeline, when LIVE_STEP_PIPELINE_KEY and LIVE_STEP_JOB_ID name a pipeline of the workspace (with no worker
@@ -114,7 +115,12 @@ class StepPipelineLiveIT {
 
     @Test
     void theReferenceLegacyJobRunsThroughKafkaAndItsWorkerExactlyAsBefore() throws Exception {
-        long jobId = Long.parseLong(System.getenv().getOrDefault("LIVE_LEGACY_JOB_ID", "2834"));
+        // No default: 2834 (workspace 2924's reference CSV job) went in the 2026-10-06 wipe, and the rebuilt platform has no
+        // legacy job and no worker (service-1/2/3 are retired, ADR-009). A legacy job id is named only where both exist.
+        String legacy = System.getenv("LIVE_LEGACY_JOB_ID");
+        assumeTrue(legacy != null && !legacy.trim().isEmpty(),
+            "LIVE_LEGACY_JOB_ID names no legacy job: the rebuilt platform runs no worker to take one (ADR-009)");
+        long jobId = Long.parseLong(legacy.trim());
         RunSeen seen = runToTheEnd(jobId);
 
         assertThat(seen.last).as("seen " + seen.statuses).isEqualTo("Completed");

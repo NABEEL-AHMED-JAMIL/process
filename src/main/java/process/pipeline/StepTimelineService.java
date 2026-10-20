@@ -353,6 +353,44 @@ public class StepTimelineService {
         return new ResponseDto(SUCCESS, String.format("%d file(s).", outputs.size()), manifest);
     }
 
+    /** Upload rows of an object looked at for its writer: enough to pass over the runs this caller may not read. */
+    static final int WRITER_ROWS = 20;
+
+    /**
+     * 2026-10-20: which run wrote this object -- a bucket alias and key, as Storage's file panel names a file. The newest
+     * upload of it in the run manifests (run_output, kind bucket) whose run the caller may read (as runOutputs), with the
+     * run, its schedule and pipeline, the step that wrote it and when; data null when no run the caller reads wrote it
+     * (an upload by hand, another workspace's object). The panel used to search the recent runs' outputs instead, so a
+     * file an older run or a schedule that had not run lately wrote was "not written by any recent run".
+     */
+    @Transactional(readOnly = true)
+    public ResponseDto objectWriter(String bucket, String key) {
+        if (bucket == null || bucket.trim().isEmpty() || key == null || key.trim().isEmpty()) {
+            return new ResponseDto(ERROR, "A bucket and a key are required.");
+        }
+        for (StepStore.OutputRow row : this.steps.bucketWritesOf(bucket.trim(), key.trim(), WRITER_ROWS)) {
+            Optional<RunOwnership.Owned> owned = this.readable(row.jobQueueId);
+            if (!owned.isPresent()) {
+                continue;
+            }
+            Map<String, Object> writer = new LinkedHashMap<>();
+            writer.put("jobQueueId", row.jobQueueId);
+            writer.put("jobId", owned.get().run.getJobId());
+            writer.put("jobName", owned.get().job == null ? null : owned.get().job.getJobName());
+            writer.put("pipelineName", owned.get().job == null || owned.get().job.getTaskDetail() == null ? null
+                : owned.get().job.getTaskDetail().getTaskName());
+            writer.put("owner", owned.get().job == null ? null : owned.get().job.getCreatedByName());
+            writer.put("attempt", row.attempt);
+            writer.put("stepKey", row.stepKey);
+            writer.put("task", row.taskCode);
+            writer.put("recordedAt", row.recordedAt);
+            writer.put("bucket", row.bucketAlias);
+            writer.put("key", row.objectKey);
+            return new ResponseDto(SUCCESS, String.format("Written by run %d.", row.jobQueueId), writer);
+        }
+        return new ResponseDto(SUCCESS, "No run of yours wrote this file.", null);
+    }
+
     /**
      * MIG-345: the attempts of the run someone asked for -- resume or restart, from which step, how many steps reused, by
      * whom (a person's name, or the API client) and when -- for the run's history.

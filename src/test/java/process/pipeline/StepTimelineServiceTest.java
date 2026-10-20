@@ -10,6 +10,7 @@ import process.model.enums.JobStatus;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
+import process.model.pojo.SourceTask;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.review.InMemoryRunReviewStore;
@@ -99,6 +100,45 @@ class StepTimelineServiceTest {
             .containsEntry("durationMs", 150000L).containsEntry("statusMessage", "Job 2834 completed: 12 files.")
             .containsEntry("log", "run");
         assertThat((List<RunAiStep>) timeline.get("aiSteps")).extracting(step -> step.stepKey).containsExactly("summary");
+    }
+
+    /**
+     * 2026-10-20: which run wrote a bucket object -- Storage's file panel asks. The newest upload of that object in a run
+     * the caller reads, with its schedule; an object no run of theirs wrote is answered with no data; a run of another
+     * workspace's that wrote it is passed over.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anObjectsWriterIsTheNewestReadableRunThatUploadedIt() {
+        SourceTask task = new SourceTask();
+        task.setTaskName("Hospital readmission risk");
+        this.job.setJobName("Hospital readmission risk (daily)");
+        this.job.setTaskDetail(task);
+        long theirs = RUN + 1;
+        JobQueue other = new JobQueue();
+        other.setJobQueueId(theirs);
+        other.setJobId(JOB + 1);
+        other.setTenantId(TENANT + 1);
+        SourceJob otherJob = new SourceJob();
+        otherJob.setJobId(JOB + 1);
+        otherJob.setTenantId(TENANT + 1);
+        when(this.runs.findById(theirs)).thenReturn(Optional.of(other));
+        when(this.jobs.findById(JOB + 1)).thenReturn(Optional.of(otherJob));
+        long mine = this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "keep_stats", "upload_bucket", "fail"))).get(0);
+        this.steps.output(mine, RunOutput.bucket("riverside-health-s3", "datasets/readmission/results/statistics.csv", "csv", 27, 2087), null, null);
+        long later = this.steps.plan(theirs, 1, 1002L, Arrays.asList(new StepStore.Planned(0, "keep", "upload_bucket", "fail"))).get(0);
+        this.steps.output(later, RunOutput.bucket("riverside-health-s3", "datasets/readmission/results/statistics.csv", "csv", 1, 10), null, null);
+
+        ResponseDto answer = this.service.objectWriter("riverside-health-s3", "datasets/readmission/results/statistics.csv");
+        assertThat(answer.getStatus()).as(answer.getMessage()).isEqualTo("SUCCESS");
+        assertThat((Map<String, Object>) answer.getData()).containsEntry("jobQueueId", RUN).containsEntry("jobId", JOB)
+            .containsEntry("jobName", "Hospital readmission risk (daily)").containsEntry("pipelineName", "Hospital readmission risk")
+            .containsEntry("stepKey", "keep_stats").containsEntry("task", "upload_bucket");
+
+        ResponseDto none = this.service.objectWriter("riverside-health-s3", "uploaded/by-hand.csv");
+        assertThat(none.getStatus()).isEqualTo("SUCCESS");
+        assertThat(none.getData()).isNull();
+        assertThat(this.service.objectWriter(" ", "x").getStatus()).isEqualTo("ERROR");
     }
 
     @Test
