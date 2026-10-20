@@ -92,7 +92,7 @@ public class ReadS3StepTask extends RegisteredTask {
         BucketStore.Listing listing;
         ObjectReadMarks.Mark upTo = null;
         if (sinceLastRun) {
-            Fresh fresh = this.newSinceLastRun(context, bucket, prefix, Configs.text(config, "prefix", ""), limit);
+            Fresh fresh = this.newSinceLastRun(context, bucket, prefix, asWritten(context), limit);
             listing = fresh.listing;
             upTo = fresh.upTo;
         } else {
@@ -103,10 +103,16 @@ public class ReadS3StepTask extends RegisteredTask {
         }
         StepResult result = this.read(context, config, bucket, prefix, format, listing);
         if (sinceLastRun && context.jobId() != null && this.marks != null) {
-            this.marks.record(context.jobQueueId(), context.stepKey(), context.jobId(), bucket, Configs.text(config, "prefix", ""), upTo,
+            this.marks.record(context.jobQueueId(), context.stepKey(), context.jobId(), bucket, asWritten(context), upTo,
                 listing.objects.size(), context.attempt());
         }
         return result;
+    }
+
+    /** The prefix as the definition writes it: {{param.file}} and {{run.date}} unfilled, so one mark serves every run. */
+    static String asWritten(StepContext context) {
+        Map<String, Object> written = context.configAsWritten();
+        return Configs.text(written == null ? context.config() : written, "prefix", "");
     }
 
     /** The files the run was started for, in its own bucket (the inbox), instead of the prefix; no watermark moves. */

@@ -116,11 +116,17 @@ class ReadS3SinceLastRunTest {
         assertThat(keys(2, config)).containsExactly("in/b");
     }
 
-    /** The mark is the job's for the prefix as written: a run for one file ({{param.file}}) moves it for the next. */
+    /**
+     * The mark is the job's for the prefix as the definition writes it: a run for one file ({{param.file}} filled with its
+     * name) moves the mark the next run over the whole folder starts from.
+     */
     @Test
-    void theMarkIsKeptForThePrefixAsTheStepWritesIt() throws Exception {
+    void theMarkIsKeptForThePrefixAsTheDefinitionWritesItNotAsOneRunFilledIt() throws Exception {
         object("in/a", 1);
-        keys(1, config("bucket", "lake", "prefix", "in/{{param.file}}", "since", "last_run"));
+        TaskContext oneFile = new TaskContext(config("bucket", "lake", "prefix", "in/a", "since", "last_run"), Dataset.EMPTY);
+        oneFile.asWritten = config("bucket", "lake", "prefix", "in/{{param.file}}", "since", "last_run");
+        oneFile.runId = 1;
+        this.task.run(oneFile);
         assertThat(this.marks.prefixes).containsExactly("in/{{param.file}}");
     }
 

@@ -57,6 +57,14 @@ final class TaskContext implements StepContext {
         return TENANT;
     }
 
+    /** The config as the definition writes it, when a test fills config() with a run's values; null for config() itself. */
+    Map<String, Object> asWritten;
+
+    @Override
+    public Map<String, Object> configAsWritten() {
+        return this.asWritten != null ? this.asWritten : this.config;
+    }
+
     /** The run's id; RUN unless a test runs several. */
     long runId = RUN;
 

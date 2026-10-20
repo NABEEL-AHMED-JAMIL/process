@@ -1632,6 +1632,11 @@ public class StepEngine {
 
         /** MIG-347: the step's settings with {{param.*}} and {{run.*}} filled in (the step fills its own placeholders). */
         @Override
+        public Map<String, Object> configAsWritten() {
+            return this.step.effectiveConfig();
+        }
+
+        @Override
         public Map<String, Object> config() {
             Map<String, Object> config = this.filled;
             if (config == null) {

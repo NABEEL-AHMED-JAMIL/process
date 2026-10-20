@@ -21,6 +21,14 @@ public interface StepContext {
 
     Map<String, Object> config();
 
+    /**
+     * The step's config as the definition writes it, its {{param.*}} and {{run.*}} placeholders unfilled -- what a step
+     * keys state by that must outlive one run's values (read_s3's "since the last run" mark). {@link #config()} otherwise.
+     */
+    default Map<String, Object> configAsWritten() {
+        return this.config();
+    }
+
     /** The step's input: the output it names, else the latest output before it, else the source. Never null. */
     Dataset input();
 
