@@ -3,10 +3,12 @@ package process.config;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import process.util.FailureReference;
 import process.util.ProcessUtil;
 
@@ -54,5 +56,13 @@ class SafeErrorAttributesTest {
     void theSentenceWithoutAReferenceIsJustTheSentence() {
         assertThat(FailureReference.sentence("The export failed.", null)).isEqualTo("The export failed.");
         assertThat(FailureReference.sentence("The export failed.", "01JABC12345")).isEqualTo("The export failed. Reference: 01JABC12345.");
+    }
+
+    /** MIG-389: a path nothing serves (Spring 6.1+ raises it) is Boot 2.7's 404 answer, not an internal error. */
+    @Test
+    void aPathNothingServesIsBoot27sNotFound() {
+        Map<String, Object> answer = answer(new NoResourceFoundException(HttpMethod.GET, "/api/v1/nope", "nope"), 404, null);
+
+        assertThat(answer.get("message")).isEqualTo("No message available");
     }
 }

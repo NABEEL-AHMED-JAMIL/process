@@ -13,6 +13,8 @@ import process.util.FailureReference;
 import process.util.ProcessUtil;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.Map;
 
 /**
@@ -32,6 +34,14 @@ public class SafeErrorAttributes extends DefaultErrorAttributes {
     public Map<String, Object> getErrorAttributes(WebRequest request, ErrorAttributeOptions options) {
         Map<String, Object> attributes = super.getErrorAttributes(request, options);
         Throwable error = this.getError(request);
+        if (error instanceof NoResourceFoundException || error instanceof NoHandlerFoundException) {
+            // MIG-389: a path nothing serves. Spring 6.1+ raises it where 5.3's resource handler only answered 404, and
+            // GlobalExceptionHandler hands it back to /error; the answer is Boot 2.7's, nothing failed, nothing is logged.
+            if (attributes.containsKey("message")) {
+                attributes.put("message", "No message available");
+            }
+            return attributes;
+        }
         if (error != null && !(error instanceof ResponseStatusException) && attributes.containsKey("message")) {
             String reference = reference(request);
             logger.error("Request to {} failed outside the controllers (reference {})", attributes.get("path"), reference, error);
