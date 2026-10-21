@@ -174,7 +174,7 @@ public class Backfills {
         RunParameters.Resolved values;
 
         int willRun() {
-            return this.periods.size() - this.covered.size();
+            return this.rerun ? this.periods.size() : this.periods.size() - this.covered.size();
         }
     }
 
@@ -286,7 +286,8 @@ public class Backfills {
         if (!plan.values.ok()) {
             throw new Refused(HttpStatus.UNPROCESSABLE_CONTENT, "invalid-parameters", "The runs' parameters do not stand: " + plan.values.sentence());
         }
-        plan.covered = plan.rerun ? Collections.<Instant>emptySet() : this.store.covered(plan.job.jobId, plan.periods);
+        // ZT-P8: which periods completed before is said either way; re-running them only changes what runs.
+        plan.covered = this.store.covered(plan.job.jobId, plan.periods);
         return plan;
     }
 
@@ -319,7 +320,7 @@ public class Backfills {
         out.put("from", plan.from.toString());
         out.put("to", plan.to.toString());
         out.put("periods", plan.periods.size());
-        out.put("alreadyCompleted", plan.rerun ? 0 : plan.covered.size());
+        out.put("alreadyCompleted", plan.covered.size());
         out.put("willRun", plan.willRun());
         out.put("rerunCompleted", plan.rerun);
         out.put("concurrency", plan.concurrency);

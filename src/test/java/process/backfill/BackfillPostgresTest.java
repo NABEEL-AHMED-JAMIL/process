@@ -251,7 +251,13 @@ class BackfillPostgresTest {
 
         Backfills.Request rerun = request(JOB_A, "2026-10-01", "2026-10-07");
         rerun.rerunCompleted = true;
-        assertThat(this.backfills.preview(rerun).get("willRun")).isEqualTo(7);
+        Map<String, Object> again = this.backfills.preview(rerun);
+        assertThat(again.get("willRun")).isEqualTo(7);
+        // ZT-P8: re-running still says which periods completed before ("1 run again"), not "0 run again".
+        assertThat(again.get("alreadyCompleted")).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> againDates = (List<Map<String, Object>>) again.get("dates");
+        assertThat(againDates.get(2)).containsEntry("completed", true);
 
         this.billingDown = true;
         @SuppressWarnings("unchecked")
