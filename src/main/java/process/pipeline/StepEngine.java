@@ -886,10 +886,10 @@ public class StepEngine {
                     outputs.put(step.getKey(), passed);
                     latest = passed;
                     this.recordReads(row, step, tried.reads);
-                    String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, input.size(),
+                    String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, recordsIn,
                         out == null ? "no records" : out.toString(), tried.tries > 1 ? String.format(", on try %d", tried.tries) : "");
                     steps.ended(row, JobStatus.Completed.name(), out, null, done);
-                    this.audit(String.format("%s completed: %d in, %s out, %.1f s.", label, input.size(), out == null ? "0" : out.toString(),
+                    this.audit(String.format("%s completed: %d in, %s out, %.1f s.", label, recordsIn, out == null ? "0" : out.toString(),
                         millis / 1000.0));
                     outcome.completed++;
                 } else {

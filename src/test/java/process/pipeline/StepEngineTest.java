@@ -306,6 +306,8 @@ class StepEngineTest {
         assertThat(this.worker.last()).isEqualTo("Completed: 3 of 3 step(s) completed.");
         assertThat(this.steps.row(RUN_ID, 1, "second").recordsIn).as("a read step's input is ignored: 3 rows of <first> are not its").isZero();
         assertThat(this.steps.row(RUN_ID, 1, "second").recordsOut).isEqualTo(1L);
+        assertThat(this.steps.row(RUN_ID, 1, "second").statusMessage).as("the run drawer's line").endsWith(": 0 in, 1 out.");
+        assertThat(this.steps.row(RUN_ID, 1, "both").statusMessage).endsWith(": 4 in, 4 out.");
         assertThat(this.steps.row(RUN_ID, 1, "both").recordsIn).as("the append takes in first's 3 and second's 1").isEqualTo(4L);
         assertThat(this.steps.row(RUN_ID, 1, "both").recordsOut).isEqualTo(4L);
         assertThat(this.audit).anySatisfy(line -> assertThat(line).startsWith("Step 2/3 <second> (sample) started on 0 record(s)."));
