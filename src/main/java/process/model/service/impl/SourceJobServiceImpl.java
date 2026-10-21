@@ -26,6 +26,7 @@ import process.model.projection.JobAuditLogProjection;
 import process.identity.IdentityPort;
 import process.model.service.SourceJobService;
 import org.barco.platform.tenancy.TenantScope;
+import process.security.ManagedSessionOnly;
 import process.security.TenantContext;
 import process.security.JobOwnership;
 import process.security.TenantFilterHelper;
@@ -959,6 +960,11 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Override
     @Transactional(readOnly = true)
     public ResponseDto listSourceJob(Integer page, Integer size, List<Long> onlyJobIds) throws Exception {
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the schedules are a workspace's, never the platform
+        // administrator's own sign-in's (WorkspaceDataGuard refuses it at the edge; this holds without it).
+        if (ManagedSessionOnly.isPlatformOwnSignIn()) {
+            return new ResponseDto(ERROR, ManagedSessionOnly.REFUSAL);
+        }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
         List<SourceJob> jobs = this.listedJobs(page, size, onlyJobIds);
         List<Long> jobIds = jobs.stream().map(SourceJob::getJobId).collect(Collectors.toList());

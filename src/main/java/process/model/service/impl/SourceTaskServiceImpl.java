@@ -70,6 +70,7 @@ import static process.util.ProcessUtil.formatter;
 import static process.util.ProcessUtil.isNull;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import static process.util.ProcessUtil.SUCCESS;
 import static process.util.ProcessUtil.SHEET_NAME;
 import process.model.dto.ConfigurationMakerRequest;
@@ -603,6 +604,29 @@ public class SourceTaskServiceImpl implements SourceTaskService {
             responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         }
         return responseDto;
+    }
+
+    /**
+     * ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the platform's rate-card editor picks a pipeline for a
+     * PIPELINE pricing rule from every workspace's. It read listSourceTask -- definitions, payloads, runs -- across every
+     * workspace; this answers ids, names and the workspace (its name from Identity) and nothing else.
+     */
+    @Override
+    public ResponseDto pipelineNames() {
+        List<Object[]> rows = this.sourceTaskRepository.findPipelineNames();
+        Map<Long, String> workspaceNames = WorkspaceNames.forCaller(this.identity, rows.stream()
+            .map(row -> row[2] == null ? null : Long.valueOf(row[2].toString())).collect(Collectors.toList()));
+        List<Map<String, Object>> names = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String, Object> name = new LinkedHashMap<>();
+            Long tenantId = row[2] == null ? null : Long.valueOf(row[2].toString());
+            name.put("taskDetailId", Long.valueOf(row[0].toString()));
+            name.put("taskName", row[1] == null ? null : row[1].toString());
+            name.put("tenantId", tenantId);
+            name.put("tenantName", workspaceNames.get(tenantId));
+            names.add(name);
+        }
+        return new ResponseDto(SUCCESS, names.size() + " pipeline(s).", names);
     }
 
     @Override

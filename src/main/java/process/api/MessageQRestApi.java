@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * @author Nabeel Ahmed
  * */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's runs (the Queue's rows, facets and logs)
+// and every status change on them are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @RequestMapping(value = "/message.json")
 @PreAuthorize("hasRole('TENANT_USER')")

@@ -1,6 +1,9 @@
 package process.api;
 
+import org.barco.platform.security.AuditedRead;
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.PlatformLevel;
+import org.barco.platform.security.WorkspaceData;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +29,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * @author Nabeel Ahmed
  * */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's pipelines -- their definitions, linked
+// schedules, export and every add, change and delete -- are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @RequestMapping(value = "/sourceTask.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
@@ -125,6 +131,27 @@ public class SourceTaskRestApi {
         }
     }
 
+    /**
+     * ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the platform's rate-card editor names a pipeline in a
+     * PIPELINE pricing rule. It reads every workspace's pipelines as {taskDetailId, taskName, tenantId, tenantName}, by
+     * name -- ids and names only, no definition, no run -- so the platform's own sign-in keeps it; listSourceTask is a
+     * managed session's.
+     */
+    @PlatformLevel
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @RequestMapping(value = "/names", method = RequestMethod.GET)
+    public ResponseEntity<?> names() {
+        try {
+            return new ResponseEntity<>(this.sourceTaskService.pipelineNames(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while listing pipeline names :- {}.", ex);
+            return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session exporting the workspace's pipelines
+    // writes one managed_action_log row.
+    @AuditedRead("pipelines export")
     @RequestMapping(value = "/downloadListSourceTask", method = RequestMethod.GET)
     public ResponseEntity<?> downloadListSourceTask() {
         try {

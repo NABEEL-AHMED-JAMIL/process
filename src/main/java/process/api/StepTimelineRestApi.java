@@ -2,6 +2,8 @@ package process.api;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.barco.platform.security.AuditedRead;
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,6 +35,9 @@ import process.pipeline.StepTimelineService;
  *
  * A missing id is Spring's 400; a run or step that is not the caller's is the envelope's "not found".
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a run's steps, step logs, outputs, datasets, written
+// objects and retries are a workspace's data, "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class StepTimelineRestApi {
@@ -59,6 +64,9 @@ public class StepTimelineRestApi {
      * with the envelope: 400 for a format it does not write, 404 for a dataset that is not the caller's (another
      * workspace's included), 410 once it has expired. Every answer is in file_access_log (MIG-243).
      */
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session downloading a run dataset writes one
+    // managed_action_log row.
+    @AuditedRead(value = "run output", id = {"runDatasetId", "format"})
     @RequestMapping(value = "/sourceJob.json/runDataset", method = RequestMethod.GET)
     public ResponseEntity<StreamingResponseBody> runDataset(@RequestParam Long runDatasetId,
         @RequestParam(required = false) String format) throws JsonProcessingException {
@@ -81,6 +89,9 @@ public class StepTimelineRestApi {
     }
 
     /** Wave 4: a run's result manifest -- the files its steps wrote, every attempt unless one is named. */
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session opening a run's result manifest writes
+    // one managed_action_log row.
+    @AuditedRead(value = "run outputs", id = {"jobQueueId", "attempt"})
     @RequestMapping(value = "/sourceJob.json/runOutputs", method = RequestMethod.GET)
     public ResponseEntity<?> runOutputs(@RequestParam Long jobQueueId, @RequestParam(required = false) Integer attempt) {
         return new ResponseEntity<>(this.service.outputs(jobQueueId, attempt), HttpStatus.OK);
@@ -129,6 +140,9 @@ public class StepTimelineRestApi {
         public void setFrom(String from) { this.from = from; }
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session opening a step's log lines writes one
+    // managed_action_log row.
+    @AuditedRead(value = "step logs", id = "stepExecutionId")
     @RequestMapping(value = "/sourceJob.json/stepLogs", method = RequestMethod.GET)
     public ResponseEntity<?> stepLogs(@RequestParam Long stepExecutionId) {
         return new ResponseEntity<>(this.service.log(stepExecutionId), HttpStatus.OK);

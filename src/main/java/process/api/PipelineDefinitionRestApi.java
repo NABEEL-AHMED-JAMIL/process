@@ -1,6 +1,8 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.PlatformLevel;
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +37,9 @@ import process.pipeline.StepPreview;
  * A missing pipelineKey is Spring's 400; a pipeline of another workspace, or none, is the envelope's
  * "That pipeline no longer exists." -- the pipeline form's own words.
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's step definitions, their validation,
+// previews on its rows and task switches are "Work in this workspace"'s only; the shared step catalogue stays platform-level.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class PipelineDefinitionRestApi {
@@ -76,11 +81,17 @@ public class PipelineDefinitionRestApi {
     }
 
     /** Owner #16: a platform administrator names the workspace (the shared selector's tenantId); anyone else reads their own. */
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the step catalogue every workspace shares (codes, names,
+    // what each takes) and whether a task is switched on -- no pipeline, no row -- stays platform-level.
+    @PlatformLevel
     @RequestMapping(value = "/pipeline.json/steps/tasks", method = RequestMethod.GET)
     public ResponseEntity<?> tasks(@RequestParam(required = false) Long tenantId) {
         return new ResponseEntity<>(this.service.tasks(tenantId), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the kinds of reads a step may make, the same for every
+    // workspace, stay platform-level.
+    @PlatformLevel
     @RequestMapping(value = "/pipeline.json/steps/reads", method = RequestMethod.GET)
     public ResponseEntity<?> reads() {
         return new ResponseEntity<>(this.service.reads(), HttpStatus.OK);

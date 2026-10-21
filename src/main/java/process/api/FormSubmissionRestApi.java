@@ -1,5 +1,7 @@
 package process.api;
 
+import org.barco.platform.security.AuditedRead;
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,6 +27,9 @@ import static process.util.ProcessUtil.ERROR;
  *   <li>GET formSubmission.json/export?formId= -- all of a form's submissions as CSV.</li>
  * </ul>
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a form's submissions, one submission and their CSV
+// (refused below the edge already) answer a uniform 403 here; "Work in this workspace" reaches them.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class FormSubmissionRestApi {
@@ -40,11 +45,17 @@ public class FormSubmissionRestApi {
         return new ResponseEntity<>(this.submissions.list(formId, limit), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session opening one submission writes one
+    // managed_action_log row; the list is not logged.
+    @AuditedRead(value = "form submission", id = "submissionId")
     @RequestMapping(value = "/formSubmission.json/fetch", method = RequestMethod.GET)
     public ResponseEntity<?> fetch(@RequestParam Long submissionId) {
         return new ResponseEntity<>(this.submissions.fetch(submissionId), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session exporting a form's submissions writes
+    // one managed_action_log row.
+    @AuditedRead(value = "form submissions CSV", id = "formId")
     @RequestMapping(value = "/formSubmission.json/export", method = RequestMethod.GET)
     public ResponseEntity<?> export(@RequestParam Long formId) {
         FormSubmissionService.Export export = this.submissions.export(formId);

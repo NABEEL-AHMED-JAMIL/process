@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,9 @@ import process.util.ProcessUtil;
  *   <li>sourceTask.json/aiStepModelOptions (GET, POST /save): a pipeline step's own allowed list, for task editors.</li>
  * </ul>
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's AI model choices per schedule, run and
+// pipeline step, and a run with them, are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class AiModelChoiceRestApi {

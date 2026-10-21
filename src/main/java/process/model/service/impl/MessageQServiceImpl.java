@@ -12,6 +12,7 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.model.service.MessageQService;
 import process.security.JobOwnership;
+import process.security.ManagedSessionOnly;
 import process.util.BusinessTime;
 import process.util.EnumUtils;
 import process.util.ProcessUtil;
@@ -87,6 +88,11 @@ public class MessageQServiceImpl implements MessageQService {
 
     @Override
     public ResponseDto fetchLogs(MessageQSearchDto messageQSearch) {
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the runs are a workspace's, never the platform
+        // administrator's own sign-in's (WorkspaceDataGuard refuses it at the edge; this holds without it).
+        if (ManagedSessionOnly.isPlatformOwnSignIn()) {
+            return new ResponseDto(ERROR, ManagedSessionOnly.REFUSAL);
+        }
         ResponseDto responseDto = new ResponseDto(SUCCESS, "No Data found.", new ArrayList<>());
         if (ProcessUtil.isNull(messageQSearch.getFromDate())) {
             return new ResponseDto(ERROR, "FromDate missing.");

@@ -26,6 +26,9 @@ public interface SourceTaskService {
 
     ResponseDto fetchSourceTaskWithSourceTaskId(Long sourceTaskId);
 
+    /** ZT-A12 follow-up: the pipelines' ids, names and workspaces, by name -- no definition, no run. */
+    ResponseDto pipelineNames();
+
     ByteArrayOutputStream downloadListSourceTask() throws Exception;
 
     ByteArrayOutputStream downloadSourceTaskTemplate() throws Exception;

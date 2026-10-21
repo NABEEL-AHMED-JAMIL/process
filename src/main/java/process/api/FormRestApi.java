@@ -1,6 +1,7 @@
 package process.api;
 
 import java.util.Map;
+import org.barco.platform.security.WorkspaceData;
 import process.forms.FormSharing;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.barco.platform.security.BuilderAction;
@@ -43,6 +44,9 @@ import java.io.IOException;
  *       (FormSubmissionService). Every member's, in either management mode: it is data entry, not building.</li>
  * </ul>
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's forms, share links and submissions (refused
+// below the edge already) answer a uniform 403 here; "Work in this workspace" reaches them.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class FormRestApi {

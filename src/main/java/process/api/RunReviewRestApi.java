@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -32,6 +33,9 @@ import process.util.ProcessUtil;
  * The customer's half, POST /v1/executions/{id}/review, is deferred with the customer integration (MIG-234): it will
  * call RunReviewService.decide as the CUSTOMER party. A run that is not the caller's is the envelope's "not found".
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a run's review (its held rows) and the decision on it are
+// a workspace's, "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class RunReviewRestApi {

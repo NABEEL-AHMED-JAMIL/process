@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -68,6 +69,9 @@ public class DashboardRestApi {
     }
 
     /** Per-user totals for the people dashboard: what each user owns and how it has gone. */
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): runs per person of a workspace (names and counts) are its
+    // data, "Work in this workspace"'s only; the other dashboard.json counts stay for Home.
+    @WorkspaceData
     @RequestMapping(value = "/userStatistics", method = RequestMethod.GET)
     public ResponseEntity<?> userStatistics(
         @RequestParam(name = "startDate", required = false) String startDate,
@@ -96,6 +100,9 @@ public class DashboardRestApi {
         return new ResponseEntity<>(this.dashboardService.weeklyHrsRunningJobStatistics(startDate, endDate), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the hour's runs per schedule, by name, are a workspace's
+    // data, "Work in this workspace"'s only.
+    @WorkspaceData
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimension", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimension(
         @RequestParam(name = "targetDate") String targetDate,
@@ -103,6 +110,9 @@ public class DashboardRestApi {
         return new ResponseEntity<>(this.dashboardService.weeklyHrRunningStatisticsDimension(targetDate, targetHr), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the hour's run rows (schedule, pipeline, status) are a
+    // workspace's data, "Work in this workspace"'s only.
+    @WorkspaceData
     @RequestMapping(value = "/weeklyHrRunningStatisticsDimensionDetail", method = RequestMethod.GET)
     public ResponseEntity<?> weeklyHrRunningStatisticsDimensionDetail(
         @RequestParam(name = "targetDate", required = false) String targetDate,

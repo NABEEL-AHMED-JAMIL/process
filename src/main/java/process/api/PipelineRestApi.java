@@ -1,6 +1,8 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.PlatformLevel;
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,9 @@ import org.springframework.web.bind.annotation.RequestBody;
  *
  * @author Nabeel Ahmed
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's pipeline definitions, fields and forms are
+// "Work in this workspace"'s only; Home's count (no names, no definition) stays platform-level.
+@WorkspaceData
 @RestController
 @RequestMapping(value = "/pipeline.json")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
@@ -84,6 +89,9 @@ public class PipelineRestApi {
      * ZT-P11 (owner 2026-10-21): Home's count of the workspace's pipelines (total, active) -- no definition, no names -- for
      * anyone signed in. The definition reads around it are the Pipelines or Schedules page's (PageKey).
      */
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): Home's count of pipelines (total, active) -- no names, no
+    // definition -- names nothing of a workspace, so the platform's own sign-in keeps it.
+    @PlatformLevel
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/count", method = RequestMethod.GET)
     public ResponseEntity<?> count() {

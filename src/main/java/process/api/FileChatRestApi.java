@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 /**
  * @author Nabeel Ahmed
  * */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a chat over a workspace's files, its messages and exports
+// are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @RequestMapping(value = "/fileChat.json")
 @PreAuthorize("hasRole('TENANT_USER')")

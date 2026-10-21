@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,9 @@ import java.util.Map;
  * Every refusal is a 4xx with its sentence in the envelope -- 400 for what is not valid (an account with no workspace
  * included), 403 for who may not (the @PreAuthorize), 429 for too many -- as the other services answer theirs.
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's review policy and its bulk decisions on held
+// runs are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class RunReviewBulkRestApi {

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,9 @@ import process.util.ProcessUtil;
  * </ul>
  * Refusals are 4xx with their sentence: 400 for what is not valid, 403 for who may not, 429 for too many.
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's failed runs, their errors and the bulk
+// retry of them are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 public class FailedRunsRestApi {
 

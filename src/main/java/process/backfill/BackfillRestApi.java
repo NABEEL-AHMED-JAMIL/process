@@ -1,5 +1,6 @@
 package process.backfill;
 
+import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,9 @@ import java.util.function.Supplier;
  * Refusals are 4xx with their sentence: 400 not valid, 404 not found (or not yours), 409 the backfill's or workspace's state,
  * 422 parameters that do not stand.
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's backfills, their runs and every start,
+// pause, resume, cancel and retry are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class BackfillRestApi {

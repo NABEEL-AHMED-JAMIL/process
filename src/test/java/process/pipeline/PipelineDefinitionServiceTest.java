@@ -224,6 +224,29 @@ class PipelineDefinitionServiceTest {
             .containsEntry("pipelineKey", KEY).containsEntry("config", Collections.singletonMap("pipelineId", "F768927"));
     }
 
+    /**
+     * ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the platform administrator's own sign-in reads a
+     * workspace's catalogue and switches (the Task Registry) but not its pipelines, which the legacy entries name.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void thePlatformsOwnSignInReadsAWorkspacesTaskListWithoutItsPipelines() {
+        Pipeline claims = new Pipeline();
+        claims.setPipelineKey(KEY);
+        claims.setPipelineId("F768927");
+        claims.setPipelineName("Claims intake");
+        when(this.pipelines.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(TENANT, Status.Delete))
+            .thenReturn(Collections.singletonList(claims));
+        TenantContext.set(null, "PLATFORM_ADMIN", 4639L, "qa-platform-admin@platform.local");
+
+        ResponseDto answer = this.service.tasks(TENANT);
+        List<Map<String, Object>> list = (List<Map<String, Object>>) answer.getData();
+
+        assertThat(answer.getMessage()).isEqualTo("3 step task(s) and 0 legacy pipeline(s).");
+        assertThat(list).extracting(entry -> entry.get("code")).containsExactly("legacy", "sample", "select");
+        assertThat(list).noneSatisfy(entry -> assertThat(entry).containsKey("pipelineKey"));
+    }
+
     @Test
     void anAdminSwitchesATaskForTheWorkspaceButNeverLegacy() {
         PipelineDefinitionService.TaskSwitchRequest off = new PipelineDefinitionService.TaskSwitchRequest();

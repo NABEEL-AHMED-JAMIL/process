@@ -13,6 +13,7 @@ import process.pipeline.registry.TaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
 import process.pipeline.registry.TaskSpec;
 import process.pipeline.tasks.MeasureImageStepTask;
+import process.security.ManagedSessionOnly;
 import process.security.TenantContext;
 import process.security.TenantOwnership;
 import process.util.UserNameResolver;
@@ -278,7 +279,9 @@ public class PipelineDefinitionService {
         this.attachControlNames(list);
         Optional<Map<String, Object>> legacy = list.stream().filter(entry -> PipelineDefinition.LEGACY_TASK.equals(entry.get("code"))).findFirst();
         int pipelines = 0;
-        if (tenantId != null && legacy.isPresent()) {
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a legacy entry names one of the workspace's
+        // pipelines, so the platform administrator's own sign-in reads the catalogue and the switches without them.
+        if (tenantId != null && legacy.isPresent() && !ManagedSessionOnly.isPlatformOwnSignIn()) {
             for (Pipeline pipeline : this.pipelines.findAllByTenantIdAndStatusNotOrderByPipelineKeyDesc(tenantId, Status.Delete)) {
                 Map<String, Object> entry = new LinkedHashMap<>(legacy.get());
                 entry.put("name", "Legacy: " + pipeline.getPipelineName());

@@ -1,7 +1,9 @@
 package process.api;
 
 import java.util.List;
+import org.barco.platform.security.AuditedRead;
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.WorkspaceData;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * @author Nabeel Ahmed
  * */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a workspace's schedules (jobs) -- their runs, run
+// logs, activity, export, assistant answers and every add, change, run and delete -- are "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @RequestMapping(value = "/sourceJob.json")
 @PreAuthorize("hasRole('TENANT_USER')")
@@ -238,6 +243,9 @@ public class SourceJobRestApi {
         }
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session opening a run's log writes one
+    // managed_action_log row.
+    @AuditedRead(value = "run log", id = {"jobQueueId", "jobId"})
     @RequestMapping(value = "/findSourceJobAuditLog", method = RequestMethod.GET)
     public ResponseEntity<?> findSourceJobAuditLog(
         @RequestParam Long jobQueueId,
@@ -263,6 +271,9 @@ public class SourceJobRestApi {
         }
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Audit data reads"): a managed session exporting the workspace's schedules
+    // writes one managed_action_log row.
+    @AuditedRead("schedules export")
     @RequestMapping(value = "/downloadListSourceJob", method = RequestMethod.GET)
     public ResponseEntity<?> downloadListSourceJob() {
         try {

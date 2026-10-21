@@ -1,5 +1,6 @@
 package process.api;
 
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,12 +58,18 @@ public class TaskRegistryRestApi {
         return new ResponseEntity<>(this.usage.usage(tenantId), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the pipelines that use a task, by name, are a workspace's
+    // data, "Work in this workspace"'s only; usage counts, history and platformState stay platform-level.
+    @WorkspaceData
     @RequestMapping(value = "/pipeline.json/steps/tasks/pipelines", method = RequestMethod.GET)
     public ResponseEntity<?> pipelines(@RequestParam(required = false) String code, @RequestParam(required = false) Long pipelineKey,
         @RequestParam(required = false) Long tenantId) {
         return new ResponseEntity<>(this.usage.pipelines(code, pipelineKey, tenantId), HttpStatus.OK);
     }
 
+    // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the runs of a task, by schedule and pipeline, are a
+    // workspace's data, "Work in this workspace"'s only.
+    @WorkspaceData
     @RequestMapping(value = "/pipeline.json/steps/tasks/runs", method = RequestMethod.GET)
     public ResponseEntity<?> runs(@RequestParam(required = false) String code, @RequestParam(required = false) Long pipelineKey,
         @RequestParam(required = false) Integer limit, @RequestParam(required = false) Long tenantId) {

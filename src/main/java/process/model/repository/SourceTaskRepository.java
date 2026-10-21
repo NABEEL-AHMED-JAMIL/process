@@ -48,6 +48,15 @@ public interface SourceTaskRepository extends CrudRepository<SourceTask, Long> {
     @Query(value = "select task_detail_id from source_task where task_status = 'Active' and tenant_id = :tenantId", nativeQuery = true)
     List<Long> findAllSourceTaskForTenant(@Param("tenantId") Long tenantId);
 
+    /**
+     * ZT-A12 follow-up: every pipeline that is not deleted as {task_detail_id, task_name, tenant_id}, by name -- ids and
+     * names only, for the platform's rate-card editor. Row security decides whose rows (every workspace's for a platform
+     * administrator).
+     */
+    @Query(value = "select task_detail_id, task_name, tenant_id from source_task where task_status <> 'Delete' "
+        + "order by lower(task_name), task_detail_id", nativeQuery = true)
+    List<Object[]> findPipelineNames();
+
     Optional<SourceTask> findByTaskDetailIdAndTaskStatus(Long taskDetailId, Status taskStatus);
 
     /** A task with its tag rows in one read, for a caller outside a transaction (MIG-67). */

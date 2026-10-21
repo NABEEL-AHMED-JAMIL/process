@@ -38,6 +38,7 @@ import process.model.repository.TaskReferenceRepository;
 import process.model.service.AiAgentService;
 import process.notifications.JobMail;
 import process.notifications.NotificationPort;
+import process.security.ManagedSessionOnly;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
 import process.util.excel.BulkExcel;
@@ -283,12 +284,40 @@ class JobOwnershipPostgresTest {
     }
 
     @Test
-    void aPlatformAdminStillSeesEveryJobInEveryWorkspace() throws Exception {
+    void aPlatformAdminStillSeesEveryJobInEveryWorkspaceButTheScheduleAndRunLists() throws Exception {
         asPlatformAdmin();
         Map<String, Set<Long>> seen = this.everyListAndStatistic();
-        // The shared task's linked jobs are one workspace's by construction; everything else spans both.
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the schedule list and the run list are a managed
+        // session's ("Work in this workspace"); the platform's own sign-in is refused them (dataOrRefused). The shared
+        // task's linked jobs are one workspace's by construction; everything else spans both.
+        Set<String> refused = new TreeSet<>(Arrays.asList("sourceJob.json/listSourceJob", "message.json/fetchLogs",
+            "message.json/fetchLogs jobStatusStatistic"));
         seen.forEach((endpoint, ids) -> assertThat(ids).as(endpoint)
-            .isEqualTo(endpoint.startsWith("sourceTask.json") ? WORKSPACE : EVERY_WORKSPACE));
+            .isEqualTo(refused.contains(endpoint) ? ids() : endpoint.startsWith("sourceTask.json") ? WORKSPACE : EVERY_WORKSPACE));
+    }
+
+    /** ZT-A12 follow-up: the platform's rate-card editor reads every workspace's pipelines as ids and names only. */
+    @SuppressWarnings("unchecked")
+    @Test
+    void aPlatformAdminNamesEveryWorkspacesPipelinesAndNothingMore() throws Exception {
+        asPlatformAdmin();
+        when(this.identity.workspaces(any())).thenReturn(Arrays.asList(
+            new IdentityPort.Workspace(TENANT, "Ownership", "OWN", "Active"),
+            new IdentityPort.Workspace(OTHER_TENANT, "Elsewhere", "OTH", "Active")));
+
+        ResponseDto answer = this.call(() -> this.tasks.pipelineNames());
+
+        assertThat(answer.getStatus()).isEqualTo(ProcessUtil.SUCCESS);
+        assertThat(answer.getMessage()).isEqualTo("2 pipeline(s).");
+        List<Map<String, Object>> names = (List<Map<String, Object>>) answer.getData();
+        // By name: "shared task" (4101) before "their task" (4102); ids and names, nothing of a definition or a run.
+        assertThat(names).hasSize(2);
+        assertThat(names.get(0)).containsOnlyKeys("taskDetailId", "taskName", "tenantId", "tenantName")
+            .containsEntry("taskDetailId", TASK).containsEntry("taskName", "shared task").containsEntry("tenantId", TENANT)
+            .containsEntry("tenantName", "Ownership");
+        assertThat(names.get(1)).containsOnlyKeys("taskDetailId", "taskName", "tenantId", "tenantName")
+            .containsEntry("taskDetailId", OTHER_TASK).containsEntry("taskName", "their task").containsEntry("tenantId", OTHER_TENANT)
+            .containsEntry("tenantName", "Elsewhere");
     }
 
     /** Fail closed: a tenant user whose token names nobody is no one's owner, and sees nothing. */
@@ -326,8 +355,10 @@ class JobOwnershipPostgresTest {
     private Map<String, Set<Long>> everyListAndStatistic() throws Exception {
         Map<String, Set<Long>> seen = new LinkedHashMap<>();
 
-        List<SourceJobDto> list = this.data(() -> this.jobs.listSourceJob());
-        seen.put("sourceJob.json/listSourceJob", list.stream().map(SourceJobDto::getJobId).collect(toIds()));
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): the schedule list and the run list are refused to
+        // the platform administrator's own sign-in, and seen as nothing.
+        List<SourceJobDto> list = this.dataOrRefused(() -> this.jobs.listSourceJob());
+        seen.put("sourceJob.json/listSourceJob", list == null ? ids() : list.stream().map(SourceJobDto::getJobId).collect(toIds()));
         seen.put("sourceJob.json/downloadListSourceJob", this.exportedJobs());
 
         List<SourceJobDto> linked = this.data(() -> this.tasks.fetchAllLinkJobsWithSourceTaskId(TASK, null, null, null, null,
@@ -340,7 +371,7 @@ class JobOwnershipPostgresTest {
         seen.put("sourceTask.json/listSourceTask totalLinksJobs", this.counted(linkedCount));
 
         // No runs at all is answered with an empty list rather than the map.
-        Object logData = this.data(() -> this.queue.fetchLogs(new MessageQSearchDto(DAY, DAY, null, null, null)));
+        Object logData = this.dataOrRefused(() -> this.queue.fetchLogs(new MessageQSearchDto(DAY, DAY, null, null, null)));
         Map<String, Object> logs = logData instanceof Map ? (Map<String, Object>) logData : null;
         List<SourceJobQueueDto> runs = logs == null ? new ArrayList<>() : (List<SourceJobQueueDto>) logs.get("sourceJobQueues");
         seen.put("message.json/fetchLogs", runs.stream().map(SourceJobQueueDto::getJobId).collect(toIds()));
@@ -635,6 +666,20 @@ class JobOwnershipPostgresTest {
 
     private ResponseDto call(Callable<ResponseDto> work) {
         return this.inTransaction(work);
+    }
+
+    /**
+     * The answer's data, or null when the caller is the platform administrator's own sign-in, which must be refused with
+     * WorkspaceDataGuard's sentence (ZT-A12 follow-up, "Managed session only").
+     */
+    private <T> T dataOrRefused(Callable<ResponseDto> work) {
+        if (!TenantContext.isPlatformAdmin()) {
+            return this.data(work);
+        }
+        ResponseDto response = this.call(work);
+        assertThat(response.getStatus()).isEqualTo(ProcessUtil.ERROR);
+        assertThat(response.getMessage()).isEqualTo(ManagedSessionOnly.REFUSAL);
+        return null;
     }
 
     @SuppressWarnings("unchecked")

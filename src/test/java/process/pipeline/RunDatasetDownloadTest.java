@@ -21,6 +21,7 @@ import process.model.repository.SourceJobRepository;
 import process.pipeline.review.InMemoryRunReviewStore;
 import process.pipeline.review.RunReviewStore;
 import process.pipeline.review.RunReviews;
+import process.security.ManagedSessionOnly;
 import process.security.TenantContext;
 
 import java.io.ByteArrayOutputStream;
@@ -307,5 +308,25 @@ class RunDatasetDownloadTest {
         this.mvc().perform(asyncDispatch(started))
             .andExpect(status().isNotFound())
             .andExpect(content().string(containsString("\"status\":\"ERROR\"")));
+    }
+
+    // ---- ZT-A12 follow-up (owner 2026-10-21, "Managed session only") -------------------------------------------------
+
+    /** Below the edge too: a run's outputs and datasets are never the platform administrator's own sign-in's. */
+    @Test
+    void thePlatformAdministratorsOwnSignInIsRefusedARunsOutputsAndDatasetsAndAManagedSessionReadsThem() throws Exception {
+        TenantContext.set(null, "PLATFORM_ADMIN", 4639L, "qa-platform-admin@platform.local");
+        StepTimelineService.Download refused = this.service.download(this.output, null);
+        assertThat(refused.status).isEqualTo(403);
+        assertThat(refused.refusal.getMessage()).isEqualTo(ManagedSessionOnly.REFUSAL);
+        assertThat(refused.body).isNull();
+        ResponseDto outputs = this.service.outputs(RUN, null);
+        assertThat(outputs.getStatus()).isEqualTo("ERROR");
+        assertThat(outputs.getMessage()).isEqualTo(ManagedSessionOnly.REFUSAL);
+
+        // "Work in this workspace": the workspace's TENANT_ADMIN, the same person.
+        TenantContext.set(TENANT, "TENANT_ADMIN", 4639L, "qa-platform-admin@platform.local");
+        assertThat(this.service.download(this.output, null).status).isEqualTo(200);
+        assertThat(this.service.outputs(RUN, null).getStatus()).isEqualTo("SUCCESS");
     }
 }

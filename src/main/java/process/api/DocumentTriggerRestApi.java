@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,6 +30,9 @@ import process.documents.DocumentTriggerService;
  *
  * Whoever may see the job may set its trigger (JobOwnership); anyone else is answered as for a job that does not exist.
  */
+// ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a schedule's document trigger and its approvals are a
+// workspace's, "Work in this workspace"'s only.
+@WorkspaceData
 @RestController
 @PreAuthorize("hasRole('TENANT_USER')")
 public class DocumentTriggerRestApi {

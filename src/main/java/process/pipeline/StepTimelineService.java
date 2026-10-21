@@ -18,6 +18,7 @@ import process.pipeline.review.RunReaders;
 import process.pipeline.review.RunReviews;
 import process.util.BusinessTime;
 import process.util.UserNameResolver;
+import process.security.ManagedSessionOnly;
 import process.security.TenantContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -265,6 +266,11 @@ public class StepTimelineService {
      */
     @Transactional(readOnly = true)
     public Download download(Long runDatasetId, String format) {
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a run's datasets are a workspace's, never the platform
+        // administrator's own sign-in's (WorkspaceDataGuard refuses it at the edge; this holds without it).
+        if (ManagedSessionOnly.isPlatformOwnSignIn()) {
+            return Download.refused(403, ManagedSessionOnly.REFUSAL);
+        }
         String wanted = format == null || format.trim().isEmpty() ? null : format.trim().toLowerCase(Locale.ROOT);
         if (wanted != null && !FileFormats.WRITABLE.contains(wanted) && !"pdf".equals(wanted)) {
             return Download.refused(400, String.format("A dataset downloads as csv, json or jsonl; got '%s'.", format));
@@ -319,6 +325,11 @@ public class StepTimelineService {
      */
     @Transactional(readOnly = true)
     public ResponseDto outputs(Long jobQueueId, Integer attempt) {
+        // ZT-A12 follow-up (owner 2026-10-21, "Managed session only"): a run's outputs are a workspace's, never the platform
+        // administrator's own sign-in's (WorkspaceDataGuard refuses it at the edge; this holds without it).
+        if (ManagedSessionOnly.isPlatformOwnSignIn()) {
+            return new ResponseDto(ERROR, ManagedSessionOnly.REFUSAL);
+        }
         Optional<RunOwnership.Owned> owned = this.readable(jobQueueId);
         if (!owned.isPresent()) {
             return new ResponseDto(ERROR, RUN_NOT_FOUND);
