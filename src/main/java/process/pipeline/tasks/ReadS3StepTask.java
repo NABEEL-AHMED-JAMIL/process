@@ -162,7 +162,15 @@ public class ReadS3StepTask extends RegisteredTask {
         }
         List<BucketStore.Listed> fresh = new ArrayList<>();
         int undated = 0;
+        // ZT-R18: a run whose parameters fill the prefix to one object's key ("Run with…" a recording) asked for that file:
+        // it is read whether or not an earlier run read it.
+        boolean named = !prefix.equals(asWritten) && !prefix.isEmpty() && !prefix.endsWith("/");
+        BucketStore.Listed asked = null;
         for (BucketStore.Listed object : all.objects) {
+            if (named && object.key.equals(prefix)) {
+                asked = object;
+                continue;
+            }
             if (object.lastModified == null) {
                 undated++;
                 continue;
@@ -176,6 +184,15 @@ public class ReadS3StepTask extends RegisteredTask {
         List<BucketStore.Listed> taken = more ? new ArrayList<>(fresh.subList(0, limit)) : fresh;
         BucketStore.Listed newest = taken.isEmpty() ? null : taken.get(taken.size() - 1);
         ObjectReadMarks.Mark upTo = newest == null ? mark.orElse(null) : new ObjectReadMarks.Mark(newest.lastModified, newest.key);
+        if (asked != null) {
+            taken = new ArrayList<>(taken);
+            taken.add(0, asked);
+            if (asked.lastModified != null) {
+                ObjectReadMarks.Mark own = new ObjectReadMarks.Mark(asked.lastModified, asked.key);
+                upTo = upTo == null || own.compareTo(upTo) > 0 ? own : upTo;  // the mark never moves back
+            }
+            context.log(String.format("The run names %s: it is read, whether or not an earlier run read it.", asked.key));
+        }
         if (context.jobId() == null || this.marks == null) {
             context.log("Not a job's run: every object under the prefix is new.");
         } else {

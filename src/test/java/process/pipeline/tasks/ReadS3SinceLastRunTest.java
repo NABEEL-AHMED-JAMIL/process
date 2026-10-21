@@ -130,6 +130,29 @@ class ReadS3SinceLastRunTest {
         assertThat(this.marks.prefixes).containsExactly("in/{{param.file}}");
     }
 
+    /**
+     * ZT-R18 (zero-tolerance QA 2026-10-20, Zanium's voice call insight): "Run with…" naming one recording
+     * (file = synthetic-call-a.m4a) completed with nothing read, because an earlier run had read that file and the folder's
+     * mark was past it. A run whose parameters name one object reads it, old or new; the mark never moves back.
+     */
+    @Test
+    void aRunThatNamesOneFileReadsItEvenWhenAnEarlierRunReadIt() throws Exception {
+        object("in/a.m4a", 1);
+        object("in/b.m4a", 2);
+        Map<String, Object> folder = config("bucket", "lake", "prefix", "in/", "since", "last_run");
+        assertThat(keys(1, folder)).containsExactly("in/a.m4a", "in/b.m4a");
+        this.marks.completed.add(1L);
+        TaskContext oneFile = new TaskContext(config("bucket", "lake", "prefix", "in/a.m4a", "since", "last_run"), Dataset.EMPTY);
+        oneFile.asWritten = config("bucket", "lake", "prefix", "in/{{param.file}}", "since", "last_run");
+        oneFile.runId = 2;
+        List<Object> read = new ArrayList<>();
+        this.task.run(oneFile).getOutput().getRows().forEach(r -> read.add(r.get("key")));
+        assertThat(read).as("the file the run names").containsExactly("in/a.m4a");
+        assertThat(this.marks.byRun.get(2L).key).as("the mark stays where the folder's runs left it").isEqualTo("in/b.m4a");
+        this.marks.completed.add(2L);
+        assertThat(keys(3, folder)).as("the next run over the folder: nothing new").isEmpty();
+    }
+
     @Test
     void aPrefixTooBigToListWholeIsRefused() {
         this.buckets.truncated = true;
