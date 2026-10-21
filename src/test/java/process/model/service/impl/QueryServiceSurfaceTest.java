@@ -102,7 +102,7 @@ class QueryServiceSurfaceTest {
         byTrigger.setFromDate("2026-09-01");
         byTrigger.setToDate("2026-09-21");
         byTrigger.setTriggers(new HashSet<>(Arrays.asList("file")));
-        String[] runTables = {"api_intake", "document_approval", "inbox_arrival", "job_queue", "source_job", "source_task"};
+        String[] runTables = {"api_intake", "backfill_slot", "document_approval", "form_submission", "inbox_arrival", "job_queue", "source_job", "source_task"};
         builders.put("fetchJobQLog(MessageQSearchDto,boolean)", new Builder(
             () -> this.queries.fetchJobQLog(runs, false) + "\n" + this.queries.fetchJobQLog(byTrigger, true), runTables));
         // MessageQServiceImpl.runFacets (B3): the same runs counted by status, pipeline, trigger and time slot.

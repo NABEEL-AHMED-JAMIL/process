@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
  *       (V38) and the ones a person or an API client asked for (MIG-345, run_attempt);</li>
  *   <li>{@code api} "API": started through the customer API (MIG-332, api_intake names the run);</li>
  *   <li>{@code document} "Document approved": started by approved documents (MIG-364, document_approval names it);</li>
+ *   <li>{@code form} "Form submitted" (ZT-P15): a form submission started it (form_submission names the run);</li>
+ *   <li>{@code backfill} "Backfill" (ZT-P15): one of a backfill's runs (backfill_slot names it);</li>
  *   <li>{@code file} "File arrived": started for a file (an input key on the run, or MIG-360's inbox_arrival names it);</li>
  *   <li>{@code manual} "Run now": run_manual -- Run now and Run with;</li>
  *   <li>{@code schedule} "Schedule": the rest, the scheduler's own runs.</li>
@@ -45,6 +47,8 @@ public final class RunFacets {
     public static final String API = "api";
     public static final String DOCUMENT = "document";
     public static final String FILE = "file";
+    public static final String FORM = "form";
+    public static final String BACKFILL = "backfill";
     public static final String MANUAL = "manual";
     public static final String SCHEDULE = "schedule";
 
@@ -57,6 +61,8 @@ public final class RunFacets {
         triggers.put(MANUAL, "Run now");
         triggers.put(FILE, "File arrived");
         triggers.put(DOCUMENT, "Document approved");
+        triggers.put(FORM, "Form submitted");
+        triggers.put(BACKFILL, "Backfill");
         triggers.put(API, "API");
         triggers.put(RETRY, "Retry");
         TRIGGERS = Collections.unmodifiableMap(triggers);
@@ -84,6 +90,10 @@ public final class RunFacets {
         return "(CASE WHEN " + run + ".attempt > 1 THEN '" + RETRY + "'"
             + " WHEN EXISTS (SELECT 1 FROM api_intake ai WHERE ai.job_queue_id = " + run + ".job_queue_id) THEN '" + API + "'"
             + " WHEN EXISTS (SELECT 1 FROM document_approval da WHERE da.job_queue_id = " + run + ".job_queue_id) THEN '" + DOCUMENT + "'"
+            // ZT-P15: a form submission's run carries the submission as its input key; it read as "a file arrived".
+            + " WHEN EXISTS (SELECT 1 FROM form_submission fs WHERE fs.job_queue_id = " + run + ".job_queue_id) THEN '" + FORM + "'"
+            // ZT-P15: a backfill's runs read "on its timetable".
+            + " WHEN EXISTS (SELECT 1 FROM backfill_slot bs WHERE bs.job_queue_id = " + run + ".job_queue_id) THEN '" + BACKFILL + "'"
             + " WHEN " + run + ".input_key IS NOT NULL OR EXISTS (SELECT 1 FROM inbox_arrival ia WHERE ia.job_queue_id = " + run
             + ".job_queue_id) THEN '" + FILE + "'"
             + " WHEN " + run + ".run_manual THEN '" + MANUAL + "'"

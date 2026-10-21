@@ -170,6 +170,31 @@ class RunFacetsPostgresTest {
             .containsExactlyInAnyOrder("FAILED=1", "SKIP=1");
     }
 
+    /** ZT-P15: a run a form submission started says so, and so does a backfill's run (they read "a file arrived" and "on its timetable"). */
+    @Test
+    void aFormSubmissionsRunAndABackfillsRunSayWhatStartedThem() {
+        JdbcTemplate sql = db.sql();
+        task(93031L, TENANT, "Gamma intake", "GAMMA");
+        job(93032L, TENANT, 93031L, OWNER);
+        run(21, 93032L, TENANT, "Completed", "2026-10-20 10:00:00-05", "false", "intake/forms/form-77/submission-1.json", 1, "Active");
+        run(22, 93032L, TENANT, "Completed", "2026-10-20 11:00:00-05", "false", null, 1, "Active");
+        sql.update("INSERT INTO form_definition (form_id, tenant_id, name, status) VALUES (77, ?, 'Intake', 'Active')", TENANT);
+        sql.update("INSERT INTO form_submission (form_id, tenant_id, form_version, answers, status, job_id, job_queue_id) "
+            + "VALUES (77, ?, 1, '{}'::jsonb, 'RunStarted', ?, 930121)", TENANT, 93032L);
+        long backfill = sql.queryForObject("INSERT INTO backfill (tenant_id, job_id, step, range_from, range_to, zone, concurrency, total) "
+            + "VALUES (?, ?, 'DAILY', '2026-10-01', '2026-10-01', 'America/Chicago', 1, 1) RETURNING backfill_id", Long.class, TENANT, 93032L);
+        sql.update("INSERT INTO backfill_slot (backfill_id, slot_start, slot_end, run_date, tenant_id, job_id, state, job_queue_id) "
+            + "VALUES (?, '2026-10-01 05:00:00+00', '2026-10-02 05:00:00+00', '2026-10-01', ?, ?, 'COMPLETED', 930122)", backfill, TENANT, 93032L);
+        TenantContext.set(TENANT, "TENANT_ADMIN", 1L, "admin@t.test");
+        MessageQSearchDto day = new MessageQSearchDto();
+        day.setFromDate("2026-10-20");
+        day.setToDate("2026-10-20");
+        Map<Long, Object> triggers = db.sql().queryForList(new QueryService().fetchJobQLog(day, false)).stream()
+            .collect(Collectors.toMap(r -> ((Number) r.get("job_queue_id")).longValue(), r -> r.get("run_trigger")));
+        assertThat(triggers).containsOnly(entry(930121L, "form"), entry(930122L, "backfill"));
+        assertThat(RunFacets.TRIGGERS).containsEntry("form", "Form submitted").containsEntry("backfill", "Backfill");
+    }
+
     @Test
     void eachFacetIsCountedWithTheOtherFiltersButNotItsOwn() {
         TenantContext.set(TENANT, "TENANT_ADMIN", 1L, "admin@t.test");
@@ -181,7 +206,7 @@ class RunFacetsPostgresTest {
             entry("Beta labs", 3L));
         assertThat(counts(all, "triggers", "key")).containsExactly(entry("schedule", 1L),
             entry("manual", 1L), entry("file", 2L),
-            entry("document", 1L), entry("api", 1L),
+            entry("document", 1L), entry("form", 0L), entry("backfill", 0L), entry("api", 1L),
             entry("retry", 1L));
 
         MessageQSearchDto failed = week();
