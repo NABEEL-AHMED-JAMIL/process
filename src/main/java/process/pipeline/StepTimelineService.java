@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import process.pipeline.registry.TaskKind;
 import process.ai.ModelChoiceStore;
 import process.ai.RunAiStep;
 import process.model.dto.ResponseDto;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -687,7 +689,7 @@ public class StepTimelineService {
             this.definitions.byId(pipelineDefinitionId).ifPresent(stored -> {
                 String previous = null;
                 for (PipelineDefinition.Step step : stored.definition().getSteps()) {
-                    java.util.LinkedHashSet<String> from = new java.util.LinkedHashSet<>();
+                    LinkedHashSet<String> from = new LinkedHashSet<>();
                     Optional<StepTask> task = this.stepTasks.find(step.getTask());
                     Map<String, Object> schema = task.map(found -> found.spec().configSchema()).orElse(null);
                     if (step.getInput() != null) {
@@ -709,7 +711,7 @@ public class StepTimelineService {
     /** Whether a task takes in the step before it: not a read (it makes its own rows), not one whose input is "Not read". */
     private static boolean readsItsInput(StepTask task) {
         Map<String, Object> input = task.spec().inputSchema();
-        if (task.spec().kind() == process.pipeline.registry.TaskKind.READ || input == null) {
+        if (task.spec().kind() == TaskKind.READ || input == null) {
             return false;
         }
         return !String.valueOf(input.get("description")).startsWith("Not read");
@@ -717,7 +719,7 @@ public class StepTimelineService {
 
     /** The values of every {@code format: step} property in a config, walking objects and lists as its schema does. */
     @SuppressWarnings("unchecked")
-    private static void stepRefs(Map<String, Object> schema, Object value, java.util.Set<String> into) {
+    private static void stepRefs(Map<String, Object> schema, Object value, Set<String> into) {
         if (schema == null || value == null) {
             return;
         }

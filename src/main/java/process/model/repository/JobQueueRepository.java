@@ -127,7 +127,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Transactional
     @Modifying
     @Query(value = "update step_execution set status = 'Interrupt', status_message = ?2, date_updated = now() "
-        + "where job_queue_id = ?1 and status in ('Running', 'Queue')", nativeQuery = true)
+        + "where job_queue_id = ?1 and status in ('Queue', 'Start', 'Running')", nativeQuery = true)
     int interruptOpenSteps(Long jobQueueId, String message);
 
     /**

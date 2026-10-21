@@ -310,7 +310,7 @@ class StepEnginePostgresTest {
         assertThat(rows.get(0)).containsEntry("step_key", "shape").containsEntry("status", "Completed").containsEntry("tries", 1)
             .containsEntry("records_in", 1L).containsEntry("records_out", 1L).containsEntry("tenant_id", TENANT)
             .containsEntry("started", true).containsEntry("ended", true);
-        assertThat(rows.get(1)).containsEntry("step_key", "more").containsEntry("records_in", 1L).containsEntry("records_out", 2L);
+        assertThat(rows.get(1)).containsEntry("step_key", "more").containsEntry("records_in", 0L).containsEntry("records_out", 2L);
         assertThat(login.queryForList("SELECT d.name || ':' || d.row_count || ':' || d.storage_key || ':' || d.tenant_id FROM run_dataset d "
             + "JOIN step_execution s ON s.step_execution_id = d.step_execution_id WHERE s.job_queue_id = ? ORDER BY s.step_index",
             String.class, steps)).containsExactly("output:1:datasets/" + steps + "/1/shape/output.rows:" + TENANT,

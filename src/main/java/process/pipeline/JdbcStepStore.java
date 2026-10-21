@@ -68,7 +68,10 @@ public class JdbcStepStore implements StepStore {
 
     @Override
     public void engineLeaseEnd(long jobQueueId) {
-        this.jdbc.update("UPDATE job_queue SET prepare_lease_until = NULL WHERE job_queue_id = ? AND job_send = true", jobQueueId);
+        // Also when the run was just queued again for a retry (job_send false, not yet prepared): the hold must not stand in
+        // for a preparer's lease and keep the retry from being prepared.
+        this.jdbc.update("UPDATE job_queue SET prepare_lease_until = NULL WHERE job_queue_id = ? AND (job_send = true OR prepared_at IS NULL)",
+            jobQueueId);
     }
 
     private static String unheldHash() {

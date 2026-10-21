@@ -351,7 +351,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
             }
             // ZT-P16: a run whose step engine is gone (its hold lapsed: Core restarted while its steps ran) is closed now, not
             // after six hours with its job blocked ("still in flight") and its schedule skipped.
-            java.util.Set<Long> lost = new java.util.HashSet<>();
+            Set<Long> lost = new HashSet<>();
             for (JobQueue jobQueue : this.transactionService.findRunsWithLapsedEngineLease()) {
                 if (toClose.putIfAbsent(jobQueue.getJobQueueId(), jobQueue) == null) {
                     lost.add(jobQueue.getJobQueueId());

@@ -9,6 +9,8 @@ import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import process.pipeline.registry.TaskKind;
+import process.model.enums.JobAuditMarker;
 import process.settings.EngineDial;
 import process.settings.EngineDials;
 import org.springframework.stereotype.Component;
@@ -56,6 +58,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.SynchronousQueue;
@@ -365,8 +369,8 @@ public class StepEngine {
     }
 
     /** ZT-P16: the runs this engine holds now, by id, with their workspace (the renewal runs in it). */
-    private final Map<Long, Long> leased = new java.util.concurrent.ConcurrentHashMap<>();
-    private volatile java.util.concurrent.ScheduledExecutorService leaseTimer;
+    private final Map<Long, Long> leased = new ConcurrentHashMap<>();
+    private volatile ScheduledExecutorService leaseTimer;
 
     private void lease(JobQueue run) {
         this.leased.put(run.getJobQueueId(), run.getTenantId());
@@ -743,6 +747,9 @@ public class StepEngine {
                 this.stopAll(rows, 0, "Interrupt", "Not run: the run was closed before its steps started.");
                 return;
             }
+            // ZT-P17: the start marker a worker writes as it picks a run up (JobAuditMarker, WORKER-CONTRACT 4.1): the run
+            // report measures execution from it, and without it every step-engine run read -1 (RunStartMarkerMonitor: 100%).
+            this.audit(JobAuditMarker.JOB_STARTED.logDetail());
             Outcome outcome;
             try {
                 outcome = this.steps(rows, resumed);
@@ -1268,7 +1275,7 @@ public class StepEngine {
          */
         private long recordsIn(PipelineDefinition.Step step, Input input, Map<String, String> outputs, Dataset source) {
             Optional<StepTask> task = tasks.find(step.getTask());
-            if (task.isPresent() && task.get().spec().kind() == process.pipeline.registry.TaskKind.READ && task.get().spec().inputSchema() == null) {
+            if (task.isPresent() && task.get().spec().kind() == TaskKind.READ && task.get().spec().inputSchema() == null) {
                 return 0;
             }
             if ("append".equals(step.getTask()) && step.getConfig() != null && step.getConfig().get("steps") instanceof List) {
@@ -1322,7 +1329,20 @@ public class StepEngine {
                 }
                 if (future != null) {
                     try {
-                        tried.result = this.await(future, timeout);
+                        boolean[] closed = {false};
+                        tried.result = this.await(future, timeout, closed);
+                        if (closed[0]) {
+                            // ZT-P7: the run was marked interrupted (or failed) while this step ran: it stops now, not after
+                            // every row it had left (an AI step went on calling the model, and was billed, for minutes).
+                            future.cancel(true);
+                            if (streams) {
+                                ((StreamTry) context).discard();
+                            }
+                            tried.closed = true;
+                            tried.error = "the run was closed while this step ran";
+                            log.line("WARN", String.format("Try %d stopped: the run was closed while this step ran.", t));
+                            return tried;
+                        }
                         String uncommitted = streams ? this.commitStreamed((StreamTry) context, tried) : null;
                         tried.timedOut = false;
                         if (uncommitted == null) {
@@ -1333,17 +1353,6 @@ public class StepEngine {
                         // The work succeeded but its output could not be kept: a failed try.
                         tried.result = null;
                         tried.error = uncommitted;
-                    } catch (RunClosed closed) {
-                        // ZT-P7: the run was marked interrupted (or failed) while this step ran: it stops now, not after every
-                        // row it had left (an AI step went on calling the model, and was billed, for minutes).
-                        future.cancel(true);
-                        if (streams) {
-                            ((StreamTry) context).discard();
-                        }
-                        tried.closed = true;
-                        tried.error = "the run was closed while this step ran";
-                        log.line("WARN", String.format("Try %d stopped: the run was closed while this step ran.", t));
-                        return tried;
                     } catch (TimeoutException ex) {
                         future.cancel(true);
                         tried.error = String.format("timed out after %d s", timeout);
@@ -1380,9 +1389,12 @@ public class StepEngine {
             return tried;
         }
 
-        /** A try's answer, within its timeout; looks every closeCheckMillis whether the run is still running (ZT-P7). */
-        private StepResult await(Future<StepResult> future, int timeout)
-            throws InterruptedException, ExecutionException, TimeoutException, RunClosed {
+        /**
+         * A try's answer, within its timeout; looks every closeCheckMillis whether the run is still running (ZT-P7), and when it
+         * is not, answers null with {@code closed[0]} set.
+         */
+        private StepResult await(Future<StepResult> future, int timeout, boolean[] closed)
+            throws InterruptedException, ExecutionException, TimeoutException {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeout);
             while (true) {
                 long left = deadline - System.nanoTime();
@@ -1393,7 +1405,8 @@ public class StepEngine {
                     return future.get(Math.min(left, TimeUnit.MILLISECONDS.toNanos(closeCheckMillis)), TimeUnit.NANOSECONDS);
                 } catch (TimeoutException slice) {
                     if (System.nanoTime() < deadline && !this.stillRunning()) {
-                        throw new RunClosed();
+                        closed[0] = true;
+                        return null;
                     }
                 }
             }
@@ -1630,13 +1643,6 @@ public class StepEngine {
     }
 
     /** One step's tries. */
-    /** ZT-P7: the run was closed while a step's try ran. */
-    private static final class RunClosed extends Exception {
-        RunClosed() {
-            super("the run was closed while this step ran", null, false, false);
-        }
-    }
-
     private static final class Tried {
         /** ZT-P7: stopped because the run was closed meanwhile. */
         boolean closed;

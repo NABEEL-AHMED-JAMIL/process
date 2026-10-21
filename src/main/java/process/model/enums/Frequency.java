@@ -1,5 +1,8 @@
 package process.model.enums;
 
+import java.util.Locale;
+import java.util.Optional;
+
 /**
  * How a schedule repeats. Cron (Wave 4) steps by the schedule's own cron expression (scheduler.cron_expression, V187;
  * process.util.CronSchedule) rather than by interval_value.
@@ -15,24 +18,24 @@ public enum Frequency {
      * "Hourly" stored as it came; the scheduler cannot step by a name it does not know, so the schedule ran its first slot
      * and expired. Empty when the text names no frequency.
      */
-    public static java.util.Optional<Frequency> parse(String text) {
+    public static Optional<Frequency> parse(String text) {
         if (text == null || text.isBlank()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        String said = text.trim().toLowerCase(java.util.Locale.ROOT);
+        String said = text.trim().toLowerCase(Locale.ROOT);
         for (Frequency frequency : values()) {
-            if (frequency.name().toLowerCase(java.util.Locale.ROOT).equals(said)) {
-                return java.util.Optional.of(frequency);
+            if (frequency.name().toLowerCase(Locale.ROOT).equals(said)) {
+                return Optional.of(frequency);
             }
         }
         switch (said) {
-            case "minute": case "minutes": case "minutely": case "every n minutes": return java.util.Optional.of(Mint);
-            case "hour": case "hours": case "hourly": return java.util.Optional.of(Hr);
-            case "day": case "days": return java.util.Optional.of(Daily);
-            case "week": case "weeks": return java.util.Optional.of(Weekly);
-            case "month": case "months": return java.util.Optional.of(Monthly);
-            case "advanced (cron)": case "cron expression": return java.util.Optional.of(Cron);
-            default: return java.util.Optional.empty();
+            case "minute": case "minutes": case "minutely": case "every n minutes": return Optional.of(Mint);
+            case "hour": case "hours": case "hourly": return Optional.of(Hr);
+            case "day": case "days": return Optional.of(Daily);
+            case "week": case "weeks": return Optional.of(Weekly);
+            case "month": case "months": return Optional.of(Monthly);
+            case "advanced (cron)": case "cron expression": return Optional.of(Cron);
+            default: return Optional.empty();
         }
     }
 

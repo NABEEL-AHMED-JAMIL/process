@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
@@ -293,8 +294,10 @@ class StepEngineTest {
 
         assertThat(this.steps.logText(RUN_ID, 1, "read")).containsExactly("INFO 2 sample row(s).");
         assertThat(this.steps.logText(RUN_ID, 1, "count")).containsExactly("INFO 2 record(s) counted");
-        assertThat(this.audit).hasSize(6).first().asString().startsWith("Step 1/3 <read> (sample) started on 0 record(s).");
-        assertThat(this.audit.get(3)).startsWith("Step 2/3 <keep> (select) completed: 2 in, 2 out");
+        // ZT-P17: the worker's start marker first, exactly, so the run report can measure the run's execution.
+        assertThat(this.audit).hasSize(7).first().isEqualTo("Job started");
+        assertThat(this.audit.get(1)).startsWith("Step 1/3 <read> (sample) started on 0 record(s).");
+        assertThat(this.audit.get(4)).startsWith("Step 2/3 <keep> (select) completed: 2 in, 2 out");
     }
 
     /** ZT-P2: a read step takes nothing in (the step before it is not its input); an append takes in what it joins. */
@@ -423,7 +426,7 @@ class StepEngineTest {
         long saved = StepEngine.closeCheckMillis;
         StepEngine.closeCheckMillis = 100;
         try {
-            java.util.concurrent.ScheduledExecutorService operator = Executors.newSingleThreadScheduledExecutor();
+            ScheduledExecutorService operator = Executors.newSingleThreadScheduledExecutor();
             operator.schedule(() -> this.run.setJobStatus(JobStatus.Interrupt), 500, TimeUnit.MILLISECONDS);
             long began = System.currentTimeMillis();
             this.runs(Definitions.of(slow, step("after", "counts")));

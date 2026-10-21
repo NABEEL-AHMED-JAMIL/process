@@ -1,6 +1,7 @@
 package process.pipeline;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -113,7 +114,7 @@ public class InMemoryStepStore implements StepStore {
     }
 
     /** ZT-P16: the engine's holds, in order: "lease:<run>" and "end:<run>". */
-    public final java.util.List<String> holds = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    public final List<String> holds = Collections.synchronizedList(new ArrayList<>());
 
     @Override
     public void engineLease(long jobQueueId, int seconds) {

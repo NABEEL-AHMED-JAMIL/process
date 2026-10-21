@@ -4,6 +4,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import process.ai.InMemoryModelChoiceStore;
+import process.pipeline.tasks.JoinStepTask;
+import process.pipeline.tasks.AppendStepTask;
 import process.ai.RunAiStep;
 import process.model.dto.ResponseDto;
 import process.model.enums.JobStatus;
@@ -207,7 +209,7 @@ class StepTimelineServiceTest {
             + "{\"key\":\"picked\",\"task\":\"select\",\"input\":\"a\",\"config\":{\"columns\":[\"k\"]}}]}";
         when(definitions.byId(1001L)).thenReturn(Optional.of(stored));
         this.service.useDefinitions(definitions);
-        this.service.useStepTasks(Definitions.builtInTasks(new process.pipeline.tasks.AppendStepTask(), new process.pipeline.tasks.JoinStepTask()));
+        this.service.useStepTasks(Definitions.builtInTasks(new AppendStepTask(), new JoinStepTask()));
         this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "a", "sample", "fail"), new StepStore.Planned(1, "b", "sample", "fail"),
             new StepStore.Planned(2, "both", "append", "fail"), new StepStore.Planned(3, "joined", "join", "fail"),
             new StepStore.Planned(4, "picked", "select", "fail")));
