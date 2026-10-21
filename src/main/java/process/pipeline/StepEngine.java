@@ -1203,13 +1203,13 @@ public class StepEngine {
         /** Every try of one step, each bounded by its timeout; the first success, or the last failure. */
         /**
          * ZT-P2: the rows a step takes in, as its run page shows them. A read step that declares no input ignores the step before
-         * it (TaskKind.READ; Read API declares the first row it reads), so it takes in the run's source (none, unless the run was given rows) -- it showed the previous step's rows, as if
-         * a file read had read them. An append takes in the outputs of the steps it joins, not the step before it.
+         * it (TaskKind.READ; Read API declares the first row it reads), so it takes in nothing -- it showed the previous step's rows
+         * (or the job's payload row), as if a file read had read them. An append takes in the outputs of the steps it joins, not the step before it.
          */
         private long recordsIn(PipelineDefinition.Step step, Input input, Map<String, String> outputs, Dataset source) {
             Optional<StepTask> task = tasks.find(step.getTask());
             if (task.isPresent() && task.get().spec().kind() == process.pipeline.registry.TaskKind.READ && task.get().spec().inputSchema() == null) {
-                return source.size();
+                return 0;
             }
             if ("append".equals(step.getTask()) && step.getConfig() != null && step.getConfig().get("steps") instanceof List) {
                 long total = 0;
