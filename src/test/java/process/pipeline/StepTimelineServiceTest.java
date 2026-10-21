@@ -191,6 +191,33 @@ class StepTimelineServiceTest {
             .containsExactly("read=The image this run was started for", "call=null");
     }
 
+    /** ZT-P9: the run map draws each step from the steps it reads, not from the step before it. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void eachStepSaysWhichStepsRowsItTakesIn() {
+        PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1001L;
+        stored.tenantId = TENANT;
+        stored.version = 1;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"a\",\"task\":\"sample\",\"config\":{\"rows\":[{\"k\":1}]}},"
+            + "{\"key\":\"b\",\"task\":\"sample\",\"config\":{\"rows\":[{\"k\":1}]}},"
+            + "{\"key\":\"both\",\"task\":\"append\",\"config\":{\"steps\":[\"a\",\"b\"]}},"
+            + "{\"key\":\"joined\",\"task\":\"join\",\"config\":{\"with\":\"b\",\"on\":[{\"left\":\"k\",\"right\":\"k\"}]}},"
+            + "{\"key\":\"picked\",\"task\":\"select\",\"input\":\"a\",\"config\":{\"columns\":[\"k\"]}}]}";
+        when(definitions.byId(1001L)).thenReturn(Optional.of(stored));
+        this.service.useDefinitions(definitions);
+        this.service.useStepTasks(Definitions.builtInTasks(new process.pipeline.tasks.AppendStepTask(), new process.pipeline.tasks.JoinStepTask()));
+        this.steps.plan(RUN, 1, 1001L, Arrays.asList(new StepStore.Planned(0, "a", "sample", "fail"), new StepStore.Planned(1, "b", "sample", "fail"),
+            new StepStore.Planned(2, "both", "append", "fail"), new StepStore.Planned(3, "joined", "join", "fail"),
+            new StepStore.Planned(4, "picked", "select", "fail")));
+
+        List<Map<String, Object>> list = (List<Map<String, Object>>) this.timeline(null).get("steps");
+
+        assertThat(list).extracting(step -> step.get("key") + "<" + step.get("reads"))
+            .containsExactly("a<[]", "b<[]", "both<[a, b]", "joined<[both, b]", "picked<[a]");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void aDefinitionThatCannotBeReadNamesNoStepAndTheTimelineStillAnswers() {

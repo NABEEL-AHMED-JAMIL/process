@@ -141,6 +141,14 @@ public class StepTimelineService {
         this.attempts = attempts;
     }
 
+    /** ZT-P9: the Task Registry, to say which steps' rows each step takes in (the run map's edges); absent in hand-built tests. */
+    private StepTasks stepTasks;
+
+    @Autowired(required = false)
+    public void useStepTasks(StepTasks stepTasks) {
+        this.stepTasks = stepTasks;
+    }
+
     /** MIG-346: the Approval steps' requests, shown on their steps. */
     private RunApprovalStore approvals;
 
@@ -201,6 +209,7 @@ public class StepTimelineService {
             Long definitionId = ofAttempt.isEmpty() ? null : ofAttempt.get(0).pipelineDefinitionId;
             timeline.put("pipelineDefinitionId", definitionId);
             Map<String, String> names = this.stepNames(definitionId);
+            Map<String, List<String>> reads = this.stepReads(definitionId);
             // MIG-346: an Approval step's request (a reused step shows the one that approved it).
             Map<Long, RunApprovalStore.Approval> approvalsOf = this.approvals == null ? Collections.emptyMap()
                 : this.approvals.ofSteps(ofAttempt.stream().filter(row -> "approval".equals(row.taskCode))
@@ -210,6 +219,9 @@ public class StepTimelineService {
                 long datasetsOf = row.reusedFrom != null ? row.reusedFrom : row.stepExecutionId;
                 Map<String, Object> step = step(row, datasets.getOrDefault(datasetsOf, Collections.emptyList()));
                 step.put("name", names.get(row.stepKey));
+                if (reads.containsKey(row.stepKey)) {
+                    step.put("reads", reads.get(row.stepKey));
+                }
                 step.put("reusedFromAttempt", row.reusedFrom == null ? null : attemptOf.get(row.reusedFrom));
                 RunApprovalStore.Approval approval = approvalsOf.get(datasetsOf);
                 if (approval != null) {
@@ -657,6 +669,73 @@ public class StepTimelineService {
             return names;
         } catch (RuntimeException ex) {
             return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * ZT-P9: the steps whose rows each step takes in, from the definition the run followed -- its input (named, else the step
+     * before it) when its task reads one, and every earlier step its settings name ({@code format: step}: a join's "with", an
+     * append's "steps", a report section's input). The run map drew every step from the one before it: a file read after
+     * another read looked fed by it, and a join or an append showed one source. Empty when the definition cannot be read.
+     */
+    Map<String, List<String>> stepReads(Long pipelineDefinitionId) {
+        if (pipelineDefinitionId == null || this.definitions == null || this.stepTasks == null) {
+            return Collections.emptyMap();
+        }
+        try {
+            Map<String, List<String>> out = new HashMap<>();
+            this.definitions.byId(pipelineDefinitionId).ifPresent(stored -> {
+                String previous = null;
+                for (PipelineDefinition.Step step : stored.definition().getSteps()) {
+                    java.util.LinkedHashSet<String> from = new java.util.LinkedHashSet<>();
+                    Optional<StepTask> task = this.stepTasks.find(step.getTask());
+                    Map<String, Object> schema = task.map(found -> found.spec().configSchema()).orElse(null);
+                    if (step.getInput() != null) {
+                        from.add(step.getInput());
+                    } else if (previous != null && task.map(StepTimelineService::readsItsInput).orElse(true)) {
+                        from.add(previous);
+                    }
+                    stepRefs(schema, step.getConfig(), from);
+                    out.put(step.getKey(), new ArrayList<>(from));
+                    previous = step.getKey();
+                }
+            });
+            return out;
+        } catch (RuntimeException ex) {
+            return Collections.emptyMap();
+        }
+    }
+
+    /** Whether a task takes in the step before it: not a read (it makes its own rows), not one whose input is "Not read". */
+    private static boolean readsItsInput(StepTask task) {
+        Map<String, Object> input = task.spec().inputSchema();
+        if (task.spec().kind() == process.pipeline.registry.TaskKind.READ || input == null) {
+            return false;
+        }
+        return !String.valueOf(input.get("description")).startsWith("Not read");
+    }
+
+    /** The values of every {@code format: step} property in a config, walking objects and lists as its schema does. */
+    @SuppressWarnings("unchecked")
+    private static void stepRefs(Map<String, Object> schema, Object value, java.util.Set<String> into) {
+        if (schema == null || value == null) {
+            return;
+        }
+        if ("step".equals(schema.get("format")) && value instanceof String) {
+            into.add((String) value);
+            return;
+        }
+        if (value instanceof Map && schema.get("properties") instanceof Map) {
+            Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+            ((Map<String, Object>) value).forEach((name, inner) -> {
+                if (properties.get(name) instanceof Map) {
+                    stepRefs((Map<String, Object>) properties.get(name), inner, into);
+                }
+            });
+        } else if (value instanceof List && schema.get("items") instanceof Map) {
+            for (Object item : (List<Object>) value) {
+                stepRefs((Map<String, Object>) schema.get("items"), item, into);
+            }
         }
     }
 
