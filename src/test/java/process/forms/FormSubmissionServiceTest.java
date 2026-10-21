@@ -18,10 +18,12 @@ import process.model.service.impl.TransactionServiceImpl;
 import process.pipeline.backing.BucketStore;
 import process.security.TenantContext;
 import process.util.BusinessTime;
+import process.util.UserNameResolver;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -366,9 +369,8 @@ class FormSubmissionServiceTest {
         long formId = form(A, FormStore.ACTIVE, null);
         as(A, "TENANT_USER");
         this.service.submit(new FormSubmitRequest(formId, goodAnswers()));
-        process.util.UserNameResolver names = mock(process.util.UserNameResolver.class);
-        org.mockito.Mockito.when(names.namesFor(org.mockito.ArgumentMatchers.anyCollection()))
-            .thenAnswer(call -> java.util.Collections.singletonMap(4537L, "Dr. Nora Clinic"));
+        UserNameResolver names = mock(UserNameResolver.class);
+        when(names.namesFor(anyCollection())).thenAnswer(call -> Collections.singletonMap(4537L, "Dr. Nora Clinic"));
         this.service.setNames(names);
 
         @SuppressWarnings("unchecked")
@@ -377,7 +379,7 @@ class FormSubmissionServiceTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> one = (Map<String, Object>) this.service.fetch((Long) rows.get(0).get("submissionId")).getData();
         assertThat(one).containsEntry("submittedByName", "Dr. Nora Clinic");
-        String csv = new String(this.service.export(formId).content, java.nio.charset.StandardCharsets.UTF_8);
+        String csv = new String(this.service.export(formId).content, StandardCharsets.UTF_8);
         assertThat(csv).contains(",Dr. Nora Clinic,");
     }
 }
