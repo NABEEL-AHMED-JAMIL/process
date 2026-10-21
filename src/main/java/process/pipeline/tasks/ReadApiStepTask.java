@@ -36,6 +36,7 @@ public class ReadApiStepTask extends RegisteredTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("read_api", "Read API", TaskKind.READ)
         .description("Runs a saved API request (integration-service's runner) and takes its answer as rows.")
+        .input(TaskSpec.rows("Optional: only its first row is read, to fill the request's {{column}} variables."))
         .output(TaskSpec.rows("One row per element of the answer's rows (or the whole answer as one row)."))
         .config(ApiConfigs.request(JsonSchema.object())
             .property("variables", JsonSchema.map(JsonSchema.string()).title("Variables")

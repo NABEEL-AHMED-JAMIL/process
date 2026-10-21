@@ -845,8 +845,9 @@ public class StepEngine {
                 }
                 String inputKey = named ? outputs.get(step.getInput()) : latest;
                 Input input = new Input(inputKey, source);
-                steps.started(row, input.size());
-                this.audit(String.format("%s started on %d record(s).", label, input.size()));
+                long recordsIn = this.recordsIn(step, input, outputs, source);
+                steps.started(row, recordsIn);
+                this.audit(String.format("%s started on %d record(s).", label, recordsIn));
                 long began = System.nanoTime();
                 this.memory.resetPeak();
                 Tried tried = this.tryStep(step, row, input, log);
@@ -1200,6 +1201,28 @@ public class StepEngine {
         }
 
         /** Every try of one step, each bounded by its timeout; the first success, or the last failure. */
+        /**
+         * ZT-P2: the rows a step takes in, as its run page shows them. A read step that declares no input ignores the step before
+         * it (TaskKind.READ; Read API declares the first row it reads), so it takes in the run's source (none, unless the run was given rows) -- it showed the previous step's rows, as if
+         * a file read had read them. An append takes in the outputs of the steps it joins, not the step before it.
+         */
+        private long recordsIn(PipelineDefinition.Step step, Input input, Map<String, String> outputs, Dataset source) {
+            Optional<StepTask> task = tasks.find(step.getTask());
+            if (task.isPresent() && task.get().spec().kind() == process.pipeline.registry.TaskKind.READ && task.get().spec().inputSchema() == null) {
+                return source.size();
+            }
+            if ("append".equals(step.getTask()) && step.getConfig() != null && step.getConfig().get("steps") instanceof List) {
+                long total = 0;
+                for (Object key : (List<?>) step.getConfig().get("steps")) {
+                    if (key != null && outputs.containsKey(String.valueOf(key))) {
+                        total += new Input(outputs.get(String.valueOf(key)), source).size();
+                    }
+                }
+                return total;
+            }
+            return input.size();
+        }
+
         private Tried tryStep(PipelineDefinition.Step step, long row, Input input, StepLog log) {
             Optional<StepTask> task = tasks.find(step.getTask());
             // The step's own retry and timeout, else its task's registry defaults (MIG-231).

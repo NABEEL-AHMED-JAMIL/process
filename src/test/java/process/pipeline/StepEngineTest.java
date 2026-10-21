@@ -297,6 +297,21 @@ class StepEngineTest {
         assertThat(this.audit.get(3)).startsWith("Step 2/3 <keep> (select) completed: 2 in, 2 out");
     }
 
+    /** ZT-P2: a read step takes nothing in (the step before it is not its input); an append takes in what it joins. */
+    @Test
+    void aReadStepAfterAnotherTakesNoRowsInAndAnAppendCountsTheRowsItJoins() {
+        PipelineDefinition.Step both = step("both", "append", config("steps", Arrays.asList("first", "second")));
+        this.runs(Definitions.of(sample("first", row("id", 1), row("id", 2), row("id", 3)), sample("second", row("id", 4)), both));
+
+        assertThat(this.worker.last()).isEqualTo("Completed: 3 of 3 step(s) completed.");
+        assertThat(this.steps.row(RUN_ID, 1, "second").recordsIn).as("a read step's input is ignored: 3 rows of <first> are not its").isZero();
+        assertThat(this.steps.row(RUN_ID, 1, "second").recordsOut).isEqualTo(1L);
+        assertThat(this.steps.row(RUN_ID, 1, "both").recordsIn).as("the append takes in first's 3 and second's 1").isEqualTo(4L);
+        assertThat(this.steps.row(RUN_ID, 1, "both").recordsOut).isEqualTo(4L);
+        assertThat(this.audit).anySatisfy(line -> assertThat(line).startsWith("Step 2/3 <second> (sample) started on 0 record(s)."));
+        assertThat(this.audit).anySatisfy(line -> assertThat(line).startsWith("Step 3/3 <both> (append) started on 4 record(s)."));
+    }
+
     @Test
     void onErrorFailFailsTheRunAndSkipsTheRest() {
         this.runs(Definitions.of(sample("read", row("id", 1)), failing("check", "the amount is negative", null), step("count", "counts")));
