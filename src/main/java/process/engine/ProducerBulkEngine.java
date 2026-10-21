@@ -381,7 +381,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     boolean engineLost = lost.contains(jobQueue.getJobQueueId());
                     jobQueue.setJobStatusMessage(engineLost
                         ? String.format("Run %s was in the step engine when Core restarted, and nothing is running it now. Closed as "
-                            + "interrupted: retry it from the failed step.", jobQueue.getJobQueueId())
+                            + "interrupted: run it again (Run now, or Run with for its parameters).", jobQueue.getJobQueueId())
                         : refused
                         ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
                             + "so the report was refused. Closed as interrupted — check the output before "

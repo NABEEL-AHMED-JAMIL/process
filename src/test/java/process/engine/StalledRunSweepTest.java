@@ -171,7 +171,7 @@ class StalledRunSweepTest {
         verify(this.transactionService).saveJobQueue(saved.capture());
         assertThat(saved.getValue().getJobStatus()).isEqualTo(JobStatus.Interrupt);
         assertThat(saved.getValue().getJobStatusMessage()).isEqualTo("Run 8905 was in the step engine when Core restarted, and nothing "
-            + "is running it now. Closed as interrupted: retry it from the failed step.");
+            + "is running it now. Closed as interrupted: run it again (Run now, or Run with for its parameters).");
         verify(this.transactionService).interruptOpenSteps(8905L, "Stopped: Core restarted while this step ran.");
         verify(this.bulkAction).changeJobStatus(JOB_ID, JobStatus.Interrupt);
     }
