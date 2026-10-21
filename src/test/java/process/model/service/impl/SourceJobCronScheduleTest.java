@@ -189,6 +189,57 @@ public class SourceJobCronScheduleTest {
         assertThat(written.isExpired()).isFalse();
     }
 
+    // ---- ZT-P1: a frequency the scheduler cannot step by ----------------------------------------------------------
+
+    private static SchedulerDto every(String frequency, String interval) {
+        SchedulerDto schedulerDto = new SchedulerDto();
+        schedulerDto.setStartDate(BusinessTime.today());
+        schedulerDto.setStartTime(LocalTime.of(0, 0));
+        schedulerDto.setFrequency(frequency);
+        schedulerDto.setIntervalValue(interval);
+        return schedulerDto;
+    }
+
+    /** ZT-P1: "Hourly" (the console's label for Hr) was stored as it came; the scheduler ran its first slot and expired it. */
+    @Test
+    void theConsolesLabelForAFrequencyIsStoredAsTheFrequency() throws Exception {
+        when(this.sourceTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(taskOwnedByA()));
+        when(this.appUserRepository.findById(CALLER_ID)).thenReturn(Optional.of(callerUser()));
+
+        ResponseDto response = this.service.addSourceJob(jobWith(every("Hourly", "1")));
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        Scheduler written = this.savedScheduler();
+        assertThat(written.getFrequency()).isEqualTo("Hr");
+        assertThat(written.isExpired()).isFalse();
+        assertThat(written.getNextRunAt()).isAfter(BusinessTime.now());
+    }
+
+    /** ZT-P1: a frequency nobody knows is refused before anything is written, in words, never saved to expire unseen. */
+    @Test
+    void anUnknownFrequencyIsRefusedBeforeAnythingIsWritten() throws Exception {
+        ResponseDto added = this.service.addSourceJob(jobWith(every("Fortnightly", "1")));
+        ResponseDto updated = this.service.updateSourceJob(withId(jobWith(every("Fortnightly", "1"))));
+
+        for (ResponseDto response : List.of(added, updated)) {
+            assertThat(response.getStatus()).isEqualTo("ERROR");
+            assertThat(response.getMessage()).startsWith("SourceJob schedule: ").contains("'Fortnightly' is not a frequency");
+        }
+        verify(this.sourceJobRepository, never()).saveAndFlush(any());
+        verify(this.schedulerRepository, never()).save(any());
+    }
+
+    /** ZT-P1: "Repeat every" is a whole number of 1 or more when it is given; 0 or words would never step on. */
+    @Test
+    void aRepeatThatIsNotAWholeNumberOfOneOrMoreIsRefused() throws Exception {
+        for (String interval : List.of("0", "-2", "two")) {
+            ResponseDto response = this.service.addSourceJob(jobWith(every("Daily", interval)));
+            assertThat(response.getStatus()).as(interval).isEqualTo("ERROR");
+            assertThat(response.getMessage()).as(interval).isEqualTo("SourceJob schedule: Repeat every needs a whole number of 1 or more.");
+        }
+        verify(this.schedulerRepository, never()).save(any());
+    }
+
     @Test
     void anInvalidExpressionIsRefusedBeforeAnythingIsWritten() throws Exception {
         ResponseDto response = this.service.addSourceJob(jobWith(cron("0 9 * * FUNDAY")));

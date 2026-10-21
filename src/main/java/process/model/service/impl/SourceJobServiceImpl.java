@@ -307,9 +307,11 @@ public class SourceJobServiceImpl implements SourceJobService {
         if (dto == null || ProcessUtil.isNull(dto.getFrequency())) {
             return "Choose how often it runs.";
         }
-        if (!ProcessTimeUtil.frequency.contains(dto.getFrequency())) {
-            return String.format("'%s' is not a frequency: one of %s.", dto.getFrequency(), ProcessTimeUtil.frequency);
+        Optional<Frequency> frequency = Frequency.parse(dto.getFrequency());
+        if (frequency.isEmpty()) {
+            return String.format("'%s' is not a frequency; use %s.", dto.getFrequency(), Frequency.CHOICES);
         }
+        dto.setFrequency(frequency.get().name());
         if (Frequency.Cron.name().equals(dto.getFrequency())) {
             String cron = CronSchedule.problem(dto.getCronExpression());
             return cron == null ? null : "SourceJob schedule: " + cron;
@@ -408,14 +410,38 @@ public class SourceJobServiceImpl implements SourceJobService {
             return null;
         }
         for (SchedulerDto schedulerDto : sourceJobDto.getSchedulers()) {
-            if (schedulerDto != null && Frequency.Cron.name().equals(schedulerDto.getFrequency())) {
+            if (schedulerDto == null) {
+                continue;
+            }
+            // ZT-P1: the frequency is one the scheduler steps by, stored by its name ("Hourly" is stored as Hr). An unknown
+            // one was stored as it came and the schedule expired after its first slot, with nothing said to anybody.
+            if (!ProcessUtil.isNull(schedulerDto.getFrequency())) {
+                Optional<Frequency> frequency = Frequency.parse(schedulerDto.getFrequency());
+                if (frequency.isEmpty()) {
+                    return String.format("SourceJob schedule: '%s' is not a frequency; use %s.", schedulerDto.getFrequency(),
+                        Frequency.CHOICES);
+                }
+                schedulerDto.setFrequency(frequency.get().name());
+            }
+            if (Frequency.Cron.name().equals(schedulerDto.getFrequency())) {
                 String problem = CronSchedule.problem(schedulerDto.getCronExpression());
                 if (problem != null) {
                     return "SourceJob schedule: " + problem;
                 }
+            } else if (!ProcessUtil.isNull(schedulerDto.getIntervalValue()) && !wholeNumberOfOneOrMore(schedulerDto.getIntervalValue())) {
+                // Absent, a schedule runs its first slot only (the rule every frequency has always had); given, it must step.
+                return "SourceJob schedule: Repeat every needs a whole number of 1 or more.";
             }
         }
         return null;
+    }
+
+    private static boolean wholeNumberOfOneOrMore(Object value) {
+        try {
+            return Long.parseLong(String.valueOf(value).trim()) >= 1;
+        } catch (NumberFormatException notANumber) {
+            return false;
+        }
     }
 
     /**
