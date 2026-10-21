@@ -153,6 +153,10 @@ public class StepEngine {
     private final TransactionOperations local;
     /** How many try threads each run thread may hold at once: its current try and a few timed-out ones unwinding. */
     static final int TRY_THREADS_PER_RUN_THREAD = 4;
+    /** ZT-P16: how long the engine's hold on a run lasts, and how often it is renewed while the run's steps run. */
+    static final int LEASE_SECONDS = 120;
+    static volatile long leaseRenewMillis = 30_000;
+
     /** ZT-P7: how often a running step looks whether its run was closed (marked interrupted or failed) meanwhile. */
     static volatile long closeCheckMillis = 2000;
 
@@ -360,6 +364,45 @@ public class StepEngine {
         return Optional.of(new StepPlan(job, run, stored.get(), definition, null, asked));
     }
 
+    /** ZT-P16: the runs this engine holds now, by id, with their workspace (the renewal runs in it). */
+    private final Map<Long, Long> leased = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile java.util.concurrent.ScheduledExecutorService leaseTimer;
+
+    private void lease(JobQueue run) {
+        this.leased.put(run.getJobQueueId(), run.getTenantId());
+        this.renew(run.getJobQueueId(), run.getTenantId());
+        if (this.leaseTimer == null) {
+            synchronized (this) {
+                if (this.leaseTimer == null) {
+                    this.leaseTimer = Executors.newSingleThreadScheduledExecutor(r -> {
+                        Thread t = new Thread(r, "step-engine-lease");
+                        t.setDaemon(true);
+                        return t;
+                    });
+                    this.leaseTimer.scheduleAtFixedRate(() -> this.leased.forEach(this::renew), leaseRenewMillis, leaseRenewMillis,
+                        TimeUnit.MILLISECONDS);
+                }
+            }
+        }
+    }
+
+    private void renew(Long jobQueueId, Long tenantId) {
+        try {
+            RowSecurity.forTenant(tenantId, () -> this.steps.engineLease(jobQueueId, LEASE_SECONDS));
+        } catch (RuntimeException ex) {
+            logger.warn("Run {}: the step engine's hold could not be renewed: {}", jobQueueId, ExceptionUtil.getRootCauseMessage(ex));
+        }
+    }
+
+    private void release(JobQueue run) {
+        this.leased.remove(run.getJobQueueId());
+        try {
+            this.steps.engineLeaseEnd(run.getJobQueueId());
+        } catch (RuntimeException ex) {
+            logger.warn("Run {}: the step engine's hold could not be cleared: {}", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
+        }
+    }
+
     /** Runs the plan on the engine's threads, in the run's workspace; {@code done} runs afterwards, whatever happened. */
     public void submit(StepPlan plan, Runnable done) {
         long tenantId = plan.job.getTenantId();
@@ -381,6 +424,7 @@ public class StepEngine {
         this.runThreads.execute(() -> RowSecurity.forTenant(tenantId, () -> {
             JobQueue run = plan.run;
             CorrelationScope scope = CorrelationScope.open(run.getCorrelationId() == null ? CorrelationId.generate() : run.getCorrelationId());
+            this.lease(run);
             try {
                 Execution execution = new Execution(plan);
                 if (plan.definition == null) {
@@ -399,6 +443,7 @@ public class StepEngine {
                         ExceptionUtil.getRootCauseMessage(unreported));
                 }
             } finally {
+                this.release(run);
                 scope.close();
             }
         }));
@@ -407,6 +452,7 @@ public class StepEngine {
     /** One run, start to end. Never throws: what cannot be reported is logged, and the stall sweep closes the run. */
     void run(StepPlan plan) {
         JobQueue run = plan.run;
+        boolean claimed = false;
         if (run.getCorrelationId() == null) {
             run.setCorrelationId(CorrelationId.generate());
         }
@@ -416,6 +462,8 @@ public class StepEngine {
                 logger.info("Run {} was taken, sent or closed before the step engine could take it; left as it is.", run.getJobQueueId());
                 return;
             }
+            claimed = true;
+            this.lease(run);
             new Execution(plan).go();
         } catch (Throwable ex) {
             logger.error("The step engine stopped on run {}: {}", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
@@ -426,6 +474,9 @@ public class StepEngine {
                     ExceptionUtil.getRootCauseMessage(unreported));
             }
         } finally {
+            if (claimed) {
+                this.release(run);
+            }
             scope.close();
         }
     }

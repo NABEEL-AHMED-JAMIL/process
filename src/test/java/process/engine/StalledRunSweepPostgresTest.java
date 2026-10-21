@@ -160,6 +160,29 @@ class StalledRunSweepPostgresTest {
         assertThat(swept).containsExactly(101L, 102L, 103L, 111L);
     }
 
+    /** ZT-P16: the runs whose step engine's hold lapsed over a minute ago -- not a fresh hold, no hold, a closed run or an unsent one. */
+    @Test
+    void theLapsedHoldQuerySelectsOnlySentInFlightRunsWhoseHoldLapsed() throws Exception {
+        for (long jobId = 9031; jobId <= 9036; jobId++) {
+            this.job(jobId);
+        }
+        LocalDateTime recent = NOW.minusMinutes(10);
+        this.run(131, 9031, "Running", recent, recent);
+        this.run(132, 9032, "Running", recent, recent);
+        this.run(133, 9033, "Running", recent, recent);
+        this.run(134, 9034, "Completed", recent, recent);
+        this.run(135, 9035, "Queue", null, recent);
+        this.run(136, 9036, "Start", recent, recent);
+        this.sql.update("UPDATE job_queue SET job_send = true WHERE job_queue_id IN (131, 132, 133, 134, 136)");
+        this.sql.update("UPDATE job_queue SET prepare_lease_until = now() - interval '5 minutes' WHERE job_queue_id IN (131, 134, 135, 136)");
+        this.sql.update("UPDATE job_queue SET prepare_lease_until = now() + interval '90 seconds' WHERE job_queue_id = 132");
+
+        List<Long> lost = this.sql.queryForList(nativeQuery("findRunsWithLapsedEngineLease").replace("job_queue.*", "job_queue.job_queue_id"), Long.class);
+
+        assertThat(lost).as("131 lapsed; 132 held; 133 no hold (an approval wait); 134 closed; 135 unsent (a preparer's lease); 136 lapsed")
+            .containsExactly(131L, 136L);
+    }
+
     /** The busy test the sweep's "leave the job row alone" rests on reads status the same case-blind way. */
     @Test
     void theInFlightCountTheSweepConsultsIsCaseBlindToo() throws Exception {

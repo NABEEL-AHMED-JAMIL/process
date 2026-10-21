@@ -438,6 +438,34 @@ class StepEngineTest {
         }
     }
 
+    /** ZT-P16: the engine holds a run while its steps run and lets go when they end, so a run whose Core restarts can be told. */
+    @Test
+    void theEngineHoldsARunWhileItsStepsRunAndLetsGoAfter() {
+        List<String> during = new ArrayList<>();
+        StepTask peek = new StepTask() {
+            @Override public String code() { return "peek"; }
+
+            @Override public String description() { return "looks at the holds"; }
+
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
+            @Override public StepResult run(StepContext context) {
+                during.addAll(StepEngineTest.this.steps.holds);
+                return StepResult.nothing(0L);
+            }
+        };
+        List<StepTask> registered = this.all.list();
+        registered.add(peek);
+        this.tasks = new StepTasks(registered);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(new TaskRegistry(this.tasks, this.switches)),
+            this.datasets, this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+        this.runs(Definitions.of(sample("read", row("id", 1)), step("look", "peek")));
+
+        assertThat(during).as("held while the steps run").containsExactly("lease:" + RUN_ID);
+        assertThat(this.steps.holds).as("let go after").containsExactly("lease:" + RUN_ID, "end:" + RUN_ID);
+    }
+
     @Test
     void aTryThatFindsNoFreeThreadFailsInWordsInsteadOfGrowingThePool() throws Exception {
         // MIG-214: the try threads are bounded; here the only one is still held by an earlier try that timed out

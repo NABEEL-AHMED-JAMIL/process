@@ -217,6 +217,16 @@ public class TransactionServiceImpl {
         return this.jobQueueRepository.findOrchestrationSetting(settingKey);
     }
 
+    /** ZT-P16: runs the step engine held whose hold lapsed (JobQueueRepository.findRunsWithLapsedEngineLease). */
+    public List<JobQueue> findRunsWithLapsedEngineLease() {
+        return this.jobQueueRepository.findRunsWithLapsedEngineLease();
+    }
+
+    /** ZT-P16: a closed run's open steps, closed with it. */
+    public int interruptOpenSteps(Long jobQueueId, String message) {
+        return this.jobQueueRepository.interruptOpenSteps(jobQueueId, message);
+    }
+
     public List<JobQueue> findRunsWithRefusedCallbacks() {
         return this.jobQueueRepository.findRunsWithRefusedCallbacks();
     }

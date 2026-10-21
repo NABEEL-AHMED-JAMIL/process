@@ -46,6 +46,18 @@ public interface StepStore {
 
     void started(long stepExecutionId, Long recordsIn);
 
+    /**
+     * ZT-P16: the engine holds this run for {@code seconds} more (job_queue.prepare_lease_until, unused once a run is sent):
+     * renewed while its steps run, cleared when they stop or wait for an approval. A lease that lapsed means the Core that
+     * ran it is gone (a restart, a deploy), and the stall sweep closes the run within its quarter hour, not after six hours.
+     */
+    default void engineLease(long jobQueueId, int seconds) {
+    }
+
+    /** ZT-P16: the engine no longer holds this run (its steps ended, or it waits for an approval). */
+    default void engineLeaseEnd(long jobQueueId) {
+    }
+
     void tried(long stepExecutionId, int tries);
 
     /** Completed or Failed, with its end time, records out, the error (a JSON object) and a status line. */

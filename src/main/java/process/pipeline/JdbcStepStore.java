@@ -60,6 +60,17 @@ public class JdbcStepStore implements StepStore {
             + "AND job_send = false AND prepared_at IS NULL", correlationId, unheldHash(), jobQueueId) == 1;
     }
 
+    @Override
+    public void engineLease(long jobQueueId, int seconds) {
+        this.jdbc.update("UPDATE job_queue SET prepare_lease_until = now() + (? * interval '1 second') WHERE job_queue_id = ? "
+            + "AND job_send = true AND UPPER(job_status) IN ('QUEUE', 'START', 'RUNNING')", seconds, jobQueueId);
+    }
+
+    @Override
+    public void engineLeaseEnd(long jobQueueId) {
+        this.jdbc.update("UPDATE job_queue SET prepare_lease_until = NULL WHERE job_queue_id = ? AND job_send = true", jobQueueId);
+    }
+
     private static String unheldHash() {
         byte[] random = new byte[32];
         RANDOM.nextBytes(random);

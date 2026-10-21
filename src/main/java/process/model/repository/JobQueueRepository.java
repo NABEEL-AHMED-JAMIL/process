@@ -114,6 +114,23 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     List<JobQueue> findStalledRuns(Timestamp startedBefore);
 
     /**
+     * ZT-P16: runs the step engine held whose hold lapsed more than a minute ago -- the Core that ran them is gone (a restart,
+     * a deploy): in flight, sent, and prepare_lease_until (the engine's hold once a run is sent, renewed every 30 s) in the past.
+     * A run waiting for an approval has no hold. The database's clock on both sides, as the engine writes it.
+     */
+    @Query(value = "select job_queue.* from job_queue where UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') and job_send = true "
+        + "and prepare_lease_until is not null and prepare_lease_until < now() - interval '60 seconds' "
+        + "order by job_queue_id asc", nativeQuery = true)
+    List<JobQueue> findRunsWithLapsedEngineLease();
+
+    /** ZT-P16: a closed run's steps that were still running or waiting, closed with it. */
+    @Transactional
+    @Modifying
+    @Query(value = "update step_execution set status = 'Interrupt', status_message = ?2, date_updated = now() "
+        + "where job_queue_id = ?1 and status in ('Running', 'Queue')", nativeQuery = true)
+    int interruptOpenSteps(Long jobQueueId, String message);
+
+    /**
      * Notes on a run still in flight that its own worker's report was refused for an expired token
      * (MIG-63). Guarded on the in-flight statuses so a late report on a finished run marks nothing.
      */

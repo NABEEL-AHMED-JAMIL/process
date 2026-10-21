@@ -77,7 +77,9 @@ class CrossTenantReadsAreNamedTest {
             // core-dispatch's pre-dispatch phase and scheduler claim, and the worker callbacks' refusal record.
             "JobQueueRepository.findRunsToPrepare", "JobQueueRepository.leaseForPreparation", "JobQueueRepository.markPrepared",
             "JobQueueRepository.findOrchestrationSetting", "JobQueueRepository.noteRefusedCallback",
-            "JobQueueRepository.findRunsWithRefusedCallbacks", "SchedulerRepository.claimNextDueScheduler"}) {
+            "JobQueueRepository.findRunsWithRefusedCallbacks", "SchedulerRepository.claimNextDueScheduler",
+            // ZT-P16: the stall sweep's runs whose step engine stopped, and their open steps closed with them.
+            "JobQueueRepository.findRunsWithLapsedEngineLease", "JobQueueRepository.interruptOpenSteps"}) {
             NOT_TENANT_ROWS.put(name, engine);
         }
         // FOLLOW-UP for Core: these three are a platform admin's all-tenant lists, chosen by an

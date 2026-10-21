@@ -112,6 +112,19 @@ public class InMemoryStepStore implements StepStore {
         return planned;
     }
 
+    /** ZT-P16: the engine's holds, in order: "lease:<run>" and "end:<run>". */
+    public final java.util.List<String> holds = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    @Override
+    public void engineLease(long jobQueueId, int seconds) {
+        this.holds.add("lease:" + jobQueueId);
+    }
+
+    @Override
+    public void engineLeaseEnd(long jobQueueId) {
+        this.holds.add("end:" + jobQueueId);
+    }
+
     @Override
     public synchronized void started(long id, Long recordsIn) {
         StepRow row = this.rows.get(id);

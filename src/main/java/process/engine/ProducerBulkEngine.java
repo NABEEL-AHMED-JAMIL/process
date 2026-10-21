@@ -349,8 +349,20 @@ public class ProducerBulkEngine implements DispatchOutcomes {
             for (JobQueue jobQueue : this.transactionService.findRunsWithRefusedCallbacks()) {
                 toClose.put(jobQueue.getJobQueueId(), jobQueue);
             }
+            // ZT-P16: a run whose step engine is gone (its hold lapsed: Core restarted while its steps ran) is closed now, not
+            // after six hours with its job blocked ("still in flight") and its schedule skipped.
+            java.util.Set<Long> lost = new java.util.HashSet<>();
+            for (JobQueue jobQueue : this.transactionService.findRunsWithLapsedEngineLease()) {
+                if (toClose.putIfAbsent(jobQueue.getJobQueueId(), jobQueue) == null) {
+                    lost.add(jobQueue.getJobQueueId());
+                }
+            }
             if (toClose.isEmpty()) {
                 return;
+            }
+            if (!lost.isEmpty()) {
+                logger.warn("reconcileStalledRuns --> {} run(s) were in a step engine that stopped (their hold lapsed); closing them "
+                    + "so their jobs can run again.", lost.size());
             }
             if (silent > 0) {
                 logger.warn("reconcileStalledRuns --> {} run(s) have been in flight since before {}; "
@@ -366,7 +378,11 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     jobQueue.setJobStatus(JobStatus.Interrupt);
                     jobQueue.setEndReason(reason);
                     jobQueue.setEndTime(BusinessTime.now());
-                    jobQueue.setJobStatusMessage(refused
+                    boolean engineLost = lost.contains(jobQueue.getJobQueueId());
+                    jobQueue.setJobStatusMessage(engineLost
+                        ? String.format("Run %s was in the step engine when Core restarted, and nothing is running it now. Closed as "
+                            + "interrupted: retry it from the failed step.", jobQueue.getJobQueueId())
+                        : refused
                         ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
                             + "so the report was refused. Closed as interrupted — check the output before "
                             + "running it again.", jobQueue.getJobId(), reported, jobQueue.getRefusedCallbackAt())
@@ -375,13 +391,19 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                         + "have finished — check the output before running it again.",
                         jobQueue.getJobId(), STALLED_AFTER_MINUTES / 60));
                     this.transactionService.saveJobQueue(jobQueue);
+                    if (engineLost) {
+                        this.transactionService.interruptOpenSteps(jobQueue.getJobQueueId(),
+                            "Stopped: Core restarted while this step ran.");
+                    }
                     // C4: the sweep writes Interrupt, never Failed -- and it is a bad run for the SLI (MIG-196).
                     this.bulkAction.countRunEnd(before, JobStatus.Interrupt, reason);
                     // Quote the time it actually has. A run that was never dispatched has no
                     // start_time, and "no update since null" reads as "we lost track of it" when
                     // what happened is "it was never picked up" -- two different incidents, told
                     // apart here or nowhere.
-                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), refused
+                    this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), engineLost
+                        ? "Run closed automatically: the step engine that ran it stopped (Core restarted); its hold lapsed."
+                        : refused
                         ? String.format("Run closed automatically: the worker's report (%s) at %s was refused "
                             + "because its callback token had expired.",
                             reported, jobQueue.getRefusedCallbackAt())

@@ -157,6 +157,25 @@ class StalledRunSweepTest {
             + "closed after 6 hours. The work may have finished — check the output before running it again.");
     }
 
+    /** ZT-P16: a run whose step engine stopped (its hold lapsed) is closed now, its open steps with it, in its own words. */
+    @Test
+    void aRunWhoseStepEngineStoppedIsClosedNowWithItsOpenSteps() {
+        JobQueue lost = run(8905L, JOB_ID, JobStatus.Running, BusinessTime.now().minusMinutes(12), null);
+        when(this.transactionService.findStalledRuns(any())).thenReturn(Collections.emptyList());
+        when(this.transactionService.findRunsWithLapsedEngineLease()).thenReturn(Collections.singletonList(lost));
+        when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
+
+        this.engine.reconcileStalledRuns();
+
+        ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
+        verify(this.transactionService).saveJobQueue(saved.capture());
+        assertThat(saved.getValue().getJobStatus()).isEqualTo(JobStatus.Interrupt);
+        assertThat(saved.getValue().getJobStatusMessage()).isEqualTo("Run 8905 was in the step engine when Core restarted, and nothing "
+            + "is running it now. Closed as interrupted: retry it from the failed step.");
+        verify(this.transactionService).interruptOpenSteps(8905L, "Stopped: Core restarted while this step ran.");
+        verify(this.bulkAction).changeJobStatus(JOB_ID, JobStatus.Interrupt);
+    }
+
     /** Whatever state it was stranded in, the verdict is the same one -- and it is never an outcome. */
     @Test
     void noStalledRunIsEverRecordedAsFailedOrCompleted() {
