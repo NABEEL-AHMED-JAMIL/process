@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.barco.platform.security.ReadOnlyList;
 import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ public class FailedRunsRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_USER')")
+    @ReadOnlyList("failed runs")
     @PostMapping("/message.json/failedRuns")
     public ResponseEntity<ResponseDto> failedRuns(@RequestBody(required = false) Map<String, Object> body) {
         return answer(() -> {

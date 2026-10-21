@@ -3,6 +3,7 @@ package process.api;
 import org.barco.platform.security.AuditedRead;
 import org.barco.platform.security.BuilderAction;
 import org.barco.platform.security.PlatformLevel;
+import org.barco.platform.security.ReadOnlyList;
 import org.barco.platform.security.WorkspaceData;
 import process.util.BusinessTime;
 import org.slf4j.Logger;
@@ -82,6 +83,7 @@ public class SourceTaskRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_USER')")
+    @ReadOnlyList("pipelines")
     @RequestMapping(value = "/listSourceTask", method = RequestMethod.POST)
     public ResponseEntity<?> listSourceTask(
         @RequestParam(value = "page", required = false) Long page,
@@ -101,6 +103,7 @@ public class SourceTaskRestApi {
     }
 
     @PreAuthorize("hasRole('TENANT_USER')")
+    @ReadOnlyList("a pipeline's schedules")
     @RequestMapping(value = "/fetchAllLinkJobsWithSourceTaskId", method = RequestMethod.POST)
     public ResponseEntity<?> fetchAllLinkJobsWithSourceTaskId(
         @RequestParam(value = "sourceTaskId") Long sourceTaskId,

@@ -1,5 +1,6 @@
 package process.retention;
 
+import org.barco.platform.security.ReadOnlyList;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -79,6 +80,7 @@ public class RetentionRestApi {
         });
     }
 
+    @ReadOnlyList("what a retention pass would remove, counted")
     @PostMapping("/preview")
     public ResponseEntity<ResponseDto> preview(@RequestBody(required = false) Map<String, Object> body) {
         return answer(() -> {

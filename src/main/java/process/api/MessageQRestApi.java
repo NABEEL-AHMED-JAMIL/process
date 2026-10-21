@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.ReadOnlyList;
 import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,7 @@ public class MessageQRestApi {
         this.messageQService = messageQService;
     }
 
+    @ReadOnlyList("runs")
     @RequestMapping(value = "/fetchLogs", method = RequestMethod.POST)
     public ResponseEntity<?> fetchLogs(
         @RequestBody MessageQSearchDto messageQSearch) {
@@ -53,6 +55,7 @@ public class MessageQRestApi {
      * UX review 2026-10-13 (B3): the Runs explorer's facets (status, pipeline, trigger) and time histogram, for fetchLogs'
      * body. Gated as the Queue (Runs) page: Run analytics holds /message.json/fetchLogs only.
      */
+    @ReadOnlyList("the runs' facets and counts")
     @RequestMapping(value = "/runFacets", method = RequestMethod.POST)
     public ResponseEntity<?> runFacets(@RequestBody MessageQSearchDto messageQSearch) {
         try {

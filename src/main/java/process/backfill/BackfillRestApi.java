@@ -1,5 +1,6 @@
 package process.backfill;
 
+import org.barco.platform.security.ReadOnlyList;
 import org.barco.platform.security.WorkspaceData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,7 @@ public class BackfillRestApi {
         this.backfills = backfills;
     }
 
+    @ReadOnlyList("a backfill's periods")
     @PostMapping("/sourceJob.json/backfills/preview")
     public ResponseEntity<ResponseDto> preview(@RequestBody(required = false) Map<String, Object> body) {
         return answer(() -> new ResponseDto(ProcessUtil.SUCCESS, "Backfill preview.", this.backfills.preview(request(body))));
