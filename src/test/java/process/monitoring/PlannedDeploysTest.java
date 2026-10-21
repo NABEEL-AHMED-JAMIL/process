@@ -83,7 +83,7 @@ class PlannedDeploysTest {
         // No window at all.
         List<Finding> none = RuleChecks.serviceRestarted(RESTARTED, restartedAt(5), NOW, Collections.emptyMap());
         assertThat(none).extracting(f -> f.subject).containsExactly("service:transcriber");
-        assertThat(none.get(0).title).isEqualTo("transcriber restarted 5 min ago");
+        assertThat(none.get(0).title).isEqualTo("transcriber restarted at 09:55");
         assertThat(none.get(0).detail).contains("Not a planned deploy");
         // A window that ended well before the restart.
         DeployWindow earlier = new DeployWindow("transcriber", ago(25), ago(10), ago(20), "ok");
@@ -116,7 +116,7 @@ class PlannedDeploysTest {
         DeployWindow deploy = new DeployWindow("transcriber", ago(6), ago(6).plus(Duration.ofMinutes(15)), ago(3), "ok");
         List<Finding> found = RuleChecks.serviceRestarted(RESTARTED, recent, NOW, windows(deploy));
         assertThat(found).hasSize(1);
-        assertThat(found.get(0).title).isEqualTo("transcriber restarted 20 min ago");
+        assertThat(found.get(0).title).isEqualTo("transcriber restarted at 09:40");
     }
 
     @Test

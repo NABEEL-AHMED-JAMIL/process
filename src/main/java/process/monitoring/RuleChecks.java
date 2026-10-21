@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import process.retention.DataClass;
 
 /**
@@ -308,7 +310,9 @@ public final class RuleChecks {
                 continue;
             }
             Instant latest = starts.last();
-            out.add(Finding.of("service:" + entry.getKey(), entry.getKey() + " restarted " + ago(latest, now) + " ago",
+            // ZT-M: when it started, not how long ago: an incident keeps the title of its last evaluation, so one from 20 Oct
+            // still read "restarted 29 min ago" the next day. The platform's clock is Chicago's, 24-hour (owner 09-28).
+            out.add(Finding.of("service:" + entry.getKey(), entry.getKey() + " restarted at " + CLOCK.format(latest.atZone(PLATFORM_ZONE)),
                 (starts.size() > 1 ? starts.size() + " starts in the last " + minutes(rule.windowMinutes) + ". " : "")
                     + "Not a planned deploy (scripts/deploy.sh announces those, and they do not alert): a crash, an out-of-memory kill "
                     + "or a restart by hand.",
@@ -404,6 +408,9 @@ public final class RuleChecks {
         }
         return minutes == 1 ? "a minute" : minutes + " minutes";
     }
+
+    private static final ZoneId PLATFORM_ZONE = ZoneId.of("America/Chicago");
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
     static String ago(Instant at, Instant now) {
         return human(Duration.between(at, now));

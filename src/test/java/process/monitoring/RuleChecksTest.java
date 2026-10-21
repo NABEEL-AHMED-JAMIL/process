@@ -232,7 +232,11 @@ class RuleChecksTest {
         recent.put("ai", Collections.singletonList(sample("ai", 0, "UP", 1, 2, null, old)));
         List<Finding> found = RuleChecks.serviceRestarted(rule(AlertKind.SERVICE_RESTARTED, null, 1, 30), recent, NOW);
         assertThat(found).extracting(f -> f.subject).containsExactly("service:transcriber");
-        assertThat(found.get(0).title).isEqualTo("transcriber restarted 4 min ago");
+        // ZT-M: the time of the start, not how long ago it was when last evaluated -- the alert keeps its title, so an
+        // incident from 20 Oct still read "restarted 29 min ago" on the 21st. 14:56 UTC is 09:56 in Chicago.
+        assertThat(found.get(0).title).isEqualTo("transcriber restarted at 09:56");
+        assertThat(RuleChecks.serviceRestarted(rule(AlertKind.SERVICE_RESTARTED, null, 1, 30), recent, NOW.plus(Duration.ofMinutes(25))).get(0).title)
+            .as("the same start reads the same 25 minutes later").isEqualTo("transcriber restarted at 09:56");
         assertThat(RuleChecks.serviceRestarted(rule(AlertKind.SERVICE_RESTARTED, null, 1, 3), recent, NOW)).isEmpty();
     }
 

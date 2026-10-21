@@ -37,6 +37,8 @@ import process.security.TenantContext;
 import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import java.util.function.Supplier;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 
 /**
  * MIG-355 end to end on etl_job as the changelog builds it, through the application's pool (process_app, row security):
@@ -384,7 +386,7 @@ class MonitoringPostgresTest {
         AlertEngine.Pass outside = this.engine.evaluate(now.plusSeconds(60));
         assertThat(outside.opened).isEqualTo(1);
         assertThat(login.queryForObject("SELECT title FROM alert_incident WHERE kind = 'SERVICE_RESTARTED' AND state = 'OPEN'", String.class))
-            .isEqualTo("transcriber restarted 5 min ago");
+            .isEqualTo("transcriber restarted at " + DateTimeFormatter.ofPattern("HH:mm").format(started.atZone(ZoneId.of("America/Chicago"))));
         assertThat(this.notices).extracting(n -> ((NotificationCreated) n[1]).getAppUserId()).containsExactly(PLATFORM);
 
         // Past the rule's 30 minutes the start is no longer news: resolved by itself.
