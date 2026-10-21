@@ -153,6 +153,8 @@ public class StepEngine {
     private final TransactionOperations local;
     /** How many try threads each run thread may hold at once: its current try and a few timed-out ones unwinding. */
     static final int TRY_THREADS_PER_RUN_THREAD = 4;
+    /** ZT-P7: how often a running step looks whether its run was closed (marked interrupted or failed) meanwhile. */
+    static volatile long closeCheckMillis = 2000;
 
     private final ExecutorService runThreads;
     private final ExecutorService tryThreads;
@@ -852,6 +854,13 @@ public class StepEngine {
                 this.memory.resetPeak();
                 Tried tried = this.tryStep(step, row, input, log);
                 long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - began);
+                if (tried.closed) {
+                    steps.ended(row, JobStatus.Interrupt.name(), null, null, "Stopped: the run was closed while this step ran.");
+                    this.stopAll(rows, i + 1, JobStatus.Interrupt.name(), "Not run: the run was closed while its steps ran.");
+                    this.audit(String.format("%s stopped: the run was closed while it ran.", label));
+                    outcome.interrupted = true;
+                    return outcome;
+                }
                 // MIG-344: what a streaming step held, on its log -- for a step that read a batch or more, or spilled (a small
                 // step's log stays as it was).
                 if (tried.streamed && (input.size() >= batchRows() || this.memory.spilled() > 0)) {
@@ -1262,7 +1271,7 @@ public class StepEngine {
                 }
                 if (future != null) {
                     try {
-                        tried.result = future.get(timeout, TimeUnit.SECONDS);
+                        tried.result = this.await(future, timeout);
                         String uncommitted = streams ? this.commitStreamed((StreamTry) context, tried) : null;
                         tried.timedOut = false;
                         if (uncommitted == null) {
@@ -1273,6 +1282,17 @@ public class StepEngine {
                         // The work succeeded but its output could not be kept: a failed try.
                         tried.result = null;
                         tried.error = uncommitted;
+                    } catch (RunClosed closed) {
+                        // ZT-P7: the run was marked interrupted (or failed) while this step ran: it stops now, not after every
+                        // row it had left (an AI step went on calling the model, and was billed, for minutes).
+                        future.cancel(true);
+                        if (streams) {
+                            ((StreamTry) context).discard();
+                        }
+                        tried.closed = true;
+                        tried.error = "the run was closed while this step ran";
+                        log.line("WARN", String.format("Try %d stopped: the run was closed while this step ran.", t));
+                        return tried;
                     } catch (TimeoutException ex) {
                         future.cancel(true);
                         tried.error = String.format("timed out after %d s", timeout);
@@ -1307,6 +1327,25 @@ public class StepEngine {
                 }
             }
             return tried;
+        }
+
+        /** A try's answer, within its timeout; looks every closeCheckMillis whether the run is still running (ZT-P7). */
+        private StepResult await(Future<StepResult> future, int timeout)
+            throws InterruptedException, ExecutionException, TimeoutException, RunClosed {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeout);
+            while (true) {
+                long left = deadline - System.nanoTime();
+                if (left <= 0) {
+                    throw new TimeoutException();
+                }
+                try {
+                    return future.get(Math.min(left, TimeUnit.MILLISECONDS.toNanos(closeCheckMillis)), TimeUnit.NANOSECONDS);
+                } catch (TimeoutException slice) {
+                    if (System.nanoTime() < deadline && !this.stillRunning()) {
+                        throw new RunClosed();
+                    }
+                }
+            }
         }
 
         /** The output, to the dataset store, and its reference, to run_dataset; the reference. */
@@ -1540,7 +1579,16 @@ public class StepEngine {
     }
 
     /** One step's tries. */
+    /** ZT-P7: the run was closed while a step's try ran. */
+    private static final class RunClosed extends Exception {
+        RunClosed() {
+            super("the run was closed while this step ran", null, false, false);
+        }
+    }
+
     private static final class Tried {
+        /** ZT-P7: stopped because the run was closed meanwhile. */
+        boolean closed;
         int tries;
         StepResult result;
         String error;

@@ -414,6 +414,28 @@ class StepEngineTest {
         assertThat(this.worker.last()).isEqualTo("Failed: Step 1 <slow> failed: timed out after 1 s");
     }
 
+    /** ZT-P7: a run marked interrupted while a long step runs stops that step too, not only the steps after it. */
+    @Test
+    void aRunClosedWhileALongStepRunsStopsThatStepWithoutWaitingForIt() throws Exception {
+        PipelineDefinition.Step slow = step("slow", "slow", config("millis", 30000));
+        long saved = StepEngine.closeCheckMillis;
+        StepEngine.closeCheckMillis = 100;
+        try {
+            java.util.concurrent.ScheduledExecutorService operator = Executors.newSingleThreadScheduledExecutor();
+            operator.schedule(() -> this.run.setJobStatus(JobStatus.Interrupt), 500, TimeUnit.MILLISECONDS);
+            long began = System.currentTimeMillis();
+            this.runs(Definitions.of(slow, step("after", "counts")));
+            operator.shutdownNow();
+
+            assertThat(System.currentTimeMillis() - began).as("not the step's thirty seconds").isLessThan(10000);
+            assertThat(this.statuses()).containsExactly(entry("slow", "Interrupt"), entry("after", "Interrupt"));
+            assertThat(this.steps.row(RUN_ID, 1, "slow").statusMessage).isEqualTo("Stopped: the run was closed while this step ran.");
+            assertThat(this.worker.statuses()).doesNotContain(JobStatus.Failed, JobStatus.Completed);
+        } finally {
+            StepEngine.closeCheckMillis = saved;
+        }
+    }
+
     @Test
     void aTryThatFindsNoFreeThreadFailsInWordsInsteadOfGrowingThePool() throws Exception {
         // MIG-214: the try threads are bounded; here the only one is still held by an earlier try that timed out
