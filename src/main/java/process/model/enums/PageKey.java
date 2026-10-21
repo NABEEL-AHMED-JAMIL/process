@@ -31,10 +31,21 @@ import java.util.Set;
  */
 public enum PageKey {
 
+    // ZT-P11 (owner 2026-10-21, "Restrict."): a pipeline's definition -- the list, its fields and form, its steps and their
+    // settings (bucket keys, request and prompt ids, a read's SQL) -- is the Pipelines or Schedules page's to read, so a
+    // viewer or reviewer holding neither is refused it. Each read is named, not /pipeline.json whole: validate, preview,
+    // /steps/tasks and /steps/reads (Sources') stay as they were. Home's count is /pipeline.json/count, open to everyone.
     JOBS("jobs", "Source Jobs", "Operations", "/operations/jobs",
-        "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/aiPrompt.json", "/fileChat.json"),
+        "/sourceJob.json", "/sourceTask.json", "/aiAgent.json", "/aiPrompt.json", "/fileChat.json",
+        "/pipeline.json/listPipelines", "/pipeline.json/fields", "/pipeline.json/listForTopic", "/pipeline.json/definition",
+        "/pipeline.json/formForPipeline", "/pipeline.json/get", "/pipeline.json/list", "/pipeline.json/listForms",
+        "/pipeline.json/steps/definition"),
     TASKS("tasks", "Source Tasks", "Operations", "/operations/tasks",
-        "/sourceTask.json"),
+        "/sourceTask.json",
+        // The definition reads, steps/definition and list first: a refusal of them names Pipelines, not Prompts (PageGate.named).
+        "/pipeline.json/steps/definition", "/pipeline.json/list", "/pipeline.json/listPipelines", "/pipeline.json/fields",
+        "/pipeline.json/listForTopic", "/pipeline.json/definition", "/pipeline.json/formForPipeline", "/pipeline.json/get",
+        "/pipeline.json/listForms"),
     // UX review 2026-10-12 (R2): a reviewer holding the Queue was refused the run they were sent to review. The run's
     // READS open to this page too -- its log, steps, a step's log, outputs, datasets, its review and the runs waiting for
     // review, and its AI answers -- and Core answers them only for a run the caller owns or reviews (RunReaders).
@@ -69,8 +80,9 @@ public enum PageKey {
         "/audioTranscript.json"),
     // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
     // the group: the file chat and the job assistant still read prompts through its aliases.
+    // ZT-P11: the AI Assistant (this page) lists the pipelines and reads a step definition to design and change one.
     AI_PROMPTS("ai-prompts", "Prompts", "Assistants", "/assistants/prompts",
-        "/aiPrompt.json", "/aiAgent.json"),
+        "/aiPrompt.json", "/aiAgent.json", "/pipeline.json/list", "/pipeline.json/steps/definition"),
     // Wave 5 Forms (lite): Core's own forms (/form.json: build, read, fill in) and what they collected
     // (/formSubmission.json). Identity-service's catalogue has had both keys since MIG-267; they gate these groups
     // once its PageKey names the same prefixes (HttpIdentity asks it only about a path this catalogue gates).

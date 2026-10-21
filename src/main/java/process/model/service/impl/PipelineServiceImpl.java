@@ -182,6 +182,22 @@ public class PipelineServiceImpl {
             PagingUtil.convertEntityToPagingDTO(found.getTotalElements(), window));
     }
 
+    /**
+     * ZT-P11 (owner 2026-10-21): Home's count -- how many pipelines the caller's workspace has and how many are Active, and
+     * nothing of any definition, so it is open to everyone who signs in (a viewer holds neither Pipelines nor Schedules).
+     * Scoped as listForms: the caller's own workspace; a platform administrator's every workspace, as counts alone.
+     */
+    public ResponseDto count() {
+        TenantScope scope = TenantContext.scope();
+        long tenant = scope.isAllTenants() ? TenantScope.NO_TENANT_MATCHES : ((TenantScope.Scoped) scope).tenantId();
+        PipelineSummaryProjection summary = !scope.isAllTenants() && tenant == TenantScope.NO_TENANT_MATCHES ? null
+            : this.pipelineRepository.summarise(scope.isAllTenants(), tenant);
+        Map<String, Long> counts = new HashMap<>();
+        counts.put("total", summary == null ? 0L : summary.getTotal());
+        counts.put("active", summary == null ? 0L : summary.getActive());
+        return new ResponseDto(SUCCESS, String.format("%d pipeline(s).", counts.get("total")), counts);
+    }
+
     /** The list answer: the page's rows and the whole scope's numbers side by side. */
     private static Map<String, Object> pageOf(List<PipelineRowDto> rows,
         PipelineSummaryProjection summary) {

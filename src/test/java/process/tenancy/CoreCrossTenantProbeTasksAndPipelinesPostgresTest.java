@@ -164,6 +164,8 @@ class CoreCrossTenantProbeTasksAndPipelinesPostgresTest {
         // ---- /pipeline.json: the reads a tenant user reaches, as the user and as the admin
         for (Caller caller : new Caller[] {USER_OF_A, ADMIN_OF_A}) {
             fx.probe("GET pipeline.json/listPipelines", caller, () -> fx.pipelines.listPipelines(1L, 50L, null, null, null));
+            // ZT-P11: Home's count is A's numbers alone -- no name, no definition, nothing of B's.
+            assertThat(fx.probe("GET pipeline.json/count", caller, () -> fx.pipelines.count())).doesNotContain("bravo");
             assertThat(fx.probe("GET pipeline.json/fields", caller, () -> fx.pipelines.fields(B_PIPELINE))).contains(REFUSED);
             fx.probe("GET pipeline.json/listForTopic", caller, () -> fx.pipelines.listForTopic(B_TYPE));
             // One method answers both paths; each path is a URL a tenant can call, so each is probed by name.

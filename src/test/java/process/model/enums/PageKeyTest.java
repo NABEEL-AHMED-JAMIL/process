@@ -50,6 +50,30 @@ public class PageKeyTest {
         }
     }
 
+    /**
+     * ZT-P11 (owner 2026-10-21, "Restrict."): a pipeline's definition is the Pipelines or Schedules page's -- a viewer or a
+     * reviewer holding neither is refused it -- and the AI Assistant's page lists the pipelines and reads a step definition.
+     * Home's count, a preview, a validation, the task list and Sources' reads are not definitions and stay as they were.
+     */
+    @Test
+    void aPipelinesDefinitionIsThePipelinesOrSchedulesPages() {
+        for (String read : new String[] {"/pipeline.json/listPipelines", "/pipeline.json/fields", "/pipeline.json/listForTopic",
+            "/pipeline.json/definition", "/pipeline.json/formForPipeline", "/pipeline.json/get", "/pipeline.json/listForms",
+            "/pipeline.json/steps/definition", "/pipeline.json/list"}) {
+            assertThat(PageKey.pagesGating(read)).as(read).contains(PageKey.TASKS, PageKey.JOBS)
+                .doesNotContain(PageKey.QUEUE, PageKey.REPORTS, PageKey.ANALYTICS_DASHBOARDS);
+        }
+        assertThat(PageKey.pagesGating("/pipeline.json/list")).containsExactlyInAnyOrder(PageKey.TASKS, PageKey.JOBS, PageKey.AI_PROMPTS);
+        assertThat(PageKey.pagesGating("/pipeline.json/steps/definition"))
+            .containsExactlyInAnyOrder(PageKey.TASKS, PageKey.JOBS, PageKey.AI_PROMPTS);
+        assertThat(PageKey.pagesGating("/pipeline.json/listPipelines")).containsExactlyInAnyOrder(PageKey.TASKS, PageKey.JOBS);
+        for (String open : new String[] {"/pipeline.json/count", "/pipeline.json/steps/preview", "/pipeline.json/steps/validate",
+            "/pipeline.json/steps/tasks"}) {
+            assertThat(PageKey.pagesGating(open)).as(open).isEmpty();
+        }
+        assertThat(PageKey.pagesGating("/pipeline.json/steps/reads")).containsExactly(PageKey.SOURCES);
+    }
+
     @Test
     void prefixesMatchWholeSegmentsOnly() {
         // "/report.json" must not also gate a hypothetical "/report.jsonx" or "/reportX.json".

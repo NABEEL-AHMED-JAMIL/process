@@ -80,6 +80,21 @@ public class PipelineRestApi {
         }
     }
 
+    /**
+     * ZT-P11 (owner 2026-10-21): Home's count of the workspace's pipelines (total, active) -- no definition, no names -- for
+     * anyone signed in. The definition reads around it are the Pipelines or Schedules page's (PageKey).
+     */
+    @PreAuthorize("hasRole('TENANT_USER')")
+    @RequestMapping(value = "/count", method = RequestMethod.GET)
+    public ResponseEntity<?> count() {
+        try {
+            return new ResponseEntity<>(this.pipelineService.count(), HttpStatus.OK);
+        } catch (Exception ex) {
+            logger.error("An error occurred while counting pipelines", ex);
+            return internalError();
+        }
+    }
+
     /** The fields of one pipeline, fetched when a list row is opened rather than sent with every row. */
     @PreAuthorize("hasRole('TENANT_USER')")
     @RequestMapping(value = "/fields", method = RequestMethod.GET)
