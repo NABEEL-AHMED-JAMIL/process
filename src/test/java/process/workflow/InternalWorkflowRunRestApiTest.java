@@ -5,9 +5,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import process.model.dto.ResponseDto;
+import process.model.enums.JobStatus;
+import process.model.pojo.JobQueue;
+import process.model.repository.JobQueueRepository;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,7 +28,8 @@ import static org.mockito.Mockito.when;
 class InternalWorkflowRunRestApiTest {
 
     private final SourceJobService jobs = mock(SourceJobService.class);
-    private final InternalWorkflowRunRestApi api = new InternalWorkflowRunRestApi(this.jobs, "shared-token");
+    private final JobQueueRepository runs = mock(JobQueueRepository.class);
+    private final InternalWorkflowRunRestApi api = new InternalWorkflowRunRestApi(this.jobs, this.runs, "shared-token");
 
     @AfterEach
     void clear() {
@@ -69,5 +75,51 @@ class InternalWorkflowRunRestApiTest {
         ResponseEntity<?> answer = this.api.run("shared-token", request);
         assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(((ResponseDto) answer.getBody()).getMessage()).isEqualTo("Name the workspace (tenantId) and the job (jobId).");
+    }
+
+    private static InternalWorkflowRunRestApi.StateRequest state(long tenantId, long runId) {
+        InternalWorkflowRunRestApi.StateRequest request = new InternalWorkflowRunRestApi.StateRequest();
+        request.setTenantId(tenantId);
+        request.setRunId(runId);
+        return request;
+    }
+
+    private static JobQueue run(long tenantId, JobStatus status, String message) {
+        JobQueue q = new JobQueue();
+        q.setTenantId(tenantId);
+        q.setJobStatus(status);
+        q.setJobStatusMessage(message);
+        return q;
+    }
+
+    /** 2026-10-21: a run_pipeline step that waits asks how its run is; the token first, then the workspace's own run only. */
+    @Test
+    void aRunsStateIsTheWorkspacesOwnOnly() {
+        AtomicReference<Long> tenantDuringRead = new AtomicReference<>();
+        when(this.runs.findById(1019L)).thenAnswer(call -> {
+            tenantDuringRead.set(TenantContext.getTenantId());
+            return Optional.of(run(2924L, JobStatus.Completed, "8 of 8 step(s) completed."));
+        });
+
+        assertThat(this.api.runState(null, state(2924L, 1019L)).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        ResponseDto mine = (ResponseDto) this.api.runState("shared-token", state(2924L, 1019L)).getBody();
+        assertThat(mine.getStatus()).isEqualTo("SUCCESS");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) mine.getData();
+        assertThat(data).containsEntry("status", "Completed").containsEntry("ended", true).containsEntry("message", "8 of 8 step(s) completed.");
+        assertThat(tenantDuringRead.get()).isEqualTo(2924L);
+        assertThat(TenantContext.getTenantId()).isNull();
+
+        ResponseDto theirs = (ResponseDto) this.api.runState("shared-token", state(4414L, 1019L)).getBody();
+        assertThat(theirs.getStatus()).isEqualTo("ERROR");
+        assertThat(theirs.getMessage()).isEqualTo("No run 1019 in this workspace.");
+    }
+
+    @Test
+    void aRunWaitingForItsApprovalHasNotEnded() {
+        when(this.runs.findById(1020L)).thenReturn(Optional.of(run(2924L, JobStatus.Running, "Waiting for approval at step 6.")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) ((ResponseDto) this.api.runState("shared-token", state(2924L, 1020L)).getBody()).getData();
+        assertThat(data).containsEntry("status", "Running").containsEntry("ended", false);
     }
 }

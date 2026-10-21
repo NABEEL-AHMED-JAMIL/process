@@ -12,11 +12,17 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import process.model.dto.ResponseDto;
+import process.model.pojo.JobQueue;
+import process.model.repository.JobQueueRepository;
 import process.model.service.SourceJobService;
 import process.security.TenantContext;
+import process.slo.RunSlo;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * A workflow's run_pipeline step (workflow-service, MIG-273): start a job of a workspace, service to service. No person
@@ -34,10 +40,12 @@ public class InternalWorkflowRunRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(InternalWorkflowRunRestApi.class);
     private final SourceJobService jobs;
+    private final JobQueueRepository runs;
     private final byte[] token;
 
-    public InternalWorkflowRunRestApi(SourceJobService jobs, @Value("${internal.service-token:}") String token) {
+    public InternalWorkflowRunRestApi(SourceJobService jobs, JobQueueRepository runs, @Value("${internal.service-token:}") String token) {
         this.jobs = jobs;
+        this.runs = runs;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -82,6 +90,53 @@ public class InternalWorkflowRunRestApi {
             this.logger.info("Workflow instance {} step {} asked to run job {} of workspace {}: {}", request.getInstanceId(),
                 request.getStepKey(), request.getJobId(), request.getTenantId(), answer.getMessage());
             return ResponseEntity.ok(answer);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    /** Which run a waiting step asks about. */
+    public static class StateRequest {
+        private Long tenantId;
+        private Long runId;
+
+        public Long getTenantId() { return tenantId; }
+
+        public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
+        public Long getRunId() { return runId; }
+
+        public void setRunId(Long runId) { this.runId = runId; }
+    }
+
+    /**
+     * 2026-10-21: a run_pipeline step that waits for its run asks here, on each turn of workflow-service's timer, how the
+     * run is: {status, ended, message, endedAt}. Read as the workspace named (row security), and only a run of that
+     * workspace: another's, or none, is "No run". Nothing changes.
+     */
+    @PostMapping(value = "/runState", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> runState(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
+        @RequestBody StateRequest request) {
+        if (!this.admits(presented)) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        if (request == null || request.getTenantId() == null || request.getRunId() == null) {
+            return ResponseEntity.badRequest().body(new ResponseDto("ERROR", "Name the workspace (tenantId) and the run (runId)."));
+        }
+        TenantContext.set(request.getTenantId(), WORKSPACE_ROLE, null, "workflow-service");
+        try {
+            Optional<JobQueue> run = this.runs.findById(request.getRunId())
+                .filter(q -> request.getTenantId().equals(q.getTenantId()));
+            if (!run.isPresent()) {
+                return ResponseEntity.ok(new ResponseDto("ERROR", "No run " + request.getRunId() + " in this workspace."));
+            }
+            JobQueue q = run.get();
+            Map<String, Object> state = new LinkedHashMap<>();
+            state.put("status", q.getJobStatus() == null ? null : q.getJobStatus().name());
+            state.put("ended", RunSlo.isTerminal(q.getJobStatus()));
+            state.put("message", q.getJobStatusMessage());
+            state.put("endedAt", q.getEndTime() == null ? null : q.getEndTime().toString());
+            return ResponseEntity.ok(new ResponseDto("SUCCESS", "Run state.", state));
         } finally {
             TenantContext.clear();
         }

@@ -205,6 +205,8 @@ class CoreProbeCoverageTest {
             + " (InternalKafkaPublishRestApiTest.withoutTheServiceTokenNothingIsPublished)");
         NOTHING_TO_AIM.put("POST internal/workflows/run", service + "; the job runs as that workspace through Run now's own rules"
             + " (InternalWorkflowRunRestApiTest.withoutTheInternalTokenNothingRuns)");
+        NOTHING_TO_AIM.put("POST internal/workflows/runState", service + "; reads one run of the workspace named, as that workspace"
+            + " (row security), and another workspace's run is \"No run\" (InternalWorkflowRunRestApiTest.aRunsStateIsTheWorkspacesOwnOnly)");
         NOTHING_TO_AIM.put("POST internal/review/bulkEligibility", service + "; answered as that workspace (RowSecurity.forTenant), "
             + "another workspace's subject is not-found and names nothing (InternalReviewEligibilityRestApiTest."
             + "withoutTheInternalTokenNothingIsAnswered, eachSubjectIsAnsweredByItsPipelinesFlagAsTheWorkspace)");
