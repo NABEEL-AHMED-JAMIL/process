@@ -40,6 +40,22 @@ public class PipelineParameters {
         }
     }
 
+    /**
+     * V220: whether the job runs a step pipeline (Core's engine), whose runs keep their data under their own run id -- so a
+     * workflow's runs of it may run side by side. A legacy one (external workers) shares the task's one output folder.
+     */
+    public boolean runsSteps(SourceJob job) {
+        if (job == null || job.getTenantId() == null || job.getTaskDetail() == null || job.getTaskDetail().getPipelineId() == null) {
+            return false;
+        }
+        Optional<PipelineDefinitionStore.Stored> stored = this.definitions.latestFor(job.getTenantId(), job.getTaskDetail().getPipelineId());
+        try {
+            return stored.isPresent() && !stored.get().definition().isLegacy();
+        } catch (IllegalStateException unreadable) {
+            return false;
+        }
+    }
+
     /** Given values checked for a run of this job: its run_params (null when the pipeline has none), or the refusal. */
     public static final class Checked {
         public final String runParams;

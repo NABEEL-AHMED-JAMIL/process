@@ -58,11 +58,13 @@ class DrillDownPostgresTest {
             + "callback_token_attempt integer, callback_token_expires_at timestamptz, callback_token_hash varchar(64), "
             + "date_created timestamptz NOT NULL, end_time timestamptz, input_bucket varchar(255), input_key varchar(1024), job_id bigint NOT NULL, "
             + "job_send boolean, job_status varchar(255) NOT NULL, job_status_message text, next_attempt_at timestamptz, output_folder varchar(255), "
-            + "run_manual boolean, skip_manual boolean, skip_time timestamptz, start_time timestamptz, status varchar(255) NOT NULL)");
+            + "run_manual boolean, skip_manual boolean, skip_time timestamptz, start_time timestamptz, status varchar(255) NOT NULL, "
+            + "workflow_instance_id bigint, workflow_step_key varchar(128))");
         sql.update("INSERT INTO hibernate_order.job_queue SELECT job_queue_id, attempt, bucket, callback_token_attempt, "
             + "callback_token_expires_at, callback_token_hash, date_created, end_time, input_bucket, input_key, job_id, job_send, job_status, "
             + "job_status_message, "
-            + "next_attempt_at, output_folder, run_manual, skip_manual, skip_time, start_time, status FROM public.job_queue");
+            + "next_attempt_at, output_folder, run_manual, skip_manual, skip_time, start_time, status, workflow_instance_id, workflow_step_key "
+            + "FROM public.job_queue");
     }
 
     @AfterAll

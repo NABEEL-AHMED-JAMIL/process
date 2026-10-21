@@ -166,6 +166,17 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         return jobQueue;
     }
 
+    /**
+     * V220: queues a run for a workflow request's run_pipeline step, beside the job's own runs: the job's running status and
+     * last run stay its own runs' (Run now and the schedule read them), and no job-status notice goes. Answers the run.
+     */
+    public JobQueue addWorkflowJobInQueue(SourceJob sourceJob, Long instanceId, String stepKey) {
+        JobQueue jobQueue = this.bulkAction.createWorkflowJobQueue(sourceJob.getJobId(), BusinessTime.now(), instanceId, stepKey);
+        logger.info("Run {} of job {} queued by workflow request {}, step {}.", jobQueue.getJobQueueId(), sourceJob.getJobId(), instanceId, stepKey);
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
+        return jobQueue;
+    }
+
     /** A line in a run's audit log saying why it was queued (a workflow step, MIG-273). */
     public void auditRun(Long jobQueueId, String reason) {
         this.bulkAction.saveJobAuditLogs(jobQueueId, reason);
@@ -416,7 +427,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     // console shows. Closing the queue row alone leaves the job reading Start for
                     // ever -- the same symptom, one table across. Only clear it once the job has
                     // genuinely nothing in flight, so a newer run that did start is left alone.
-                    if (!jobQueue.isBackfillRun() && this.bulkAction.getCountForInQueueJobByJobId(jobQueue.getJobId()) == 0) {
+                    if (!jobQueue.isSideRun() && this.bulkAction.getCountForInQueueJobByJobId(jobQueue.getJobId()) == 0) {
                         this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Interrupt);
                     }
                     this.bulkAction.sendJobStatusNotification(jobQueue.getJobId());
@@ -785,7 +796,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         // escaped markup -- pushed everything worth reading off the end of the line.
         jobQueue.setJobStatusMessage("Handed to the worker queue at offset " + offset + ".");
         this.transactionService.updateJobQueue(jobQueue);
-        if (!jobQueue.isBackfillRun()) {
+        if (!jobQueue.isSideRun()) {
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Start);
         }
 

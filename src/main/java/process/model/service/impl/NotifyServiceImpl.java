@@ -249,8 +249,9 @@ public class NotifyServiceImpl implements NotifyService {
         }
         // MIG-347: a backfill's run is one of the job's past dates in a lane of its own: the job's running status stays its
         // live runs' (Run now and the schedule read it), and the backfill tells of its runs as a whole, not by a mail each.
+        // V220: nor does a workflow's run, one of several beside the job's own; its owner's mails still go, run by run.
         boolean backfill = run.get().isBackfillRun();
-        if (!backfill) {
+        if (!run.get().isSideRun()) {
             logger.info("Updating status for job {} to {}", jobQueue.getJobId(), newStatus);
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), newStatus);
         }

@@ -100,7 +100,7 @@ class RunFacetsTest {
             .containsExactly("1932:Patient 360=9", "1928:Brain MRI grading=6", "4040:null=0");
         assertThat(list(answer, "triggers")).extracting(t -> t.get("key") + ":" + t.get("label") + "=" + t.get("count")).containsExactly(
             "schedule:Schedule=0", "manual:Run now=10", "file:File arrived=5", "document:Document approved=0", "form:Form submitted=0",
-            "backfill:Backfill=0", "api:API=0", "retry:Retry=0");
+            "backfill:Backfill=0", "workflow:Workflow=0", "api:API=0", "retry:Retry=0");
     }
 
     @Test

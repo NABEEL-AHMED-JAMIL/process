@@ -72,8 +72,8 @@ public class DispatchFailures {
         if (retryable && this.bulkAction.scheduleRetry(jobQueue, statusMessage)) {
             return;
         }
-        // MIG-347: a backfill's run leaves the job's running status to its live runs.
-        if (!jobQueue.isBackfillRun()) {
+        // MIG-347: a backfill's run leaves the job's running status to its live runs; V220: so does a workflow's.
+        if (!jobQueue.isSideRun()) {
             this.bulkAction.changeJobStatus(jobQueue.getJobId(), JobStatus.Failed);
         }
         JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.getJobQueueId(), JobStatus.Failed, statusMessage);

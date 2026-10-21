@@ -78,9 +78,10 @@ public class JdbcInboxTriggerStore implements InboxTriggerStore, RunInputs {
     @Override
     public boolean inFlight(long jobId) {
         // The predicate of ux_job_queue_one_in_flight_per_job (V83, per lane since V211), written as it is, so the planner
-        // reads that index: the job's own lane -- a backfill's runs (MIG-347) do not hold its live runs back.
+        // reads that index: the job's own lane -- a backfill's runs (MIG-347) do not hold its live runs back, nor (V220) a
+        // workflow's runs, one per request beside the job's own.
         Boolean busy = this.jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM job_queue WHERE job_id = ? AND run_lane = 0 "
-            + "AND UPPER(job_status) IN ('QUEUE', 'START', 'RUNNING'))", Boolean.class, jobId);
+            + "AND UPPER(job_status) IN ('QUEUE', 'START', 'RUNNING') AND workflow_instance_id IS NULL)", Boolean.class, jobId);
         return Boolean.TRUE.equals(busy);
     }
 

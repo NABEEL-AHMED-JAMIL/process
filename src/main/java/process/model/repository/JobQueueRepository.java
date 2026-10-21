@@ -73,9 +73,16 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     @Query(value = "select setting_value from orchestration_setting where setting_key = ?1", nativeQuery = true)
     String findOrchestrationSetting(String settingKey);
 
-    // MIG-347: the job's own lane (0): a backfill's runs, in lanes of their own, do not make the job busy.
-    @Query(value = "select count(*) from job_queue where job_id = ?1 and run_lane = 0 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING')", nativeQuery = true)
+    // MIG-347: the job's own lane (0): a backfill's runs, in lanes of their own, do not make the job busy. V220: nor do a
+    // workflow's runs (one per request, beside the job's own).
+    @Query(value = "select count(*) from job_queue where job_id = ?1 and run_lane = 0 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
+        + "and workflow_instance_id is null", nativeQuery = true)
     int getCountForInQueueJobByJobId(Long jobId);
+
+    /** V220: a workflow request's run of the job still in flight, if any -- what a request asking twice is answered with. */
+    @Query(value = "select job_queue_id from job_queue where job_id = ?1 and workflow_instance_id = ?2 and tenant_id = ?3 "
+        + "and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') limit 1", nativeQuery = true)
+    Long findInFlightWorkflowRun(Long jobId, Long workflowInstanceId, Long tenantId);
 
     @Query(value = "select count(*) from job_queue where job_id = ?1", nativeQuery = true)
     int getCountForJobByJobId(Long jobId);
@@ -160,8 +167,10 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
         + "order by job_queue_id desc limit :limit", nativeQuery = true)
     List<JobQueue> findRecentByJobId(@Param("jobId") Long jobId, @Param("beforeId") long beforeId, @Param("limit") int limit);
 
-    /** The newest run of a job after a given one, or null: what a rerun queued (RunReviewService), without the history. */
-    @Query(value = "select max(job_queue_id) from job_queue where job_id = :jobId and job_queue_id > :afterId", nativeQuery = true)
+    /** The newest run of a job after a given one, or null: what a rerun queued (RunReviewService), without the history. V220: never a
+     * workflow's run of the job, which runs beside it. */
+    @Query(value = "select max(job_queue_id) from job_queue where job_id = :jobId and job_queue_id > :afterId and workflow_instance_id is null",
+        nativeQuery = true)
     Long findNewestRunIdAfter(@Param("jobId") Long jobId, @Param("afterId") long afterId);
 
     /** A job's runs counted by status in the database, for the assistant's totals (rows: status, count). */

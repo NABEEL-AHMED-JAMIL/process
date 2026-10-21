@@ -503,7 +503,7 @@ public class RunRetries {
                     return "The run moved on meanwhile (another retry, or an operator); read it again.";
                 }
                 this.attempts.record(attempt);
-                if (!run.isBackfillRun()) {
+                if (!run.isSideRun()) {
                     this.bulk.changeJobStatus(job.getJobId(), JobStatus.Queue);
                 }
                 this.bulk.saveJobAuditLogs(run.getJobQueueId(), line);

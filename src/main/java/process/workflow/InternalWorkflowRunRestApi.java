@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import process.engine.OneRunInFlight;
 import process.model.dto.ResponseDto;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
@@ -86,7 +87,23 @@ public class InternalWorkflowRunRestApi {
         TenantContext.set(request.getTenantId(), WORKSPACE_ROLE, null, "workflow-service");
         try {
             String reason = String.format("Queued by workflow instance %s, step %s.", request.getInstanceId(), request.getStepKey());
-            ResponseDto answer = this.jobs.runSourceJobFor(request.getJobId(), reason);
+            ResponseDto answer;
+            try {
+                // V220: the run goes beside the job's own runs, one in flight per job and request.
+                answer = this.jobs.runSourceJobFor(request.getJobId(), request.getInstanceId(), request.getStepKey(), reason);
+            } catch (RuntimeException refused) {
+                if (request.getInstanceId() != null && OneRunInFlight.isWorkflowViolation(refused)) {
+                    // The request asked twice (a retried call): its run is the one already in flight.
+                    Long running = this.runs.findInFlightWorkflowRun(request.getJobId(), request.getInstanceId(), request.getTenantId());
+                    if (running != null) {
+                        return ResponseEntity.ok(new ResponseDto("SUCCESS", "The request's run of this job is already in flight.", running));
+                    }
+                }
+                if (OneRunInFlight.isViolation(refused) || OneRunInFlight.isWorkflowViolation(refused)) {
+                    return ResponseEntity.ok(new ResponseDto("ERROR", "A run of this job is already in flight."));
+                }
+                throw refused;
+            }
             this.logger.info("Workflow instance {} step {} asked to run job {} of workspace {}: {}", request.getInstanceId(),
                 request.getStepKey(), request.getJobId(), request.getTenantId(), answer.getMessage());
             return ResponseEntity.ok(answer);

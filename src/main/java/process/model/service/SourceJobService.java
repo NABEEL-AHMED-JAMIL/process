@@ -44,6 +44,13 @@ public interface SourceJobService {
      */
     ResponseDto runSourceJobFor(Long jobId, String reason) throws Exception;
 
+    /**
+     * V220: Run now for a workflow request's run_pipeline step: a step pipeline's run goes beside the job's own runs (one in
+     * flight per job and request), so it is not refused because another run of the job is in flight; a legacy one keeps
+     * the job's one run in flight. Answers the run's id.
+     */
+    ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason) throws Exception;
+
     ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;
 
     ResponseDto findSourceJobAuditLog(Long jobQueueIdb, Long jobId) throws Exception;

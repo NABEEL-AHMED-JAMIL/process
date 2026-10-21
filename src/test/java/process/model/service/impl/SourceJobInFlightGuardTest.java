@@ -10,6 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import process.identity.TestIdentity;
 import process.engine.ProducerBulkEngine;
 import process.model.dto.ResponseDto;
+import process.model.pojo.JobQueue;
+import process.pipeline.PipelineParameters;
 import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 import process.model.enums.Execution;
@@ -31,6 +33,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import process.notifications.TestNotifications;
 import org.junit.jupiter.api.Test;
 import process.model.repository.SourceJobRepository;
@@ -42,6 +45,7 @@ import process.model.repository.TaskReferenceRepository;
 import process.model.repository.AppUserRepository;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -149,6 +153,56 @@ class SourceJobInFlightGuardTest {
         // reason -- a green test over exactly the defect it was written to catch.
         verify(this.schedulerRepository, never()).findSchedulerByJobId(any());
         verify(this.producerBulkEngine, never()).skipManualJobInQueue(any());
+    }
+
+    // ---- V220 (owner 2026-10-21): a workflow request's run goes beside the job's own ---------------------------
+
+    private PipelineParameters steps(boolean runsSteps) {
+        PipelineParameters parameters = mock(PipelineParameters.class);
+        lenient().when(parameters.runsSteps(any())).thenReturn(runsSteps);
+        lenient().when(parameters.check(any(SourceJob.class), isNull())).thenReturn(mock(PipelineParameters.Checked.class));
+        this.service.usePipelineParameters(parameters);
+        return parameters;
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = JobStatus.class, names = { "Queue", "Start", "Running" })
+    void aWorkflowRequestsRunOfAStepPipelineGoesBesideARunInFlight(JobStatus inFlight) throws Exception {
+        SourceJob job = this.autoJobWhoseLastRunIs(inFlight);
+        this.steps(true);
+        JobQueue run = new JobQueue();
+        run.setJobQueueId(9123L);
+        when(this.producerBulkEngine.addWorkflowJobInQueue(job, 1048L, "check")).thenReturn(run);
+
+        ResponseDto response = this.service.runSourceJobFor(JOB_ID, 1048L, "check", "Queued by workflow instance 1048, step check.");
+
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getData()).isEqualTo(9123L);
+        verify(this.producerBulkEngine, never()).addManualJobInQueue(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = JobStatus.class, names = { "Queue", "Start", "Running" })
+    void aLegacyPipelineKeepsOneRunInFlightForWorkflowsToo(JobStatus inFlight) throws Exception {
+        this.autoJobWhoseLastRunIs(inFlight);
+        this.steps(false);
+
+        ResponseDto response = this.service.runSourceJobFor(JOB_ID, 1048L, "check", "Queued by workflow instance 1048, step check.");
+
+        assertThat(response.getStatus()).isEqualTo("ERROR");
+        assertThat(response.getMessage()).contains("in flight");
+        verify(this.producerBulkEngine, never()).addWorkflowJobInQueue(any(), any(), any());
+    }
+
+    @Test
+    void runNowStillWaitsForTheJobsOwnRunWithWorkflowRunsAround() throws Exception {
+        this.autoJobWhoseLastRunIs(JobStatus.Running);
+        this.steps(true);
+
+        assertThat(this.service.runSourceJob(request()).getStatus()).isEqualTo("ERROR");
+        assertThat(this.service.runSourceJobFor(JOB_ID, "Queued by Run now's caller.").getStatus()).as("no request: the job's own lane")
+            .isEqualTo("ERROR");
+        verify(this.producerBulkEngine, never()).addWorkflowJobInQueue(any(), any(), any());
     }
 
     // ---- allowed once the last run has finished, however it finished ---------------------------

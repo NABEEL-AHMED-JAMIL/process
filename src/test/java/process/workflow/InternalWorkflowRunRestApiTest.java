@@ -50,12 +50,13 @@ class InternalWorkflowRunRestApiTest {
         assertThat(this.api.run(null, request()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(this.api.run("guess", request()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verify(this.jobs, never()).runSourceJobFor(anyLong(), any());
+        verify(this.jobs, never()).runSourceJobFor(anyLong(), any(), any(), any());
     }
 
     @Test
     void theJobRunsAsItsWorkspaceForThisCallOnlyWithTheStepInItsAuditLog() throws Exception {
         AtomicReference<Long> tenantDuringRun = new AtomicReference<>();
-        when(this.jobs.runSourceJobFor(eq(2849L), eq("Queued by workflow instance 1001, step run."))).thenAnswer(call -> {
+        when(this.jobs.runSourceJobFor(eq(2849L), eq(1001L), eq("run"), eq("Queued by workflow instance 1001, step run."))).thenAnswer(call -> {
             tenantDuringRun.set(TenantContext.getTenantId());
             return new ResponseDto("SUCCESS", "SourceJob job successfully added into queue.", 9123L);
         });

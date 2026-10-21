@@ -230,6 +230,26 @@ public class BulkAction {
         return jobQueue;
     }
 
+    /**
+     * V220: a run a workflow request started -- made with the request and its step on the row before it is written, so the
+     * one-in-flight index counts it with the request's runs (one per job and request) and never with the job's own.
+     */
+    public JobQueue createWorkflowJobQueue(Long jobId, LocalDateTime startTime, Long instanceId, String stepKey) {
+        JobQueue jobQueue = new JobQueue();
+        jobQueue.setRunManual(true);
+        jobQueue.setStartTime(startTime);
+        jobQueue.setJobStatus(JobStatus.Queue);
+        jobQueue.setJobId(jobId);
+        jobQueue.setJobStatusMessage(String.format("Job %s now in the queue for workflow request %s.", jobId, instanceId));
+        jobQueue.setWorkflowInstanceId(instanceId);
+        jobQueue.setWorkflowStepKey(stepKey);
+        RunCorrelation.stamp(jobQueue);
+        this.applyJobSnapshot(jobQueue, jobId);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(JobStatus.Queue, null);
+        return jobQueue;
+    }
+
     /** The reason a run made already over carries: Skip and Missed are the only ones the engine makes. */
     private static RunEnd bornEnded(JobStatus status) {
         if (status == JobStatus.Skip) {
@@ -372,8 +392,8 @@ public class BulkAction {
         row.setJobStatusMessage(String.format(
             "Attempt %s of %s failed: %s Retrying at %s.", attempt, maxAttempts, endWithStop(reason), dueAt));
         this.transactionService.saveOrUpdateJobQueue(row);
-        // MIG-347: a backfill's run leaves the job's running status to its live runs.
-        if (!row.isBackfillRun()) {
+        // MIG-347: a backfill's run leaves the job's running status to its live runs; V220: so does a workflow's.
+        if (!row.isSideRun()) {
             this.changeJobStatus(jobId, JobStatus.Queue);
         }
         this.saveJobAuditLogs(jobQueueId, String.format(

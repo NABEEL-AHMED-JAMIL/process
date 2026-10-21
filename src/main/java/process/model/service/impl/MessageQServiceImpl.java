@@ -241,7 +241,7 @@ public class MessageQServiceImpl implements MessageQService {
                 return new ResponseDto(ERROR, "Only a run still in flight ('Queue', 'Start', 'Running') can be failed.", jobQId);
             }
             String failMessage = String.format("Job %s fail by manual.", jobQueue.get().getJobId());
-            if (!jobQueue.get().isBackfillRun()) {
+            if (!jobQueue.get().isSideRun()) {
                 this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Failed);
             }
             JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Failed, failMessage);
@@ -275,7 +275,7 @@ public class MessageQServiceImpl implements MessageQService {
         }
         if (jobQueue.isPresent()) {
             String interruptMessage = String.format("Job %s interrupted.", jobQueue.get().getJobId());
-            if (!jobQueue.get().isBackfillRun()) {
+            if (!jobQueue.get().isSideRun()) {
                 this.bulkAction.changeJobStatus(jobQueue.get().getJobId(), JobStatus.Interrupt);
             }
             JobStatus before = this.bulkAction.changeJobQueueStatus(jobQueue.get().getJobQueueId(), JobStatus.Interrupt, interruptMessage);

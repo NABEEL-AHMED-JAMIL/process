@@ -227,6 +227,16 @@ public class JobQueue {
     @Column(name = "backfill_id")
     private Long backfillId;
 
+    /** V220: the workflow request that started this run (one in flight per job and request, beside the job's own); null otherwise. */
+    @JsonIgnore
+    @Column(name = "workflow_instance_id")
+    private Long workflowInstanceId;
+
+    /** V220: that request's run_pipeline step. */
+    @JsonIgnore
+    @Column(name = "workflow_step_key", length = 128)
+    private String workflowStepKey;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -458,6 +468,25 @@ public class JobQueue {
     /** MIG-347: whether this run is one of a backfill's, in a lane of its own beside the job's live runs. */
     @JsonIgnore
     public boolean isBackfillRun() { return this.runLane > 0; }
+
+    public Long getWorkflowInstanceId() { return workflowInstanceId; }
+
+    public void setWorkflowInstanceId(Long workflowInstanceId) { this.workflowInstanceId = workflowInstanceId; }
+
+    public String getWorkflowStepKey() { return workflowStepKey; }
+
+    public void setWorkflowStepKey(String workflowStepKey) { this.workflowStepKey = workflowStepKey; }
+
+    /** V220: whether a workflow request started this run, beside the job's own runs. */
+    @JsonIgnore
+    public boolean isWorkflowRun() { return this.workflowInstanceId != null; }
+
+    /**
+     * A run beside the job's own lane -- a backfill's (MIG-347) or a workflow's (V220): it neither holds the job's lane nor
+     * writes the job's one running status, which belongs to the job's own runs.
+     */
+    @JsonIgnore
+    public boolean isSideRun() { return this.isBackfillRun() || this.isWorkflowRun(); }
 
     public Long getTenantId() {
         return tenantId;

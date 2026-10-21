@@ -49,6 +49,7 @@ public final class RunFacets {
     public static final String FILE = "file";
     public static final String FORM = "form";
     public static final String BACKFILL = "backfill";
+    public static final String WORKFLOW = "workflow";
     public static final String MANUAL = "manual";
     public static final String SCHEDULE = "schedule";
 
@@ -63,6 +64,7 @@ public final class RunFacets {
         triggers.put(DOCUMENT, "Document approved");
         triggers.put(FORM, "Form submitted");
         triggers.put(BACKFILL, "Backfill");
+        triggers.put(WORKFLOW, "Workflow");
         triggers.put(API, "API");
         triggers.put(RETRY, "Retry");
         TRIGGERS = Collections.unmodifiableMap(triggers);
@@ -94,6 +96,8 @@ public final class RunFacets {
             + " WHEN EXISTS (SELECT 1 FROM form_submission fs WHERE fs.job_queue_id = " + run + ".job_queue_id) THEN '" + FORM + "'"
             // ZT-P15: a backfill's runs read "on its timetable".
             + " WHEN EXISTS (SELECT 1 FROM backfill_slot bs WHERE bs.job_queue_id = " + run + ".job_queue_id) THEN '" + BACKFILL + "'"
+            // V220: a workflow request's run reads "Workflow", not "Run now".
+            + " WHEN " + run + ".workflow_instance_id IS NOT NULL THEN '" + WORKFLOW + "'"
             + " WHEN " + run + ".input_key IS NOT NULL OR EXISTS (SELECT 1 FROM inbox_arrival ia WHERE ia.job_queue_id = " + run
             + ".job_queue_id) THEN '" + FILE + "'"
             + " WHEN " + run + ".run_manual THEN '" + MANUAL + "'"

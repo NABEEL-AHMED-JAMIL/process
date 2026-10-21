@@ -369,6 +369,7 @@ class JobStatusTransitionTableTest {
         // Five since MIG-63 added noteRefusedCallback and findRunsWithRefusedCallbacks, seven since MIG-134
         // added findRunsToPrepare and markPrepared, eight since the scale review's countByStatusForJob (which
         // groups on it) -- every one of them through UPPER().
-        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(9); // ZT-P16: findRunsWithLapsedEngineLease
+        // V220: findInFlightWorkflowRun (a workflow request's run of a job still in flight).
+        assertThat(filtering).as("queries filtering on a run's job_status").isEqualTo(10); // ZT-P16: findRunsWithLapsedEngineLease
     }
 }

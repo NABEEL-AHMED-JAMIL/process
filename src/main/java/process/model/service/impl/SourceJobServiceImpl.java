@@ -734,11 +734,17 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Override
     @Transactional
     public ResponseDto runSourceJobFor(Long jobId, String reason) throws Exception {
+        return this.runSourceJobFor(jobId, null, null, reason);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason) throws Exception {
         if (ProcessUtil.isNull(jobId)) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Object queued = this.queueRun(jobId, null, null);
+        Object queued = this.queueRun(jobId, null, null, workflowInstanceId, workflowStepKey);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
         }
@@ -754,10 +760,17 @@ public class SourceJobServiceImpl implements SourceJobService {
      * and its workspace is not paused. Its callers are public and transactional and switch the tenant filter on first. Answers the queued run, or the refusal (a ResponseDto) saying which rule stopped it.
      */
     private Object queueRun(Long jobId, String modelProfiles, String runParams) {
+        return this.queueRun(jobId, modelProfiles, runParams, null, null);
+    }
+
+    /** As above; a workflow request's run of a step pipeline (V220) goes beside the job's own runs, not refused by them. */
+    private Object queueRun(Long jobId, String modelProfiles, String runParams, Long workflowInstanceId, String workflowStepKey) {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
+        boolean beside = workflowInstanceId != null && sourceJob.isPresent() && this.pipelineParameters != null
+            && this.pipelineParameters.runsSteps(sourceJob.get());
         if (!sourceJob.isPresent() || !this.isOwnedByCaller(sourceJob.get())) {
             return new ResponseDto(ERROR, "SourceJob not found with jobId.");
-        } else if (!ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
+        } else if (!beside && !ProcessUtil.isNull(sourceJob.get().getJobRunningStatus())
             && sourceJob.get().getJobRunningStatus().isInFlight()) {
             // Start included: a run just dispatched sits there until its worker reports, and a
             // second one would write into the same output folder.
@@ -778,6 +791,9 @@ public class SourceJobServiceImpl implements SourceJobService {
             if (defaults.refusal != null) {
                 return new ResponseDto(ERROR, defaults.refusal + " Use Run with... to give them.");
             }
+        }
+        if (beside) {
+            return this.producerBulkEngine.addWorkflowJobInQueue(sourceJob.get(), workflowInstanceId, workflowStepKey);
         }
         return runParams == null ? this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles)
             : this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles, runParams);
