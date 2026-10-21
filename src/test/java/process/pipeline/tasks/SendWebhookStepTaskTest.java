@@ -82,7 +82,7 @@ class SendWebhookStepTaskTest {
 
     @Test
     void integrationServicesRefusalIsTheStepsError() {
-        this.webhooks.refusal = "Webhook 41 does not subscribe to run.step.sent; add that event type to it in Integration › API Clients.";
+        this.webhooks.refusal = "Webhook 41 does not subscribe to run.step.sent; add that event type to it in Developers › API Clients.";
         assertThatThrownBy(() -> this.task.run(this.context("webhookId", 41))).hasMessageContaining("does not subscribe to run.step.sent");
     }
 

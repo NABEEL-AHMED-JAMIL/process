@@ -25,7 +25,7 @@ import java.util.UUID;
  * Send webhook (MIG-346): posts the step's rows, or a summary of them, to one of the workspace's registered webhooks --
  * anywhere in a pipeline, not only when the run ends. integration-service delivers it as every webhook: signed with the
  * subscription's secret, retried with backoff for a day, through its outbound guard (no private addresses), and logged in
- * the webhook's deliveries. Never to a URL the step names: only to a subscription of this workspace (Integration › API
+ * the webhook's deliveries. Never to a URL the step names: only to a subscription of this workspace (Developers › API
  * Clients › Webhooks) that is active and takes the {@value WebhookSender#EVENT_TYPE} event type.
  *
  * <ul>
@@ -51,7 +51,7 @@ public class SendWebhookStepTask extends RegisteredTask implements StreamingStep
         .output(TaskSpec.rows("The same rows, unchanged."))
         .config(JsonSchema.object()
             .required("webhookId", JsonSchema.integer().minimum(1).title("Webhook").format("webhook")
-                .description("One of this workspace's webhooks (Integration › API Clients › Webhooks), by its id; it must be active and "
+                .description("One of this workspace's webhooks (Developers › API Clients › Webhooks), by its id; it must be active and "
                     + "take the run.step.sent event type."))
             .property("send", JsonSchema.string().enumOf("summary", "rows").title("Send").defaultValue("summary")
                 .description("summary: the row count, the columns and the fields below; rows: the rows themselves (at most At most rows)."))
