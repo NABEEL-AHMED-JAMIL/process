@@ -52,6 +52,8 @@ public final class FormDatasets {
         row.put("approval_status", s.workflowStatus);
         row.put("approval_request_id", s.workflowInstanceId);
         row.put("approval_stage", s.workflowStage);
+        // ZT-F4: the approver's reason for a decision (a rejection's is required).
+        row.put("approval_reason", s.workflowReason);
         Map<String, String> types = fields.stream().collect(Collectors.toMap(FormField::getKey, FormField::getType, (a, b) -> a));
         for (Map.Entry<String, Object> answer : s.answers.entrySet()) {
             if (FormFields.RESERVED.contains(answer.getKey()) || row.containsKey(answer.getKey())) {

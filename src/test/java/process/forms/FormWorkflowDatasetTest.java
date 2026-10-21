@@ -159,6 +159,15 @@ class FormWorkflowDatasetTest {
         assertThat(new ObjectMapper().readTree(new String(this.bucket.lastRow, StandardCharsets.UTF_8)).path("approval_status").asText())
             .isEqualTo("Approved");
         assertThat(this.service.followWorkflow(A + 1, kept.submissionId, 1L, "Rejected", false)).as("another workspace").isFalse();
+
+        // ZT-F4: a rejection keeps the approver's reason, on the submission and in its row; a running request has none.
+        assertThat(this.service.followWorkflow(A, kept.submissionId, 3000 + kept.submissionId, "Rejected", false, null,
+            "The wound photo is missing.")).isTrue();
+        assertThat(this.store.submissions.get(kept.submissionId).workflowReason).isEqualTo("The wound photo is missing.");
+        assertThat(new ObjectMapper().readTree(new String(this.bucket.lastRow, StandardCharsets.UTF_8)).path("approval_reason").asText())
+            .isEqualTo("The wound photo is missing.");
+        this.service.followWorkflow(A, kept.submissionId, 3000 + kept.submissionId, "Running", false, "Again", "not a decision");
+        assertThat(this.store.submissions.get(kept.submissionId).workflowReason).isNull();
     }
 
     @Test
@@ -252,6 +261,16 @@ class FormWorkflowDatasetTest {
         assertThat(kept.workflowReason).contains("no active workflow");
     }
 
+    /** ZT-F4 (2026-10-21): a rejected submission said "Rejected" and nothing else, though its approver had to say why. */
+    @Test
+    void zfF4TheListenerTakesTheApproversReasonOffTheDecision() {
+        FormSubmissionService followed = mock(FormSubmissionService.class);
+        new FormWorkflowListener(followed).onChange("{\"payload\":{\"instanceId\":3001,\"tenantId\":2924,\"subjectId\":\"form-submission:41\","
+            + "\"state\":\"Rejected\",\"overdue\":false,\"decision\":{\"taskId\":9,\"state\":\"Rejected\",\"actedBy\":4641,"
+            + "\"comment\":\" The wound photo is missing. \"}}}");
+        verify(followed).followWorkflow(2924L, 41L, 3001L, "Rejected", false, null, "The wound photo is missing.");
+    }
+
     @Test
     void aRequestsStateIsASubmissionsStatus() {
         assertThat(FormSubmissionService.statusOf("Running", false)).isEqualTo("Pending");
@@ -268,10 +287,10 @@ class FormWorkflowDatasetTest {
         FormWorkflowListener listener = new FormWorkflowListener(followed);
         listener.onChange("{\"eventType\":\"platform.workflow.instance-changed.v1\",\"tenantId\":2924,\"payload\":{\"instanceId\":3001,"
             + "\"tenantId\":2924,\"subjectId\":\"form-submission:41\",\"state\":\"Running\",\"overdue\":true}}");
-        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", true, null);
+        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", true, null, null);
         listener.onChange("{\"payload\":{\"instanceId\":3001,\"tenantId\":2924,\"subjectId\":\"form-submission:41\","
             + "\"state\":\"Running\",\"overdue\":false,\"stage\":\"Manager approval\"}}");
-        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", false, "Manager approval");
+        verify(followed).followWorkflow(2924L, 41L, 3001L, "Running", false, "Manager approval", null);
         listener.onChange("{\"payload\":{\"instanceId\":3002,\"tenantId\":2924,\"subjectId\":\"purchase:7\",\"state\":\"Approved\"}}");
         listener.onChange("not json");
         verifyNoMoreInteractions(followed);

@@ -53,8 +53,11 @@ public class FormWorkflowListener {
         String state = change.path("state").asText(null);
         boolean overdue = change.path("overdue").asBoolean(false);
         String stage = change.path("stage").isTextual() ? change.path("stage").asText() : null;
+        // ZT-F4: the approver's words on the decision that ended it (workflow-service sends them since MIG-361).
+        JsonNode comment = change.path("decision").path("comment");
+        String reason = comment.isTextual() && !comment.asText().isBlank() ? comment.asText().trim() : null;
         boolean followed = RowSecurity.forTenant(tenantId, () -> this.submissions.followWorkflow(tenantId, submissionId, instanceId, state,
-            overdue, stage));
+            overdue, stage, reason));
         logger.info("Request {} ({}{}) {} submission {} in workspace {}.", instanceId, state, overdue ? ", overdue" : "",
             followed ? "updated" : "did not match", submissionId, tenantId);
     }

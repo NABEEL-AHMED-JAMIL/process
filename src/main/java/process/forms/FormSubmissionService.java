@@ -29,6 +29,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import process.util.UserNameResolver;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Collections;
@@ -70,6 +74,9 @@ import static process.util.ProcessUtil.SUCCESS;
 @Service
 public class FormSubmissionService {
 
+    /** The most of an approver's reason a submission keeps (its column holds 2,000 characters). */
+    static final int REASON_MAX = 2000;
+
     static final String SUBMISSION_NOT_FOUND = "Submission not found.";
     static final String CLOSED = "This form is not taking submissions.";
     static final int DEFAULT_LIST = 100;
@@ -98,6 +105,36 @@ public class FormSubmissionService {
     public FormSubmissionService(FormStore store, FormService forms, FormInbox inbox, BucketStore buckets, ProducerBulkEngine engine,
         TransactionServiceImpl jobs, PlatformTransactionManager transactionManager) {
         this(store, forms, inbox, buckets, engine, jobs, transactionManager, null, new FormDatasetWriter(store, buckets));
+    }
+
+    /** ZT-F3: who submitted, by the name the console shows everywhere else; null in tests that wire none. */
+    private UserNameResolver names;
+
+    @Autowired(required = false)
+    public void setNames(UserNameResolver names) {
+        this.names = names;
+    }
+
+    /** The submitters' names now (the user directory, else Identity); empty when nothing can be asked. */
+    private Map<Long, String> namesOf(Collection<FormStore.Submission> submissions) {
+        if (this.names == null || submissions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return this.names.namesFor(submissions.stream().map(s -> s.submittedBy).filter(Objects::nonNull).collect(Collectors.toSet()));
+        } catch (RuntimeException unavailable) {
+            return Collections.emptyMap();
+        }
+    }
+
+    /** A submission as the console reads it, its submitter by name (ZT-F3) when one is known, else as it was stored. */
+    private Map<String, Object> view(FormStore.Submission s, Map<Long, String> named) {
+        Map<String, Object> view = view(s);
+        String name = s.submittedBy == null ? null : named.get(s.submittedBy);
+        if (name != null && !name.isBlank()) {
+            view.put("submittedByName", name);
+        }
+        return view;
     }
 
     @Autowired
@@ -228,13 +265,26 @@ public class FormSubmissionService {
 
     /** As above, with the step the request waits at now (MIG-280), shown as the submission's stage. */
     public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue, String stage) {
+        return this.followWorkflow(tenantId, submissionId, instanceId, state, overdue, stage, null);
+    }
+
+    /**
+     * As above, with what the approver said on the decision that ended it (ZT-F4): a rejection's reason, which the approver
+     * had to give, is the submission's workflowReason and its row's approval_reason. A request still running has none.
+     */
+    public boolean followWorkflow(long tenantId, long submissionId, long instanceId, String state, boolean overdue, String stage,
+        String reason) {
         // Only the request this submission started may move it: any other instance naming the same subject -- a workflow
         // someone started by hand with subjectId "form-submission:N" -- is ignored, or a person could approve their own.
         Optional<FormStore.Submission> held = this.store.submission(tenantId, submissionId);
         if (!held.isPresent() || held.get().workflowInstanceId == null || held.get().workflowInstanceId != instanceId) {
             return false;
         }
-        if (!this.store.setWorkflow(tenantId, submissionId, instanceId, statusOf(state, overdue), null)) {
+        String status = statusOf(state, overdue);
+        boolean decided = "Approved".equals(status) || "Rejected".equals(status);
+        String said = decided && reason != null && !reason.isBlank()
+            ? (reason.length() <= REASON_MAX ? reason : reason.substring(0, REASON_MAX)) : null;
+        if (!this.store.setWorkflow(tenantId, submissionId, instanceId, status, said)) {
             return false;
         }
         this.store.setStage(tenantId, submissionId, stage);
@@ -609,8 +659,10 @@ public class FormSubmissionService {
         int size = limit <= 0 ? DEFAULT_LIST : Math.min(limit, MAX_LIST);
         List<Map<String, Object>> rows = new ArrayList<>();
         Map<Integer, Optional<List<FormField>>> versions = new HashMap<>();
-        for (FormStore.Submission submission : this.store.submissions(tenantId, form.get().formId, size)) {
-            Map<String, Object> row = view(submission);
+        List<FormStore.Submission> found = this.store.submissions(tenantId, form.get().formId, size);
+        Map<Long, String> named = this.namesOf(found);
+        for (FormStore.Submission submission : found) {
+            Map<String, Object> row = view(submission, named);
             // A submission to an earlier version carries that version's fields, so it is shown as it was answered.
             if (submission.formVersion != form.get().version) {
                 versions.computeIfAbsent(submission.formVersion, v -> this.fieldsOf(tenantId, submission))
@@ -631,7 +683,7 @@ public class FormSubmissionService {
         }
         return this.store.submission(tenantId, submissionId).filter(s -> s.tenantId == tenantId)
             .map(s -> {
-                Map<String, Object> view = view(s);
+                Map<String, Object> view = view(s, this.namesOf(Collections.singletonList(s)));
                 this.fieldsOf(tenantId, s).ifPresent(fields -> view.put("fields", fields));
                 return new ResponseDto(SUCCESS, "Submission fetched successfully.", view);
             })
@@ -651,7 +703,7 @@ public class FormSubmissionService {
             return null;
         }
         List<FormStore.Submission> submissions = this.store.submissions(tenantId, form.get().formId, MAX_EXPORT);
-        return new Export(fileName(form.get()), csv(form.get(), submissions));
+        return new Export(fileName(form.get()), csv(form.get(), submissions, this.namesOf(submissions)));
     }
 
     /** A CSV file: its name and its bytes (UTF-8, with a byte-order mark so a spreadsheet reads the accents). */
@@ -672,6 +724,10 @@ public class FormSubmissionService {
     }
 
     static byte[] csv(FormStore.Form form, List<FormStore.Submission> submissions) {
+        return csv(form, submissions, Collections.emptyMap());
+    }
+
+    static byte[] csv(FormStore.Form form, List<FormStore.Submission> submissions, Map<Long, String> named) {
         List<String> keys = new ArrayList<>();
         List<String> header = new ArrayList<>();
         for (String column : new String[] {"Submission", "Submitted at", "Submitted by", "Status", "Run", "Reason", "Approval"}) {
@@ -698,7 +754,9 @@ public class FormSubmissionService {
             List<String> cells = new ArrayList<>();
             cells.add(String.valueOf(s.submissionId));
             cells.add(wallClock(s.submittedAt));
-            cells.add(s.submittedByName == null ? (s.submittedBy == null ? "" : "User " + s.submittedBy) : s.submittedByName);
+            String name = s.submittedBy == null ? null : named.get(s.submittedBy);
+            cells.add(name != null && !name.isBlank() ? name
+                : s.submittedByName == null ? (s.submittedBy == null ? "" : "User " + s.submittedBy) : s.submittedByName);
             cells.add(s.status);
             cells.add(s.jobQueueId == null ? "" : String.valueOf(s.jobQueueId));
             cells.add(s.reason == null ? "" : s.reason);

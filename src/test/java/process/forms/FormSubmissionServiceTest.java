@@ -359,4 +359,25 @@ class FormSubmissionServiceTest {
         assertThat(rows.get(0)).containsKeys("answers", "status", "jobQueueId", "reason", "submittedAt");
         assertThat(this.service.fetch((Long) rows.get(0).get("submissionId")).getStatus()).isEqualTo(SUCCESS);
     }
+
+    /** ZT-F3 (2026-10-21): Submissions › Submitted by read "michael@zanium.ai" where the console says "Dr. Michael Anderson". */
+    @Test
+    void zfF3TheSubmitterIsNamedAsTheConsoleNamesThemInTheListOneSubmissionAndTheCsv() {
+        long formId = form(A, FormStore.ACTIVE, null);
+        as(A, "TENANT_USER");
+        this.service.submit(new FormSubmitRequest(formId, goodAnswers()));
+        process.util.UserNameResolver names = mock(process.util.UserNameResolver.class);
+        org.mockito.Mockito.when(names.namesFor(org.mockito.ArgumentMatchers.anyCollection()))
+            .thenAnswer(call -> java.util.Collections.singletonMap(4537L, "Dr. Nora Clinic"));
+        this.service.setNames(names);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) this.service.list(formId, 0).getData();
+        assertThat(rows.get(0)).containsEntry("submittedByName", "Dr. Nora Clinic");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> one = (Map<String, Object>) this.service.fetch((Long) rows.get(0).get("submissionId")).getData();
+        assertThat(one).containsEntry("submittedByName", "Dr. Nora Clinic");
+        String csv = new String(this.service.export(formId).content, java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(csv).contains(",Dr. Nora Clinic,");
+    }
 }
