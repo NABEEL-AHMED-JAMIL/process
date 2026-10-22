@@ -79,6 +79,8 @@ public class CallApiStepTask extends RegisteredTask {
     static final int MAX_BATCH_SIZE = 1000;
     /** MIG-419: the most a call's variables may hold, under integration's 10 MB request cap. */
     static final long MAX_CALL_BYTES = 8L * 1024 * 1024;
+    /** What a chosen file fills (MIG-419), sent as the request's variables too. */
+    private static final List<String> FILE_VALUES = Arrays.asList("file_bucket", "file_key", "file_name", "file_format");
     private static final Pattern JSON_PLACEHOLDER = Pattern.compile("\\{\\{\\s*(row|rows_json)\\s*}}");
     static final int LOGGED_BODY_CHARS = 300;
     private static final List<String> UNARY = Arrays.asList("is_null", "not_null", "is_empty", "not_empty");
@@ -114,7 +116,7 @@ public class CallApiStepTask extends RegisteredTask {
                         + "empty for the workspace's file drop."))
                 .title("A file from an earlier step")
                 .description("Fills {{file_bucket}}, {{file_key}}, {{file_name}} and {{file_format}} for the request's file or "
-                    + "multipart body."))
+                    + "multipart body: the request gets them as its variables, and the step's own variables may use them too."))
             .property("variables", JsonSchema.map(JsonSchema.string().maxLength(2000).format("template")).title("Variables")
                 .description("Request variables by name, filled from the row and the run: {{patient_id}}, {{row}}, {{rows_json}}, "
                     + "{{run}}, {{call_key}}. A variable holding {{row}} or {{rows_json}} is sent as JSON."))
@@ -384,6 +386,13 @@ public class CallApiStepTask extends RegisteredTask {
             size += filled == null ? 0 : filled.length();
             if (sendsJson(template.getValue(), values) && isJson(filled)) {
                 json.add(template.getKey());
+            }
+        }
+        // A request whose own body names {{file_bucket}}... gets the file without the step repeating it as a variable.
+        for (String name : FILE_VALUES) {
+            Object value = runValues.get(name);
+            if (value != null) {
+                variables.putIfAbsent(name, String.valueOf(value));
             }
         }
         if (size > MAX_CALL_BYTES) {

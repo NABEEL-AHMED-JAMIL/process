@@ -262,6 +262,23 @@ class CallApiStepTaskTest {
     }
 
     @Test
+    void aRequestWhoseBodyNamesTheFileGetsItWithoutTheStepRepeatingIt() throws Exception {
+        TaskContext context = TaskContext.of(config("requestId", 12, "mode", "once", "file", config("step", "save"),
+            "variables", config("key", "{{call_key}}", "file_name", "renamed.csv")), rows(1));
+        context.runFiles.put("save", Collections.singletonList(new RunFile("out.csv", "csv", 12L,
+            "lakeside-s3", "results/out.csv", null)));
+        this.task.run(context);
+        assertThat(this.api.calls.get(0).variables).containsEntry("file_bucket", "lakeside-s3").containsEntry("file_key", "results/out.csv")
+            .containsEntry("file_format", "csv").containsEntry("file_name", "renamed.csv");
+    }
+
+    @Test
+    void aStepWithoutAFileSendsNoFileValues() throws Exception {
+        this.task.run(TaskContext.of(config("requestId", 12, "mode", "once", "variables", config("key", "{{call_key}}")), rows(1)));
+        assertThat(this.api.calls.get(0).variables).doesNotContainKeys("file_bucket", "file_key", "file_name", "file_format");
+    }
+
+    @Test
     void aFileKeptWithTheRunIsPutInTheWorkspacesFileDropAndNamedThere() throws Exception {
         List<String> uploads = new ArrayList<>();
         CallApiStepTask staged = new CallApiStepTask(this.api);
