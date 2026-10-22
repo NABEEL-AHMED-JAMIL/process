@@ -1,5 +1,7 @@
 package process.engine;
 
+import org.springframework.beans.factory.ObjectProvider;
+
 import process.util.BusinessTime;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.apache.logging.log4j.Logger;
@@ -174,6 +176,27 @@ class StalledRunSweepTest {
             + "is running it now. Closed as interrupted: run it again (Run now, or Run with for its parameters).");
         verify(this.transactionService).interruptOpenSteps(8905L, "Stopped: Core restarted while this step ran.");
         verify(this.bulkAction).changeJobStatus(JOB_ID, JobStatus.Interrupt);
+    }
+
+    /** Owner 2026-10-21: the platform resumes the run its restart stopped, so the sweep leaves it in flight, not closed. */
+    @Test
+    void aRunThePlatformResumedIsNotClosedAndOneItCouldNotIs() {
+        JobQueue resumed = run(8906L, JOB_ID, JobStatus.Running, BusinessTime.now().minusMinutes(3), null);
+        JobQueue refused = run(8907L, JOB_ID, JobStatus.Running, BusinessTime.now().minusMinutes(3), null);
+        when(this.transactionService.findRunsWithLapsedEngineLease()).thenReturn(Arrays.asList(resumed, refused));
+        when(this.bulkAction.getCountForInQueueJobByJobId(JOB_ID)).thenReturn(0);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ProducerBulkEngine.LostRunResumer> resumers = mock(ObjectProvider.class);
+        when(resumers.getIfAvailable()).thenReturn(run -> run.getJobQueueId() == 8906L);
+        this.engine.useLostRunResumer(resumers);
+
+        this.engine.reconcileLostEngineRuns();
+
+        ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
+        verify(this.transactionService).saveJobQueue(saved.capture());
+        assertThat(saved.getAllValues()).extracting(JobQueue::getJobQueueId).containsExactly(8907L);
+        assertThat(saved.getValue().getJobStatus()).isEqualTo(JobStatus.Interrupt);
+        verify(this.transactionService, never()).findStalledRuns(any());
     }
 
     /** Whatever state it was stranded in, the verdict is the same one -- and it is never an outcome. */

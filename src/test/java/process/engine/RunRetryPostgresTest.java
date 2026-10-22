@@ -1,5 +1,9 @@
 package process.engine;
 
+import process.model.pojo.JobQueue;
+
+import process.pipeline.LostRunResume;
+
 import org.barco.platform.meter.Meter;
 import org.barco.platform.meter.MeterReporter;
 import org.barco.platform.meter.UsageEvent;
@@ -369,6 +373,51 @@ class RunRetryPostgresTest {
         // Billed once: both attempts' outcomes go to the meter under the run's own key, which the meter takes once.
         assertThat(this.metered).filteredOn(e -> Meter.PIPELINE_RUNS.key().equals(e.meter) && e.jobQueueId != null && e.jobQueueId == run)
             .extracting(e -> e.dedupeKey).containsExactly("run#" + run, "run#" + run);
+    }
+
+    /** The run as Core's restart left it: in flight at step 3 <check>, its engine's hold lapsed. */
+    private JobQueue stoppedAtStepThree(long run) {
+        login.update("UPDATE job_queue SET job_status = 'Running', end_time = NULL, job_send = true, prepare_lease_until = now() - "
+            + "interval '5 minutes', job_status_message = 'Running check' WHERE job_queue_id = ?", run);
+        login.update("UPDATE step_execution SET status = 'Running', ended_at = NULL WHERE job_queue_id = ? AND step_key = 'check' "
+            + "AND attempt = (SELECT attempt FROM job_queue WHERE job_queue_id = ?)", run, run);
+        login.update("UPDATE step_execution SET status = 'Queue' WHERE job_queue_id = ? AND step_key = 'after' "
+            + "AND attempt = (SELECT attempt FROM job_queue WHERE job_queue_id = ?)", run, run);
+        login.update("UPDATE source_job SET job_running_status = 'Running' WHERE job_id = ?", this.jobId);
+        return RowSecurity.forTenant(TENANT, () -> jpa.repository(JobQueueRepository.class).findById(run).get());
+    }
+
+    /**
+     * Owner 2026-10-21: a run Core's restart stopped mid-step is resumed once by the platform from that step, straight from in
+     * flight (a workflow waiting on it never sees it end); stopped again, it is left for the sweep to close.
+     */
+    @Test
+    void aRunCoresRestartStoppedIsResumedOnceFromItsStepByThePlatform() throws Exception {
+        long run = this.failedAtStepThree();
+        login.update("INSERT INTO pipeline_definition (pipeline_key, version, definition) VALUES (?, 2, ?::json)", this.pipelineKey,
+            definition(true, "id"));
+        LostRunResume resume = new LostRunResume(this.retries, jpa.repository(SourceJobRepository.class), db.appJdbc());
+
+        assertThat(resume.resume(this.stoppedAtStepThree(run))).isTrue();
+
+        Map<String, Object> queued = this.run(run);
+        assertThat(queued.get("job_status")).isEqualTo("Queue");
+        assertThat(queued.get("attempt")).isEqualTo(2);
+        assertThat(login.queryForObject("SELECT status FROM step_execution WHERE job_queue_id = ? AND attempt = 1 AND step_key = 'check'",
+            String.class, run)).isEqualTo("Interrupt");
+        assertThat(login.queryForMap("SELECT requested_via, requested_by_user_id, requested_by_client_id, mode, from_step_key FROM run_attempt "
+            + "WHERE job_queue_id = ?", run)).containsEntry("requested_via", "platform").containsEntry("requested_by_user_id", null)
+            .containsEntry("requested_by_client_id", null).containsEntry("mode", "resume").containsEntry("from_step_key", "check");
+        assertThat(login.queryForList("SELECT log_detail FROM job_audit_logs WHERE job_queue_id = ?", String.class, run))
+            .contains("Attempt 2 queued by the platform: Core restarted while step 3 <check> ran; resumed from it, reusing 2 step(s) of "
+                + "attempt 1.");
+
+        this.pass();
+        assertThat(this.run(run).get("job_status")).isEqualTo("Completed");
+
+        // Stopped again on a later attempt: the platform resumed it once already; the sweep closes it as before.
+        assertThat(resume.resume(this.stoppedAtStepThree(run))).isFalse();
+        assertThat(this.run(run).get("job_status")).isEqualTo("Running");
     }
 
     @Test

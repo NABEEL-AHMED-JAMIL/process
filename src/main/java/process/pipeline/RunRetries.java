@@ -109,6 +109,15 @@ public class RunRetries {
             return new Actor(RunAttemptStore.VIA_API, null, clientId, true, null);
         }
 
+        /** Owner 2026-10-21: Core resuming, once, a run its restart stopped (the run is still in flight, its engine gone). */
+        public static Actor platform() {
+            return new Actor(RunAttemptStore.VIA_PLATFORM, null, null, false, null);
+        }
+
+        boolean afterRestart() {
+            return RunAttemptStore.VIA_PLATFORM.equals(this.via);
+        }
+
         /** The same person, retrying as part of a bulk retry. */
         public Actor inBulk(String bulkId) {
             return new Actor(this.via, this.userId, this.clientId, this.admin, bulkId);
@@ -239,6 +248,14 @@ public class RunRetries {
      * (the retry itself always does; the console's preview does not, and says the check is still to come).
      */
     public Plan plan(JobQueue run, SourceJob job, boolean checkInputs) {
+        return this.plan(run, job, checkInputs, false);
+    }
+
+    /**
+     * {@code afterRestart}: the platform resuming a run whose step engine stopped with it in flight (owner 2026-10-21) -- the
+     * run is resumed as it stands, not first failed, so a workflow waiting on it never sees it end.
+     */
+    private Plan plan(JobQueue run, SourceJob job, boolean checkInputs, boolean afterRestart) {
         Plan plan = new Plan();
         plan.jobQueueId = run.getJobQueueId();
         plan.jobId = job.getJobId();
@@ -247,7 +264,7 @@ public class RunRetries {
         // What refuses both.
         String kind = null;
         String why = null;
-        if (run.getJobStatus() != JobStatus.Failed) {
+        if (afterRestart ? run.getJobStatus() == null || !run.getJobStatus().isInFlight() : run.getJobStatus() != JobStatus.Failed) {
             kind = NOT_FAILED;
             why = String.format("Run %d is %s, not failed: only a failed run is retried.", run.getJobQueueId(), words(run.getJobStatus()));
         } else if (run.isBackfillRun()) {
@@ -259,7 +276,7 @@ public class RunRetries {
         } else if (job.getJobStatus() != Status.Active) {
             kind = INACTIVE;
             why = "The pipeline's schedule is not active; switch it on to retry its runs.";
-        } else if (job.getJobRunningStatus() != null && job.getJobRunningStatus().isInFlight()) {
+        } else if (!afterRestart && job.getJobRunningStatus() != null && job.getJobRunningStatus().isInFlight()) {
             kind = IN_FLIGHT;
             why = "Another run of this pipeline is still in flight; one runs at a time. Retry once it has finished.";
         } else if (plan.attempt >= MAX_ATTEMPTS) {
@@ -460,7 +477,7 @@ public class RunRetries {
      * plain refusal, a second retry that got there first or a run of the job queued meanwhile.
      */
     public Outcome retry(JobQueue run, SourceJob job, boolean restart, Actor actor) {
-        Plan plan = this.plan(run, job, !restart);
+        Plan plan = this.plan(run, job, !restart, actor.afterRestart());
         String mode = restart ? RunAttemptStore.RESTART : RunAttemptStore.RESUME;
         if (restart) {
             if (!plan.restartable()) {
@@ -485,8 +502,12 @@ public class RunRetries {
         attempt.requestedByUserId = actor.userId;
         attempt.requestedByClientId = actor.clientId;
         attempt.requestedAt = Instant.now();
-        String who = RunAttemptStore.VIA_API.equals(actor.via) ? "API client " + actor.clientId : "user " + actor.userId;
-        String said = restart
+        String who = RunAttemptStore.VIA_API.equals(actor.via) ? "API client " + actor.clientId
+            : actor.afterRestart() ? "the platform" : "user " + actor.userId;
+        String said = actor.afterRestart()
+            ? String.format("Attempt %d queued by the platform: Core restarted while step %d <%s> ran; resumed from it, reusing %d step(s) of "
+                + "attempt %d.", attempt.attempt, plan.fromIndex + 1, plan.fromKey, plan.reused.size(), plan.attempt)
+            : restart
             ? String.format("Attempt %d queued by %s: run again from the start (attempt %d failed).", attempt.attempt, who, plan.attempt)
             : String.format("Attempt %d queued by %s: retry from step %d <%s>, reusing %d step(s) of attempt %d.", attempt.attempt, who,
                 plan.fromIndex + 1, plan.fromKey, plan.reused.size(), plan.attempt);
@@ -496,8 +517,8 @@ public class RunRetries {
             refused = this.transaction.execute(status -> {
                 int moved = this.jdbc.update("UPDATE job_queue SET attempt = ?, job_status = 'Queue', job_send = false, end_time = NULL, "
                     + "prepared_at = NULL, prepare_lease_until = NULL, dispatch_payload = NULL, end_reason = NULL, next_attempt_at = NULL, "
-                    + "job_status_message = ? WHERE job_queue_id = ? AND job_status = 'Failed' AND attempt = ?", attempt.attempt, line,
-                    run.getJobQueueId(), run.getAttempt());
+                    + "job_status_message = ? WHERE job_queue_id = ? AND job_status = ? AND attempt = ?", attempt.attempt, line,
+                    run.getJobQueueId(), actor.afterRestart() ? run.getJobStatus().name() : JobStatus.Failed.name(), run.getAttempt());
                 if (moved != 1) {
                     status.setRollbackOnly();
                     return "The run moved on meanwhile (another retry, or an operator); read it again.";

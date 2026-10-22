@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 222.0-platform-resume
+      author: nabeel.amd93
+      description: "owner 2026-10-21: run_attempt.requested_via 'platform' -- Core resumes, once, a run its restart stopped; expand-only (two CHECK constraints widened)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V222.0-platform-resume/V222__platform_resume.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V222.0-platform-resume/V222__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

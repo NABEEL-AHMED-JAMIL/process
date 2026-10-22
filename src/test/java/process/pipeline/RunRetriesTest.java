@@ -123,9 +123,10 @@ class RunRetriesTest {
         when(this.definitions.latestFor(TENANT, "ORDERS")).thenAnswer(call -> this.versions.values().stream()
             .reduce((a, b) -> b));
         // The requeue: the run back in Queue under its next attempt, as the UPDATE writes it.
-        when(this.jdbc.update(anyString(), any(), any(), any(), any())).thenAnswer(call -> {
-            Object[] args = Arrays.copyOfRange(call.getArguments(), 1, 5);
-            if (this.run.getJobStatus() != JobStatus.Failed || this.run.getAttempt() != ((Number) args[3]).intValue()) {
+        when(this.jdbc.update(anyString(), any(), any(), any(), any(), any())).thenAnswer(call -> {
+            // attempt, message, run, the status it must still have (Failed; in flight for the platform's resume), its attempt
+            Object[] args = Arrays.copyOfRange(call.getArguments(), 1, 6);
+            if (!this.run.getJobStatus().name().equals(args[3]) || this.run.getAttempt() != ((Number) args[4]).intValue()) {
                 return 0;
             }
             this.run.setAttempt(((Number) args[0]).intValue());

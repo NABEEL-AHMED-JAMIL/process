@@ -14,6 +14,8 @@ public interface RunAttemptStore {
     String RESTART = "restart";
     String VIA_CONSOLE = "console";
     String VIA_API = "api";
+    /** Owner 2026-10-21 (V222): Core itself, resuming a run its restart stopped; no person or client asked. */
+    String VIA_PLATFORM = "platform";
 
     /** Records an attempt someone asked for, in the caller's transaction. */
     void record(Attempt attempt);

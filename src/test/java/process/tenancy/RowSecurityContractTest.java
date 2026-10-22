@@ -47,6 +47,9 @@ class RowSecurityContractTest extends RowSecurityContract {
         paths.put("RunApprovals: in code #2",
             "the approval sweep (MIG-346) reads every workspace's approval requests whose run no longer waits on them; each is"
                 + " cancelled as its own workspace");
+        // 2026-10-21: runs a Core restart stopped are resumed once, or closed, within about two minutes.
+        paths.put("ProducerBulkEngine.reconcileLostEngineRuns",
+            "the lost-run sweep resumes once, or closes, runs of every workspace whose step engine stopped (Core restarted)");
         // 2026-10-21: decisions a restart lost on their way to the step engine.
         paths.put("RunApprovals: in code #3",
             "the approval sweep reads every workspace's decided approval requests whose run still waits; each is handed to the engine"

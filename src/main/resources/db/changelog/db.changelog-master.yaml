@@ -269,3 +269,6 @@ databaseChangeLog:
   # V221: owner 2026-10-21 -- run_read_take: "since the last run" reads with runs side by side; an item a run in flight took is not another's, a failed run's is free again (row security).
   - include:
       file: db/changelog/yaml/V221.0-run-read-takes.yaml
+  # V222: owner 2026-10-21 -- run_attempt.requested_via 'platform': Core resumes, once, a run its restart stopped.
+  - include:
+      file: db/changelog/yaml/V222.0-platform-resume.yaml

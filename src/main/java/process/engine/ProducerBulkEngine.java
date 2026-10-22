@@ -8,6 +8,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.barco.platform.correlation.CorrelationId;
 import org.barco.platform.correlation.CorrelationScope;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -64,6 +65,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * nothing is paused). Never a client of Identity -- see EnqueuePathAsksNoIdentityTest.
      */
     private WorkspaceDirectory workspaces;
+    private ObjectProvider<LostRunResumer> resumer;
     /** The dispatch pass's clock and pause, so the budget arithmetic can be tested without waiting minutes. */
     private LongSupplier clock = System::currentTimeMillis;
     private LongConsumer pause = ProducerBulkEngine::sleep;
@@ -345,6 +347,26 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      */
     @AcrossTenants("the stall sweep closes runs of every workspace that stopped reporting")
     public void reconcileStalledRuns() {
+        this.reconcile(true);
+    }
+
+    /**
+     * Owner 2026-10-21: every minute, the runs whose step engine stopped (their hold lapsed: Core restarted while their
+     * steps ran) -- each resumed once from the step it was on (LostRunResumer), else closed as interrupted, within about two
+     * minutes of the restart rather than at the stall sweep's next quarter-hour.
+     */
+    @AcrossTenants("the lost-run sweep resumes once, or closes, runs of every workspace whose step engine stopped (Core restarted)")
+    public void reconcileLostEngineRuns() {
+        this.reconcile(false);
+    }
+
+    /** Resumes a run whose step engine stopped; looked up when needed (it reaches back to this engine through RunRetries). */
+    @Autowired(required = false)
+    public void useLostRunResumer(ObjectProvider<LostRunResumer> resumer) {
+        this.resumer = resumer;
+    }
+
+    private void reconcile(boolean stalledToo) {
         try {
             LocalDateTime cutoff = BusinessTime.now().minusMinutes(STALLED_AFTER_MINUTES);
             // Two ways a run is known to be over without its worker saying so: six hours of silence, or
@@ -353,17 +375,27 @@ public class ProducerBulkEngine implements DispatchOutcomes {
             // hours with the job blocked. A run on both lists is closed once, for the refusal, which
             // is the more specific reason.
             Map<Long, JobQueue> toClose = new LinkedHashMap<>();
-            for (JobQueue jobQueue : this.transactionService.findStalledRuns(cutoff)) {
-                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            if (stalledToo) {
+                for (JobQueue jobQueue : this.transactionService.findStalledRuns(cutoff)) {
+                    toClose.put(jobQueue.getJobQueueId(), jobQueue);
+                }
             }
             int silent = toClose.size();
-            for (JobQueue jobQueue : this.transactionService.findRunsWithRefusedCallbacks()) {
-                toClose.put(jobQueue.getJobQueueId(), jobQueue);
+            if (stalledToo) {
+                for (JobQueue jobQueue : this.transactionService.findRunsWithRefusedCallbacks()) {
+                    toClose.put(jobQueue.getJobQueueId(), jobQueue);
+                }
             }
             // ZT-P16: a run whose step engine is gone (its hold lapsed: Core restarted while its steps ran) is closed now, not
             // after six hours with its job blocked ("still in flight") and its schedule skipped.
             Set<Long> lost = new HashSet<>();
+            LostRunResumer resume = this.resumer == null ? null : this.resumer.getIfAvailable();
             for (JobQueue jobQueue : this.transactionService.findRunsWithLapsedEngineLease()) {
+                // Owner 2026-10-21: resumed once from the step it was on, straight from in flight to its next attempt (a
+                // workflow waiting on it never sees it end); else closed as interrupted below.
+                if (resume != null && !toClose.containsKey(jobQueue.getJobQueueId()) && resume.resume(jobQueue)) {
+                    continue;
+                }
                 if (toClose.putIfAbsent(jobQueue.getJobQueueId(), jobQueue) == null) {
                     lost.add(jobQueue.getJobQueueId());
                 }
@@ -439,6 +471,11 @@ public class ProducerBulkEngine implements DispatchOutcomes {
         } catch (Exception ex) {
             logger.error("Error in reconcileStalledRuns: {}.", ExceptionUtil.getRootCauseMessage(ex));
         }
+    }
+
+    /** Resumes a run whose step engine stopped, once; false when it cannot (it is then closed as interrupted). */
+    public interface LostRunResumer {
+        boolean resume(JobQueue run);
     }
 
     /**

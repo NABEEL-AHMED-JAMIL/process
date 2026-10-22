@@ -69,6 +69,21 @@ public class ProcessCron {
     }
 
     /**
+     * Owner 2026-10-21: every minute, the runs whose step engine stopped (Core restarted while their steps ran) are resumed
+     * once from the step they were on, or closed as interrupted -- within about two minutes of the restart, not at the stall
+     * sweep's next quarter-hour. On the clock, locked across replicas, as the stall sweep.
+     */
+    @Scheduled(cron = "${process.reconcile.lost-engine-cron:30 * * * * *}")
+    @SchedulerLock(name = "reconcileLostEngineRuns", lockAtLeastFor = "20S", lockAtMostFor = "5M")
+    public void reconcileLostEngineRuns() {
+        try {
+            this.producerBulkEngine.reconcileLostEngineRuns();
+        } catch (Exception ex) {
+            logger.error("The lost-run sweep failed; it runs again in a minute: {}", ex.getMessage());
+        }
+    }
+
+    /**
      * Runs a quarter-hour apart rather than every minute: it exists to catch something that has
      * already been stuck for six hours, so noticing within fifteen minutes is ample and it keeps
      * a table scan off the minute cycle.
