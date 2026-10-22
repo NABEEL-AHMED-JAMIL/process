@@ -19,6 +19,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.barco.notifications.contract.MailRequested;
 import org.barco.notifications.contract.NotificationCreated;
@@ -47,7 +48,7 @@ import java.time.ZoneId;
  * <ul>
  *   <li>Tenant isolation: workspace A's alert is A's row, told only to A's people; B's to B's. A caller of A reads none of B's
  *   rules or alerts, and no workspace reads the platform's.</li>
- *   <li>Role scoping: a rule naming TENANT_ADMIN and a group tells the admin and that group's member, not another member.</li>
+ *   <li>Role scoping: a rule naming TENANT_ADMIN and a team tells the admin and that team's member, not another member.</li>
  *   <li>De-duplication: the same failure next minute touches the alert -- no second notice, mail or webhook.</li>
  *   <li>Auto-resolve: a later completed run of the pipeline resolves it, with a notice and alert.resolved.</li>
  *   <li>Quiet hours: mail held while they last and sent after; the bell is not held.</li>
@@ -104,8 +105,9 @@ class MonitoringPostgresTest {
         }
     }
 
-    static IdentityPort.Person person(long id, Long tenant, String role, Long profile) {
-        return new IdentityPort.Person(id, tenant, "user" + id + "@example.test", "User " + id, role, "Active", null, null, profile);
+    static IdentityPort.Person person(long id, Long tenant, String role, Long team) {
+        return new IdentityPort.Person(id, tenant, "user" + id + "@example.test", "User " + id, role, "Active", null, null,
+            team == null ? null : Set.of(team));
     }
 
     @BeforeEach
@@ -157,7 +159,7 @@ class MonitoringPostgresTest {
         return id;
     }
 
-    AlertRule ruleOf(long tenant, long admin, AlertKind kind, int threshold, boolean email, boolean webhook, Long... groups) {
+    AlertRule ruleOf(long tenant, long admin, AlertKind kind, int threshold, boolean email, boolean webhook, Long... teams) {
         TenantContext.set(tenant, "TENANT_ADMIN", admin, "admin@" + tenant);
         try {
             AlertRule rule = new AlertRule();
@@ -167,7 +169,7 @@ class MonitoringPostgresTest {
             rule.email = email;
             rule.webhook = webhook;
             rule.roles = new LinkedHashSet<>(Collections.singletonList("TENANT_ADMIN"));
-            rule.groups = new LinkedHashSet<>(Arrays.asList(groups));
+            rule.teams = new LinkedHashSet<>(Arrays.asList(teams));
             return this.rules.save(rule, tenant, admin);
         } finally {
             TenantContext.clear();
@@ -180,7 +182,7 @@ class MonitoringPostgresTest {
     }
 
     @Test
-    void eachWorkspacesAlertIsItsOwnAndToldOnlyToItsOwnPeopleByRoleAndGroup() {
+    void eachWorkspacesAlertIsItsOwnAndToldOnlyToItsOwnPeopleByRoleAndTeam() {
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         ruleOf(A, ADMIN_A, AlertKind.RUN_FAILED, 1, true, true, REVIEWERS);
         ruleOf(B, ADMIN_B, AlertKind.RUN_FAILED, 1, false, false);

@@ -46,12 +46,12 @@ class ApprovalStepTaskTest {
     }
 
     @Test
-    void reviewersAreARoleOrAGroup() {
+    void reviewersAreARoleOrATeam() {
         assertThat(this.task.check(config("reviewers", config("kind", "role", "value", "OWNER"))))
             .containsExactly(new DefinitionProblem("reviewers.value", "a role: one of [TENANT_ADMIN, TENANT_USER]"));
-        assertThat(this.task.check(config("reviewers", config("kind", "group", "value", "abc"))))
-            .containsExactly(new DefinitionProblem("reviewers.value", "a group: the access profile's id"));
-        assertThat(this.task.check(config("reviewers", config("kind", "group", "value", "88")))).isEmpty();
+        assertThat(this.task.check(config("reviewers", config("kind", "team", "value", "abc"))))
+            .containsExactly(new DefinitionProblem("reviewers.value", "a team: the team's id"));
+        assertThat(this.task.check(config("reviewers", config("kind", "team", "value", "88")))).isEmpty();
         assertThat(this.task.check(config("reviewers", config()))).isEmpty();
     }
 }

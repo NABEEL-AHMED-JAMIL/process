@@ -23,7 +23,7 @@ import java.util.Map;
  * reviewer's reason. Nobody deciding within {@code expiresAfterHours} fails it too. A run that failed here, or after it, is
  * retried from its failed step as any run: a retry from this step asks again, one from a later step reuses the approval.
  *
- * Reviewers: the step's own (a role, or a group by its access profile id), else the pipeline's review reviewers, else the
+ * Reviewers: the step's own (a role, or a team by its id), else the pipeline's review reviewers, else the
  * workspace's administrators. The task's title, instructions and fields fill from the run and the first row
  * ({{column}}), so a reviewer sees what they approve: "Send {{rows}} lab results ({{abnormal_count}} abnormal)?".
  */
@@ -45,10 +45,10 @@ public class ApprovalStepTask extends RegisteredTask {
             .property("fields", JsonSchema.map(JsonSchema.string().maxLength(500).format("template")).title("Fields")
                 .description("Name and value pairs shown on the task: Abnormal = {{abnormal_count}}."))
             .property("reviewers", JsonSchema.object()
-                .property("kind", JsonSchema.string().enumOf("role", "group").title("Reviewers are"))
-                .property("value", JsonSchema.string().maxLength(64).title("Role or group")
+                .property("kind", JsonSchema.string().enumOf("role", "team").title("Reviewers are"))
+                .property("value", JsonSchema.string().maxLength(64).title("Role or team")
                     .description("For a role: " + PipelineDefinition.Reviewers.ADMINS + " (the tenant administrators) or TENANT_USER "
-                        + "(every tenant user); for a group: an access profile's id."))
+                        + "(every tenant user); for a team: the team's id."))
                 .title("Reviewers").description("Empty: the pipeline's review reviewers, else the workspace's administrators."))
             .property("expiresAfterHours", JsonSchema.integer().minimum(1).maximum(MAX_HOURS).title("Decide within (hours)")
                 .defaultValue(DEFAULT_HOURS).description("Nobody deciding in this time fails the run.")))
@@ -70,11 +70,11 @@ public class ApprovalStepTask extends RegisteredTask {
             String kind = Configs.text(who, "kind", null);
             String value = Configs.text(who, "value", null);
             if (kind == null) {
-                problems.add(new DefinitionProblem("reviewers.kind", "role or group"));
+                problems.add(new DefinitionProblem("reviewers.kind", "role or team"));
             } else if (PipelineDefinition.Reviewers.ROLE.equals(kind) && !PipelineDefinition.Reviewers.ROLES.contains(value)) {
                 problems.add(new DefinitionProblem("reviewers.value", "a role: one of " + PipelineDefinition.Reviewers.ROLES));
-            } else if (PipelineDefinition.Reviewers.GROUP.equals(kind) && (value == null || !value.matches("\\d{1,18}"))) {
-                problems.add(new DefinitionProblem("reviewers.value", "a group: the access profile's id"));
+            } else if (PipelineDefinition.Reviewers.TEAM.equals(kind) && (value == null || !value.matches("\\d{1,18}"))) {
+                problems.add(new DefinitionProblem("reviewers.value", "a team: the team's id"));
             }
         }
         return problems;

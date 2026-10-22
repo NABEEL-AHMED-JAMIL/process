@@ -5,9 +5,11 @@ import org.barco.platform.tenancy.TenantScope;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Everything the rest of process asks of Identity & Tenancy, behind one interface (MIG-93).
@@ -107,6 +109,14 @@ public interface IdentityPort {
      */
     List<Person> members(TenantScope scope);
 
+    /**
+     * F4 (owner T-Q1): the team each of a workspace's groups (access profile ids) became, made once by Identity -- for
+     * {@code TeamMigration}. Group id -> team id; empty when this identity cannot say (then nothing is rewritten).
+     */
+    default Map<Long, Long> teamsOfGroups(long tenantId, Collection<Long> groupIds) {
+        return Collections.emptyMap();
+    }
+
     /** How many people a workspace has who are not deleted: its seats. */
     long seats(Long tenantId);
 
@@ -133,8 +143,8 @@ public interface IdentityPort {
         private final String status;
         private final String avatarBucket;
         private final String avatarKey;
-        /** UX review 2026-10-12: the person's access profile (their group), for "runs I review"; null for none. */
-        private final Long pageAccessProfileId;
+        /** F4 (MIG-401): the teams the person is in, by id, for "runs I review" and alerts; empty for none. */
+        private final Set<Long> teamIds;
 
         public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status) {
             this(appUserId, tenantId, username, fullName, userRole, status, null, null);
@@ -146,7 +156,7 @@ public interface IdentityPort {
         }
 
         public Person(Long appUserId, Long tenantId, String username, String fullName, String userRole, String status,
-            String avatarBucket, String avatarKey, Long pageAccessProfileId) {
+            String avatarBucket, String avatarKey, Set<Long> teamIds) {
             this.appUserId = appUserId;
             this.tenantId = tenantId;
             this.username = username;
@@ -155,7 +165,7 @@ public interface IdentityPort {
             this.status = status;
             this.avatarBucket = avatarBucket;
             this.avatarKey = avatarKey;
-            this.pageAccessProfileId = pageAccessProfileId;
+            this.teamIds = teamIds == null ? Collections.emptySet() : Collections.unmodifiableSet(new LinkedHashSet<>(teamIds));
         }
 
         public Long getAppUserId() { return this.appUserId; }
@@ -176,7 +186,7 @@ public interface IdentityPort {
 
         public String getAvatarKey() { return this.avatarKey; }
 
-        public Long getPageAccessProfileId() { return this.pageAccessProfileId; }
+        public Set<Long> getTeamIds() { return this.teamIds; }
 
         public boolean isDeleted() { return "Delete".equals(this.status); }
 

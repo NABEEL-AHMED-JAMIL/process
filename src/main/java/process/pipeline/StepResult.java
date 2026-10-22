@@ -49,7 +49,7 @@ public final class StepResult {
         public String title;
         public String instructions;
         public Map<String, String> fields = new LinkedHashMap<>();
-        /** role or group, with its value; null for the pipeline's review reviewers, else the administrators. */
+        /** role or team, with its value; null for the pipeline's review reviewers, else the administrators. */
         public String reviewersKind;
         public String reviewersValue;
         public int expiresAfterHours;

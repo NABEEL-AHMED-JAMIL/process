@@ -67,7 +67,7 @@ class AlertRulesTest {
     }
 
     @Test
-    void someoneHearsOfItAndOnlyTheWorkspacesRolesAndGroups() {
+    void someoneHearsOfItAndOnlyTheWorkspacesRolesAndTeams() {
         AlertRule nobody = rule(AlertKind.RUN_FAILED);
         nobody.roles = new LinkedHashSet<>();
         refused(nobody, 2960L, "Name who hears of it");
@@ -84,11 +84,11 @@ class AlertRulesTest {
         platformHook.webhook = true;
         refused(platformHook, null, "go to no webhook");
         AlertRule groups = rule(AlertKind.RUN_FAILED);
-        groups.groups = new LinkedHashSet<>();
+        groups.teams = new LinkedHashSet<>();
         for (long g = 1; g <= 21; g++) {
-            groups.groups.add(g);
+            groups.teams.add(g);
         }
-        refused(groups, 2960L, "At most 20 groups");
+        refused(groups, 2960L, "At most 20 teams");
     }
 
     @Test
@@ -127,7 +127,7 @@ class AlertRulesTest {
         channels.put("webhook", false);
         body.put("channels", channels);
         body.put("roles", Arrays.asList("TENANT_ADMIN", "tenant_user"));
-        body.put("groups", Collections.singletonList(8601));
+        body.put("teams", Collections.singletonList(8601));
         Map<String, Object> quiet = new HashMap<>();
         quiet.put("start", "22:00");
         quiet.put("end", "07:00");
@@ -138,7 +138,7 @@ class AlertRulesTest {
         assertThat(rule.windowMinutes).isEqualTo(10);
         assertThat(rule.email).isTrue();
         assertThat(rule.roles).containsExactly("TENANT_ADMIN", "TENANT_USER");
-        assertThat(rule.groups).containsExactly(8601L);
+        assertThat(rule.teams).containsExactly(8601L);
         assertThat(rule.quietStart).isEqualTo(LocalTime.of(22, 0));
         Map<String, Object> unknown = new HashMap<>();
         unknown.put("kind", "nope");

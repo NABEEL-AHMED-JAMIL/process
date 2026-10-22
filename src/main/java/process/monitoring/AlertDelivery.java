@@ -38,7 +38,7 @@ import java.util.Map;
  *   to the workspace's webhooks that subscribe to them -- signed and guarded by integration-service.</li>
  * </ul>
  *
- * Who: a workspace rule's roles (TENANT_ADMIN, TENANT_USER) and groups (members of the named access profiles), never
+ * Who: a workspace rule's roles (TENANT_ADMIN, TENANT_USER) and teams (members of the named teams; F4), never
  * deleted people, and only the rule's own workspace's people -- members(TenantScope.tenant(id)) cannot answer another's.
  * A platform rule tells every platform administrator.
  */
@@ -90,8 +90,8 @@ public class AlertDelivery {
                 continue;
             }
             boolean byRole = person.getUserRole() != null && rule.roles.contains(person.getUserRole());
-            boolean byGroup = person.getPageAccessProfileId() != null && rule.groups.contains(person.getPageAccessProfileId());
-            if (byRole || byGroup) {
+            boolean byTeam = person.getTeamIds().stream().anyMatch(rule.teams::contains);
+            if (byRole || byTeam) {
                 out.add(person);
             }
         }

@@ -63,7 +63,7 @@ import static process.tenancy.CoreProbeFixture.B_RUN;
 
 /**
  * MIG-361, Core's half, against a real etl_job as process_app (CoreProbeFixture): a run that completes waiting for its
- * internal review is announced on platform.process.run-review.v1 for the reviewers its pipeline names (a group here; the
+ * internal review is announced on platform.process.run-review.v1 for the reviewers its pipeline names (a team here; the
  * administrators when it names none), in the run's own workspace and with none of its storage; the Task inbox's decision
  * comes back as workflow-service's instance-changed event and is recorded as that reviewer's internal decision, once; a
  * decision recorded any way is announced so an open task is closed -- but a customer's approval alone leaves the internal
@@ -71,9 +71,9 @@ import static process.tenancy.CoreProbeFixture.B_RUN;
  */
 class CoreRunReviewTasksPostgresTest {
 
-    private static final String INTERNAL_BY_GROUP = "{\"version\":1,\"source\":{\"type\":\"task\"},\"steps\":[{\"key\":\"keep\",\"name\":"
+    private static final String INTERNAL_BY_TEAM = "{\"version\":1,\"source\":{\"type\":\"task\"},\"steps\":[{\"key\":\"keep\",\"name\":"
         + "\"Keep the notes\",\"task\":\"save_file\",\"config\":{\"fileName\":\"notes.csv\"}}],\"settings\":{\"review\":{\"required\":"
-        + "[\"internal\"],\"reviewers\":{\"kind\":\"group\",\"value\":\"1063\"}}}}";
+        + "[\"internal\"],\"reviewers\":{\"kind\":\"team\",\"value\":\"1063\"}}}}";
     private static final String BOTH_BY_DEFAULT = "{\"version\":1,\"source\":{\"type\":\"task\"},\"steps\":[{\"key\":\"keep\",\"name\":"
         + "\"Keep the notes\",\"task\":\"save_file\",\"config\":{\"fileName\":\"notes.csv\"}}],\"settings\":{\"review\":{\"required\":"
         + "[\"internal\",\"customer\"]}}}";
@@ -92,7 +92,7 @@ class CoreRunReviewTasksPostgresTest {
         fx = CoreProbeFixture.create("core_run_review_tasks");
         JdbcTemplate sql = fx.db.jdbc();
         sql.update("INSERT INTO pipeline_definition (tenant_id, pipeline_key, version, definition, date_created) "
-            + "SELECT tenant_id, pipeline_key, 1, ?::json, now() - interval '30 days' FROM pipeline WHERE pipeline_key = ?", INTERNAL_BY_GROUP,
+            + "SELECT tenant_id, pipeline_key, 1, ?::json, now() - interval '30 days' FROM pipeline WHERE pipeline_key = ?", INTERNAL_BY_TEAM,
             A_PIPELINE);
         sql.update("INSERT INTO pipeline_definition (tenant_id, pipeline_key, version, definition, date_created) "
             + "SELECT tenant_id, pipeline_key, 1, ?::json, now() - interval '30 days' FROM pipeline WHERE pipeline_key = ?", BOTH_BY_DEFAULT,
@@ -148,7 +148,7 @@ class CoreRunReviewTasksPostgresTest {
         JsonNode payload = a.path("payload");
         assertThat(payload.path("jobQueueId").asLong()).isEqualTo(A_RUN);
         assertThat(payload.path("jobId").asLong()).isEqualTo(A_JOB);
-        assertThat(payload.path("reviewers").path("kind").asText()).isEqualTo("group");
+        assertThat(payload.path("reviewers").path("kind").asText()).isEqualTo("team");
         assertThat(payload.path("reviewers").path("value").asText()).isEqualTo("1063");
         assertThat(payload.path("title").asText()).startsWith("Review run #" + A_RUN);
         assertThat(payload.path("link").asText()).isEqualTo("/pipelines/schedules/" + A_JOB + "/runs/" + A_RUN + "/logs");

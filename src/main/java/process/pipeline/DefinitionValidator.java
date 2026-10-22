@@ -255,12 +255,12 @@ public class DefinitionValidator {
         if (reviewers != null) {
             String kind = reviewers.getKind();
             String value = reviewers.getValue() == null ? null : reviewers.getValue().trim();
-            if (!PipelineDefinition.Reviewers.ROLE.equals(kind) && !PipelineDefinition.Reviewers.GROUP.equals(kind)) {
-                problems.add(new DefinitionProblem("settings.review.reviewers.kind", "role or group"));
+            if (!PipelineDefinition.Reviewers.ROLE.equals(kind) && !PipelineDefinition.Reviewers.TEAM.equals(kind)) {
+                problems.add(new DefinitionProblem("settings.review.reviewers.kind", "role or team"));
             } else if (PipelineDefinition.Reviewers.ROLE.equals(kind) && !PipelineDefinition.Reviewers.ROLES.contains(value)) {
                 problems.add(new DefinitionProblem("settings.review.reviewers.value", "a role: one of " + PipelineDefinition.Reviewers.ROLES));
-            } else if (PipelineDefinition.Reviewers.GROUP.equals(kind) && (value == null || !value.matches("\\d{1,18}"))) {
-                problems.add(new DefinitionProblem("settings.review.reviewers.value", "a group: the access profile's id"));
+            } else if (PipelineDefinition.Reviewers.TEAM.equals(kind) && (value == null || !value.matches("\\d{1,18}"))) {
+                problems.add(new DefinitionProblem("settings.review.reviewers.value", "a team: the team's id"));
             }
         }
     }

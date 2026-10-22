@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -252,6 +253,29 @@ public class HttpIdentity implements IdentityPort {
     }
 
     @Override
+    public Map<Long, Long> teamsOfGroups(long tenantId, Collection<Long> groupIds) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("tenantId", tenantId);
+        body.put("profileIds", new ArrayList<>(groupIds));
+        try {
+            Map<?, ?> answer = this.http.postForObject(this.base + "/teams/fromProfiles", this.request(body), Map.class);
+            Map<Long, Long> teams = new LinkedHashMap<>();
+            if (answer != null) {
+                answer.forEach((group, team) -> {
+                    Long from = group != null && String.valueOf(group).matches("\\d{1,18}") ? Long.valueOf(String.valueOf(group)) : null;
+                    Long to = longOf(team);
+                    if (from != null && to != null) {
+                        teams.put(from, to);
+                    }
+                });
+            }
+            return teams;
+        } catch (RestClientException ex) {
+            throw unavailable("teams/fromProfiles", ex);
+        }
+    }
+
+    @Override
     public long seats(Long tenantId) {
         if (tenantId == null) {
             return 0;
@@ -362,7 +386,21 @@ public class HttpIdentity implements IdentityPort {
     static Person toPerson(Map<?, ?> row) {
         return new Person(longOf(row.get("appUserId")), longOf(row.get("tenantId")), textOf(row.get("username")),
             textOf(row.get("fullName")), textOf(row.get("userRole")), textOf(row.get("status")),
-            textOf(row.get("avatarBucket")), textOf(row.get("avatarKey")), longOf(row.get("pageAccessProfileId")));
+            textOf(row.get("avatarBucket")), textOf(row.get("avatarKey")), teamsOf(row.get("teamIds")));
+    }
+
+    /** F4: a row's teamIds, as Identity answers them (numbers); empty when it says none. */
+    static Set<Long> teamsOf(Object value) {
+        Set<Long> teams = new LinkedHashSet<>();
+        if (value instanceof Collection) {
+            for (Object id : (Collection<?>) value) {
+                Long team = longOf(id);
+                if (team != null) {
+                    teams.add(team);
+                }
+            }
+        }
+        return teams;
     }
 
     static Workspace toWorkspace(Map<?, ?> row) {

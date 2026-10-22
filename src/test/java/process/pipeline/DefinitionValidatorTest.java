@@ -283,11 +283,11 @@ class DefinitionValidatorTest {
             new DefinitionProblem("settings.review.required[4]", "'internal' is already required"));
     }
 
-    /** MIG-361: settings.review.reviewers says whose Task inbox the internal review goes to: a role, or a group by its id. */
+    /** MIG-361: settings.review.reviewers says whose Task inbox the internal review goes to: a role, or a team by its id. */
     @Test
-    void reviewersAreARoleOrAGroupAndTheAdministratorsWhenNotSaid() {
+    void reviewersAreARoleOrATeamAndTheAdministratorsWhenNotSaid() {
         for (PipelineDefinition.Reviewers ok : Arrays.asList(PipelineDefinition.Reviewers.of("role", "TENANT_ADMIN"),
-            PipelineDefinition.Reviewers.of("role", "TENANT_USER"), PipelineDefinition.Reviewers.of("group", "1063"))) {
+            PipelineDefinition.Reviewers.of("role", "TENANT_USER"), PipelineDefinition.Reviewers.of("team", "1063"))) {
             PipelineDefinition definition = this.valid();
             PipelineDefinition.Review review = PipelineDefinition.Review.of(Arrays.asList("internal"));
             review.setReviewers(ok);
@@ -295,8 +295,8 @@ class DefinitionValidatorTest {
             assertThat(this.validator.problems(definition)).as("%s %s", ok.getKind(), ok.getValue()).isEmpty();
         }
         String[][] bad = {{"user", "4641", "settings.review.reviewers.kind"}, {"role", "TENANT_VIEWER", "settings.review.reviewers.value"},
-            {"role", "PLATFORM_ADMIN", "settings.review.reviewers.value"}, {"group", "Reviewers", "settings.review.reviewers.value"},
-            {"group", null, "settings.review.reviewers.value"}, {null, "1063", "settings.review.reviewers.kind"}};
+            {"role", "PLATFORM_ADMIN", "settings.review.reviewers.value"}, {"team", "Reviewers", "settings.review.reviewers.value"},
+            {"team", null, "settings.review.reviewers.value"}, {null, "1063", "settings.review.reviewers.kind"}};
         for (String[] one : bad) {
             PipelineDefinition definition = this.valid();
             PipelineDefinition.Review review = PipelineDefinition.Review.of(Arrays.asList("internal"));

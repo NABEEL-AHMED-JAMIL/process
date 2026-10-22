@@ -39,7 +39,7 @@ import process.model.enums.ReviewParty;
  *     input: read                      # an earlier step's output; default: the latest output before this step
  * settings: {datasetRetentionHours: 24, defaultTimeoutSeconds: 600, defaultOnError: fail,
  *            review: {required: [internal, customer],     # MIG-237: who must approve a run's results; none by default
- *                     reviewers: {kind: group, value: "1063"}}}  # MIG-361: whose Task inbox the internal review goes to
+ *                     reviewers: {kind: team, value: "1063"}}}  # MIG-361: whose Task inbox the internal review goes to
  * </pre>
  *
  * Every existing pipeline is, without a stored definition, {@link #legacy}: one {@code legacy} step that runs today's
@@ -492,8 +492,8 @@ public class PipelineDefinition {
 
         private List<String> required;
         /**
-         * MIG-361: who decides the internal review in the Task inbox -- a role (TENANT_ADMIN, TENANT_USER) or a group (an
-         * access profile, by id). Absent: the workspace's administrators, as before.
+         * MIG-361: who decides the internal review in the Task inbox -- a role (TENANT_ADMIN, TENANT_USER) or a team (F4,
+         * by id). Absent: the workspace's administrators, as before.
          */
         private Reviewers reviewers;
         /**
@@ -549,15 +549,15 @@ public class PipelineDefinition {
 
     /**
      * MIG-361: whose Task inbox a run's internal review goes to -- {@code {kind: role, value: TENANT_USER}} or {@code {kind:
-     * group, value: "1063"}} (an access profile of the workspace, by id). A workspace's viewers are neither: a role names
-     * its administrators or users, and a group only its own people.
+     * team, value: "1063"}} (a team of the workspace, by id; F4: groups became teams). A workspace's viewers are neither: a
+     * role names its administrators or users, and a team only its own people.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"kind", "value"})
     public static class Reviewers {
 
         public static final String ROLE = "role";
-        public static final String GROUP = "group";
+        public static final String TEAM = "team";
         public static final String ADMINS = "TENANT_ADMIN";
         public static final List<String> ROLES = Collections.unmodifiableList(Arrays.asList(ADMINS, "TENANT_USER"));
 

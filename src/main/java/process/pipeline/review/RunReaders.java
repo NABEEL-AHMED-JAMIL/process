@@ -14,10 +14,12 @@ import process.pipeline.PipelineDefinition;
 import process.pipeline.RunOwnership;
 import process.pipeline.approval.RunApprovalStore;
 import process.security.TenantContext;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
@@ -25,12 +27,12 @@ import java.util.function.LongSupplier;
  * UX review 2026-10-12 (R2): who may READ a run -- its page, steps, outputs, log and review. Whoever owns it
  * ({@link RunOwnership#owned}: an administrator, or the tenant user its job names), and besides them the run's reviewers:
  * a tenant user of the run's workspace whom the pipeline names to decide its internal review (settings.review.reviewers,
- * a role or a group -- an access profile, by id), for a run whose results need that review. Before this a reviewer was
+ * a role or a team, by id), for a run whose results need that review. Before this a reviewer was
  * sent a run to decide in the Task inbox and refused the run itself, since its job does not name them.
  *
  * Run page polish 2026-10-12: likewise the people an Approval step of the run went to (run_approval's reviewers, MIG-346),
  * whatever the run's review -- their Task inbox task links to the run, and the run page is where they see what they are
- * approving. Before this a reviewer in the group opened the task's link and was told the run did not exist.
+ * approving. Before this a reviewer in the team opened the task's link and was told the run did not exist.
  *
  * Reads only: retrying, running again and deciding stay the owner's and the administrators' ({@link RunOwnership#owned}),
  * and the Task inbox's for the reviewers. The page gate is unchanged in kind: the run reads open to the Queue page as well
@@ -41,8 +43,8 @@ public class RunReaders {
 
     private static final Logger logger = LoggerFactory.getLogger(RunReaders.class);
 
-    /** How long a person's group (access profile) is kept: a profile moved takes effect within it. */
-    static final long GROUP_TTL_MILLIS = 60_000L;
+    /** How long a person's teams are kept: a member added or removed takes effect within it. */
+    static final long TEAMS_TTL_MILLIS = 60_000L;
 
     private final JobQueueRepository runs;
     private final SourceJobRepository jobs;
@@ -50,7 +52,7 @@ public class RunReaders {
     private final IdentityPort identity;
     private final RunApprovalStore approvals;
     private final LongSupplier clock;
-    private final Map<Long, CachedGroup> groups = new ConcurrentHashMap<>();
+    private final Map<Long, CachedTeams> teams = new ConcurrentHashMap<>();
 
     @Autowired
     public RunReaders(JobQueueRepository runs, SourceJobRepository jobs, RunReviews reviews, IdentityPort identity, RunApprovalStore approvals) {
@@ -100,7 +102,7 @@ public class RunReaders {
         return this.namedByAnApproval(jobQueueId) ? inWorkspace : Optional.empty();
     }
 
-    /** Whether an Approval step of the run went to the caller: their role, or their group. */
+    /** Whether an Approval step of the run went to the caller: their role, or a team they are in. */
     private boolean namedByAnApproval(Long jobQueueId) {
         if (this.approvals == null || jobQueueId == null) {
             return false;
@@ -114,7 +116,7 @@ public class RunReaders {
         return false;
     }
 
-    /** Whether these reviewers name the caller: their role, or the group (access profile) they are on. */
+    /** Whether these reviewers name the caller: their role, or a team they are in (F4). */
     boolean names(PipelineDefinition.Reviewers reviewers) {
         if (reviewers == null || reviewers.getValue() == null) {
             return false;
@@ -123,43 +125,42 @@ public class RunReaders {
         if (PipelineDefinition.Reviewers.ROLE.equals(reviewers.getKind())) {
             return value.equals(TenantContext.getUserRole());
         }
-        if (PipelineDefinition.Reviewers.GROUP.equals(reviewers.getKind())) {
-            Long group = this.groupOf(TenantContext.getAppUserId());
-            return group != null && value.equals(String.valueOf(group));
+        if (PipelineDefinition.Reviewers.TEAM.equals(reviewers.getKind())) {
+            return this.teamsOf(TenantContext.getAppUserId()).stream().anyMatch(team -> value.equals(String.valueOf(team)));
         }
         return false;
     }
 
-    /** The caller's access profile id, kept a minute; null for none, or when Identity cannot say (fails closed). */
-    private Long groupOf(Long appUserId) {
+    /** The caller's teams, kept a minute; none when Identity cannot say (fails closed). */
+    private Set<Long> teamsOf(Long appUserId) {
         long now = this.clock.getAsLong();
-        CachedGroup cached = this.groups.get(appUserId);
+        CachedTeams cached = this.teams.get(appUserId);
         if (cached != null && cached.until > now) {
-            return cached.group;
+            return cached.teams;
         }
-        Long group;
+        Set<Long> teams;
         try {
-            group = this.identity.person(appUserId)
+            teams = this.identity.person(appUserId)
                 .filter(person -> Objects.equals(person.getTenantId(), TenantContext.getTenantId()) && !person.isDeleted())
-                .map(IdentityPort.Person::getPageAccessProfileId).orElse(null);
+                .map(IdentityPort.Person::getTeamIds).orElse(Collections.emptySet());
         } catch (IdentityPort.Unavailable unavailable) {
             logger.warn("Run reviewer check for user {}: Identity is unavailable ({}); read as not a reviewer.", appUserId,
                 unavailable.getMessage());
-            return null;
+            return Collections.emptySet();
         }
-        if (this.groups.size() > 10_000) {
-            this.groups.clear();
+        if (this.teams.size() > 10_000) {
+            this.teams.clear();
         }
-        this.groups.put(appUserId, new CachedGroup(group, now + GROUP_TTL_MILLIS));
-        return group;
+        this.teams.put(appUserId, new CachedTeams(teams, now + TEAMS_TTL_MILLIS));
+        return teams;
     }
 
-    private static final class CachedGroup {
-        final Long group;
+    private static final class CachedTeams {
+        final Set<Long> teams;
         final long until;
 
-        CachedGroup(Long group, long until) {
-            this.group = group;
+        CachedTeams(Set<Long> teams, long until) {
+            this.teams = teams;
             this.until = until;
         }
     }

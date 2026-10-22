@@ -32,7 +32,8 @@ public final class AlertRule {
     public boolean email;
     public boolean webhook;
     public Set<String> roles = new LinkedHashSet<>();
-    public Set<Long> groups = new LinkedHashSet<>();
+    /** F4: the teams whose members are told as well, by id. */
+    public Set<Long> teams = new LinkedHashSet<>();
     public LocalTime quietStart;
     public LocalTime quietEnd;
     public String quietZone;
@@ -44,7 +45,7 @@ public final class AlertRule {
     public Instant updated;
 
     static final String COLUMNS = "alert_rule_id, tenant_id, kind, name, enabled, severity, job_id, threshold, window_minutes, factor, "
-        + "notify_bell, notify_email, notify_webhook, recipient_roles, recipient_groups, quiet_start, quiet_end, quiet_zone, created_by, "
+        + "notify_bell, notify_email, notify_webhook, recipient_roles, recipient_teams, quiet_start, quiet_end, quiet_zone, created_by, "
         + "date_created, updated_by, date_updated, muted_until";
 
     static AlertRule of(ResultSet rs, int row) throws SQLException {
@@ -65,7 +66,7 @@ public final class AlertRule {
         rule.email = rs.getBoolean("notify_email");
         rule.webhook = rs.getBoolean("notify_webhook");
         rule.roles = words(rs.getString("recipient_roles"));
-        rule.groups = words(rs.getString("recipient_groups")).stream().map(Long::valueOf).collect(Collectors.toCollection(LinkedHashSet::new));
+        rule.teams = words(rs.getString("recipient_teams")).stream().map(Long::valueOf).collect(Collectors.toCollection(LinkedHashSet::new));
         Time start = rs.getTime("quiet_start");
         Time end = rs.getTime("quiet_end");
         rule.quietStart = start == null ? null : start.toLocalTime();
@@ -132,7 +133,7 @@ public final class AlertRule {
         channels.put("webhook", this.webhook);
         out.put("channels", channels);
         out.put("roles", this.roles);
-        out.put("groups", this.groups);
+        out.put("teams", this.teams);
         Map<String, Object> quiet = null;
         if (this.quietStart != null) {
             quiet = new LinkedHashMap<>();

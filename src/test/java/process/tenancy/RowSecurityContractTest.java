@@ -80,6 +80,8 @@ class RowSecurityContractTest extends RowSecurityContract {
             "the engine settings screen (owner #24, platform administrators) records a change to an engine setting, the platform's or one workspace's");
         paths.put("EngineSettingStore: in code #6",
             "the engine settings screen (owner #24, platform administrators) reads the history of engine setting changes, the platform's and every workspace's");
+        paths.put("TeamMigration: in code #1", "groups became teams (F4, T-Q1): every workspace's group ids, to rewrite each to the team it"
+            + " became in its own workspace");
         paths.put("DispatchOutboxPurge: in code #1",
             "the dispatch outbox purge deletes every workspace's hand-offs published or abandoned more than seven days ago; it never"
                 + " touches a pending one, and nothing else");

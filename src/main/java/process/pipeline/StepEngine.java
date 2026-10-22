@@ -1018,7 +1018,7 @@ public class StepEngine {
             }
             String who = PipelineDefinition.Reviewers.ROLE.equals(reviewers.getKind())
                 ? (PipelineDefinition.Reviewers.ADMINS.equals(reviewers.getValue()) ? "the workspace's administrators" : "the role " + reviewers.getValue())
-                : "the group " + reviewers.getValue();
+                : "the team " + reviewers.getValue();
             String waiting = String.format("Waiting for approval: %s", ask.title);
             steps.waiting(row, waiting);
             log.line("INFO", String.format("Waiting for approval by %s (request %d, in their Task inbox) until %s; approved, the run "

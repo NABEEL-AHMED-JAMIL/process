@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,7 +37,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * UX review 2026-10-12 (R2): a run's reviewers read it -- the tenant users its pipeline names for the internal review, by
- * group (access profile) or role -- besides its owner. Nobody else does: another profile (a viewer), another workspace, a
+ * team or role -- besides its owner. Nobody else does: another profile (a viewer), another workspace, a
  * run that needs no internal review, a caller Identity cannot place. And reading is all: deciding stays as it was.
  */
 class RunReadersTest {
@@ -95,7 +96,7 @@ class RunReadersTest {
 
     private void person(long id, long tenant, Long profile) {
         when(this.identity.person(id)).thenReturn(Optional.of(new IdentityPort.Person(id, tenant, "u" + id, "U " + id, "TENANT_USER",
-            "Active", null, null, profile)));
+            "Active", null, null, profile == null ? null : Set.of(profile))));
     }
 
     private static void as(long tenant, String role, long user) {
@@ -113,13 +114,13 @@ class RunReadersTest {
         when(this.definitions.byId(DEFINITION)).thenReturn(Optional.of(stored));
     }
 
-    private void reviewedByGroup(long profile) {
-        this.review("{\"required\":[\"internal\"],\"reviewers\":{\"kind\":\"group\",\"value\":\"" + profile + "\"}}");
+    private void reviewedByTeam(long profile) {
+        this.review("{\"required\":[\"internal\"],\"reviewers\":{\"kind\":\"team\",\"value\":\"" + profile + "\"}}");
     }
 
     @Test
     void theOwnerAndAnAdministratorReadTheRunAsBefore() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         as(TENANT, "TENANT_USER", OWNER);
         assertThat(this.readers.readable(RUN)).isPresent();
         assertThat(this.readers.readsAsReviewerOnly(RUN)).isFalse();
@@ -128,8 +129,8 @@ class RunReadersTest {
     }
 
     @Test
-    void aMemberOfTheReviewingGroupReadsTheRunAsItsReviewer() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+    void aMemberOfTheReviewingTeamReadsTheRunAsItsReviewer() {
+        this.reviewedByTeam(REVIEWER_PROFILE);
         as(TENANT, "TENANT_USER", REVIEWER);
         assertThat(this.readers.readable(RUN)).hasValueSatisfying(read -> assertThat(read.run.getJobQueueId()).isEqualTo(RUN));
         assertThat(this.readers.readsAsReviewerOnly(RUN)).isTrue();
@@ -137,14 +138,14 @@ class RunReadersTest {
 
     @Test
     void aViewerOnAnotherProfileReadsNothing() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         as(TENANT, "TENANT_USER", VIEWER);
         assertThat(this.readers.readable(RUN)).isEmpty();
     }
 
     @Test
     void theSameProfileIdInAnotherWorkspaceReadsNothing() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         this.person(5001L, OTHER_TENANT, REVIEWER_PROFILE);
         as(OTHER_TENANT, "TENANT_USER", 5001L);
         assertThat(this.readers.readable(RUN)).isEmpty();
@@ -156,7 +157,7 @@ class RunReadersTest {
 
     @Test
     void aRunThatNeedsNoInternalReviewHasNoReviewersToReadIt() {
-        this.review("{\"required\":[\"customer\"],\"reviewers\":{\"kind\":\"group\",\"value\":\"" + REVIEWER_PROFILE + "\"}}");
+        this.review("{\"required\":[\"customer\"],\"reviewers\":{\"kind\":\"team\",\"value\":\"" + REVIEWER_PROFILE + "\"}}");
         as(TENANT, "TENANT_USER", REVIEWER);
         assertThat(this.readers.readable(RUN)).isEmpty();
         this.review("{\"required\":[]}");
@@ -181,7 +182,7 @@ class RunReadersTest {
 
     @Test
     void aDeletedJobOrAnApiClientOrNoCallerReadsNothing() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         TenantContext.set(TENANT, "API_CLIENT", null, "client");
         assertThat(this.readers.readable(RUN)).isEmpty();
         TenantContext.clear();
@@ -192,8 +193,8 @@ class RunReadersTest {
     }
 
     @Test
-    void whenIdentityCannotSayTheReviewerIsReadAsNobodyAndTheGroupIsKeptAMinute() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+    void whenIdentityCannotSayTheReviewerIsReadAsNobodyAndTheTeamsAreKeptAMinute() {
+        this.reviewedByTeam(REVIEWER_PROFILE);
         as(TENANT, "TENANT_USER", 6001L);
         when(this.identity.person(6001L)).thenThrow(new IdentityPort.Unavailable("down", null));
         assertThat(this.readers.readable(RUN)).isEmpty();
@@ -202,7 +203,7 @@ class RunReadersTest {
         assertThat(this.readers.readable(RUN)).isPresent();
         assertThat(this.readers.readable(RUN)).isPresent();
         verify(this.identity, times(1)).person(REVIEWER);
-        this.now.addAndGet(RunReaders.GROUP_TTL_MILLIS + 1);
+        this.now.addAndGet(RunReaders.TEAMS_TTL_MILLIS + 1);
         assertThat(this.readers.readable(RUN)).isPresent();
         verify(this.identity, times(2)).person(REVIEWER);
     }
@@ -210,7 +211,7 @@ class RunReadersTest {
     @Test
     @SuppressWarnings("unchecked")
     void theReviewerReadsTheReviewAndFindsTheRunWaitingButCannotDecideHere() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         RunReviewService service = new RunReviewService(this.runs, this.jobs, this.reviews, this.store, mock(SourceJobService.class),
             mock(TransactionServiceImpl.class));
         service.setReaders(this.readers);
@@ -250,9 +251,9 @@ class RunReadersTest {
     }
 
     @Test
-    void aMemberOfTheGroupAnApprovalStepWentToReadsTheRunWhateverItsReview() {
+    void aMemberOfTheTeamAnApprovalStepWentToReadsTheRunWhateverItsReview() {
         this.review("{\"required\":[]}");
-        this.approvalBy("group", String.valueOf(REVIEWER_PROFILE));
+        this.approvalBy("team", String.valueOf(REVIEWER_PROFILE));
         as(TENANT, "TENANT_USER", REVIEWER);
         assertThat(this.readers.readable(RUN)).isPresent();
         assertThat(this.readers.readsAsReviewerOnly(RUN)).isTrue();
@@ -284,7 +285,7 @@ class RunReadersTest {
 
     @Test
     void identityIsNotAskedForAnOwner() {
-        this.reviewedByGroup(REVIEWER_PROFILE);
+        this.reviewedByTeam(REVIEWER_PROFILE);
         as(TENANT, "TENANT_USER", OWNER);
         this.readers.readable(RUN);
         verify(this.identity, times(0)).person(anyLong());

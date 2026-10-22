@@ -38,7 +38,7 @@ import org.springframework.jdbc.core.RowCallbackHandler;
  *
  * <p>The checks, each refused with a sentence (a 400): the kind is one this scope may watch; a name of 1 to 120
  * characters; each kind's own numbers in range; a pipeline that is the workspace's; recipients that are roles of the
- * workspace (TENANT_ADMIN, TENANT_USER) or groups (access profile ids, at most 20); someone to tell when the bell or mail
+ * workspace (TENANT_ADMIN, TENANT_USER) or teams (team ids, at most 20); someone to tell when the bell or mail
  * is on; the webhook only for a workspace's rule; quiet hours both ends or neither, in a real time zone; at most
  * {@value #MAX_RULES} rules a workspace (and as many for the platform).
  */
@@ -46,7 +46,7 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 public class AlertRules {
 
     public static final int MAX_RULES = 50;
-    public static final int MAX_GROUPS = 20;
+    public static final int MAX_TEAMS = 20;
     public static final String DEFAULT_ZONE = "America/Chicago";
     static final Set<String> WORKSPACE_ROLES = new HashSet<>(Arrays.asList("TENANT_ADMIN", "TENANT_USER"));
 
@@ -110,7 +110,7 @@ public class AlertRules {
             KeyHolder keys = new GeneratedKeyHolder();
             this.jdbc.update(connection -> {
                 PreparedStatement insert = connection.prepareStatement("INSERT INTO alert_rule (tenant_id, kind, name, enabled, severity, job_id, "
-                    + "threshold, window_minutes, factor, notify_bell, notify_email, notify_webhook, recipient_roles, recipient_groups, "
+                    + "threshold, window_minutes, factor, notify_bell, notify_email, notify_webhook, recipient_roles, recipient_teams, "
                     + "quiet_start, quiet_end, quiet_zone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     new String[]{"alert_rule_id"});
                 bind(insert, rule, tenantId);
@@ -125,7 +125,7 @@ public class AlertRules {
             this.jdbc.update(connection -> {
                 PreparedStatement update = connection.prepareStatement("UPDATE alert_rule SET tenant_id = ?, kind = ?, name = ?, enabled = ?, "
                     + "severity = ?, job_id = ?, threshold = ?, window_minutes = ?, factor = ?, notify_bell = ?, notify_email = ?, "
-                    + "notify_webhook = ?, recipient_roles = ?, recipient_groups = ?, quiet_start = ?, quiet_end = ?, quiet_zone = ?, "
+                    + "notify_webhook = ?, recipient_roles = ?, recipient_teams = ?, quiet_start = ?, quiet_end = ?, quiet_zone = ?, "
                     + "updated_by = ?, date_updated = now() WHERE alert_rule_id = ?");
                 bind(update, rule, tenantId);
                 setLong(update, 18, by);
@@ -199,7 +199,7 @@ public class AlertRules {
         statement.setBoolean(11, rule.email);
         statement.setBoolean(12, rule.webhook);
         statement.setString(13, String.join(",", rule.roles));
-        statement.setString(14, rule.groups.isEmpty() ? null : rule.groups.stream().map(String::valueOf).collect(Collectors.joining(",")));
+        statement.setString(14, rule.teams.isEmpty() ? null : rule.teams.stream().map(String::valueOf).collect(Collectors.joining(",")));
         statement.setTime(15, rule.quietStart == null ? null : Time.valueOf(rule.quietStart));
         statement.setTime(16, rule.quietEnd == null ? null : Time.valueOf(rule.quietEnd));
         statement.setString(17, rule.quietZone);
@@ -261,8 +261,8 @@ public class AlertRules {
                 throw new Refused(HttpStatus.BAD_REQUEST, "The platform's alerts have no workspace and go to no webhook; use the bell and mail.");
             }
             rule.roles = new LinkedHashSet<>(Arrays.asList("PLATFORM_ADMIN"));
-            if (in.groups != null && !in.groups.isEmpty()) {
-                throw new Refused(HttpStatus.BAD_REQUEST, "A platform rule tells every platform administrator; it takes no groups.");
+            if (in.teams != null && !in.teams.isEmpty()) {
+                throw new Refused(HttpStatus.BAD_REQUEST, "A platform rule tells every platform administrator; it takes no teams.");
             }
         } else {
             Set<String> roles = new LinkedHashSet<>();
@@ -274,17 +274,17 @@ public class AlertRules {
                 roles.add(upper);
             }
             rule.roles = roles;
-            Set<Long> groups = new LinkedHashSet<>(in.groups == null ? Collections.<Long>emptySet() : in.groups);
-            groups.remove(null);
-            if (groups.size() > MAX_GROUPS) {
-                throw new Refused(HttpStatus.BAD_REQUEST, "At most " + MAX_GROUPS + " groups.");
+            Set<Long> teams = new LinkedHashSet<>(in.teams == null ? Collections.<Long>emptySet() : in.teams);
+            teams.remove(null);
+            if (teams.size() > MAX_TEAMS) {
+                throw new Refused(HttpStatus.BAD_REQUEST, "At most " + MAX_TEAMS + " teams.");
             }
-            if (groups.stream().anyMatch(id -> id <= 0)) {
-                throw new Refused(HttpStatus.BAD_REQUEST, "groups are access profile ids.");
+            if (teams.stream().anyMatch(id -> id <= 0)) {
+                throw new Refused(HttpStatus.BAD_REQUEST, "teams are team ids.");
             }
-            rule.groups = groups;
-            if ((rule.bell || rule.email) && roles.isEmpty() && groups.isEmpty()) {
-                throw new Refused(HttpStatus.BAD_REQUEST, "Name who hears of it: a role (tenant administrators, tenant users) or a group.");
+            rule.teams = teams;
+            if ((rule.bell || rule.email) && roles.isEmpty() && teams.isEmpty()) {
+                throw new Refused(HttpStatus.BAD_REQUEST, "Name who hears of it: a role (tenant administrators, tenant users) or a team.");
             }
         }
         if (!rule.bell && !rule.email && !rule.webhook) {
@@ -392,7 +392,7 @@ public class AlertRules {
         return rules.stream().filter(r -> r.tenantId != null).map(r -> r.tenantId).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    /** A rule from the console's body: {id, kind, name, enabled, severity, jobId, threshold, windowMinutes, factor, channels, roles, groups, quietHours}. */
+    /** A rule from the console's body: {id, kind, name, enabled, severity, jobId, threshold, windowMinutes, factor, channels, roles, teams, quietHours}. */
     @SuppressWarnings("unchecked")
     public static AlertRule fromBody(Map<String, Object> body) {
         if (body == null) {
@@ -430,15 +430,15 @@ public class AlertRules {
         } else if (roles == null) {
             rule.roles.add("TENANT_ADMIN");
         }
-        Object groups = body.get("groups");
-        rule.groups = new LinkedHashSet<>();
-        if (groups instanceof Collection) {
-            for (Object group : (Collection<Object>) groups) {
-                Long id = asLong(group);
+        Object teams = body.get("teams");
+        rule.teams = new LinkedHashSet<>();
+        if (teams instanceof Collection) {
+            for (Object team : (Collection<Object>) teams) {
+                Long id = asLong(team);
                 if (id == null) {
-                    throw new Refused(HttpStatus.BAD_REQUEST, "groups are access profile ids.");
+                    throw new Refused(HttpStatus.BAD_REQUEST, "teams are team ids.");
                 }
-                rule.groups.add(id);
+                rule.teams.add(id);
             }
         }
         Object quiet = body.get("quietHours");

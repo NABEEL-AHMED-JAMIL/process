@@ -21,6 +21,7 @@ import process.util.JwtUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -155,7 +156,7 @@ public class LocalIdentity implements IdentityPort {
     static Person toPerson(AppUser user) {
         return new Person(user.getAppUserId(), user.getTenantId(), user.getUsername(), user.getFullName(),
             user.getUserRole() == null ? null : user.getUserRole().name(), user.getStatus() == null ? null : user.getStatus().name(),
-            user.getAvatarBucket(), user.getAvatarKey(), user.getPageAccessProfileId());
+            user.getAvatarBucket(), user.getAvatarKey(), Collections.emptySet());
     }
 
     static Workspace toWorkspace(Tenant tenant) {
