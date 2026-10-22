@@ -58,6 +58,7 @@ public class RenderPdfStepTask extends RegisteredTask implements StreamingStepTa
     static final int MAX_HISTOGRAMS = 10;
 
     static final TaskSpec SPEC = TaskSpec.builder("render_pdf", "Render PDF", TaskKind.OUTPUT)
+        .repeatSafe(true)  // a repeat writes the same thing again (owner 2026-10-21: passing errors are tried again)
         .description("Renders the rows as a PDF report (media-service) and keeps it with the run as an output file. A big table "
             + "prints its first rows and keeps the full data as a CSV beside the PDF.")
         .input(TaskSpec.rows("The rows to put in the report."))

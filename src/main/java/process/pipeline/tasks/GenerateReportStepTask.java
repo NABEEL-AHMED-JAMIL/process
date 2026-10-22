@@ -69,6 +69,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     static final int MAX_PIPELINE_NAME = 160;
 
     static final TaskSpec SPEC = TaskSpec.builder("generate_report", "Generate report", TaskKind.OUTPUT)
+        .repeatSafe(true)  // a repeat writes the same thing again (owner 2026-10-21: passing errors are tried again)
         .description("Makes a Report Studio report from the rows -- with a design made inside this step from its own data, or "
             + "a published template -- and keeps its PDF with the run. The report is a version in Reports, approved and signed "
             + "there like any other.")

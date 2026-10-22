@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
+import process.pipeline.registry.TaskKind;
+import process.pipeline.registry.TaskSpec;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
@@ -730,6 +732,85 @@ class StepEngineTest {
         assertThat(this.waited).containsExactly(Duration.ofSeconds(10), Duration.ofSeconds(10));
         assertThat(this.all.api.calls).hasSize(3);
         assertThat(this.worker.last()).startsWith("Failed: Step 1 <fetch> failed: The API request failed (HTTP 500)");
+    }
+
+    // ---- Owner 2026-10-21: errors that say to try again -----------------------------------------------------------
+
+    /** A task of this kind that fails its first {@code failures} tries with the error given, then succeeds. */
+    private StepTask failing(String code, TaskKind kind, Boolean repeatSafe, int failures, Exception error) {
+        return new StepTask() {
+            @Override public String code() { return code; }
+
+            @Override public String description() { return "fails, then succeeds"; }
+
+            @Override public TaskSpec spec() {
+                TaskSpec.Builder spec = TaskSpec.builder(code, code, kind).description("fails, then succeeds");
+                return (repeatSafe == null ? spec : spec.repeatSafe(repeatSafe)).build();
+            }
+
+            @Override public List<DefinitionProblem> check(Map<String, Object> config) { return Collections.emptyList(); }
+
+            @Override public StepResult run(StepContext context) throws Exception {
+                if (context.tryNumber() <= failures) {
+                    throw error;
+                }
+                return StepResult.nothing(1L);
+            }
+        };
+    }
+
+    private void engineWith(StepTask task) {
+        this.tasks = Definitions.builtInTasks(task);
+        this.engine = new StepEngine(this.definitions, this.steps, this.tasks, new DefinitionValidator(this.tasks), this.datasets,
+            this.worker, this.transactions, TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(),
+            this.tryThreads, this.waited::add);
+    }
+
+    /** The 2026-10-21 restart test: storage away for 7 s failed six report steps that each tried once. */
+    @Test
+    void aStepWhoseAuthorSetNoRetryIsTriedAgainWhenItsErrorSaysTo() {
+        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new java.net.ConnectException("Connection refused")));
+        this.runs(Definitions.of(step("work", "flaky")));
+        assertThat(this.statuses()).containsExactly(entry("work", "Completed"));
+        assertThat(this.steps.row(RUN_ID, 1, "work").tries).isEqualTo(2);
+        assertThat(this.waited).containsExactly(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void anErrorThatKeepsSayingToTryAgainIsTriedThreeMoreTimesThenFails() {
+        engineWith(failing("busy", TaskKind.OUTPUT, true, 9, new java.io.IOException("media-service could not queue the report (HTTP 502, "
+            + "OUTPUT_STORAGE_FAILED): Storage answered 500; try again.")));
+        this.runs(Definitions.of(step("report", "busy")));
+        assertThat(this.statuses()).containsExactly(entry("report", "Failed"));
+        assertThat(this.steps.row(RUN_ID, 1, "report").tries).isEqualTo(4);
+        assertThat(this.waited).containsExactly(Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(45));
+    }
+
+    @Test
+    void aStepWithItsAuthorsOwnRetryKeepsIt() {
+        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new java.net.ConnectException("Connection refused")));
+        PipelineDefinition.Step once = step("work", "flaky");
+        once.setRetry(PipelineDefinition.Retry.of(1, 0));
+        this.runs(Definitions.of(once));
+        assertThat(this.steps.row(RUN_ID, 1, "work").tries).isEqualTo(1);
+        assertThat(this.waited).isEmpty();
+    }
+
+    @Test
+    void anOutputThatIsNotSafeToRepeatIsNeverTriedAgainOnItsOwn() {
+        engineWith(failing("notify", TaskKind.OUTPUT, null, 1, new java.net.ConnectException("Connection refused")));
+        this.runs(Definitions.of(step("send", "notify")));
+        assertThat(this.steps.row(RUN_ID, 1, "send").tries).isEqualTo(1);
+        assertThat(this.waited).isEmpty();
+    }
+
+    @Test
+    void aRefusalIsNotAnErrorThatSaysToTryAgain() {
+        engineWith(failing("strict", TaskKind.PROCESS, null, 1, new java.io.IOException("integration-service refused the call (HTTP 400): "
+            + "bad field")));
+        this.runs(Definitions.of(step("check", "strict")));
+        assertThat(this.steps.row(RUN_ID, 1, "check").tries).isEqualTo(1);
+        assertThat(this.waited).isEmpty();
     }
 
     // ---- Wave 4: the run's result manifest ------------------------------------------------------------------------

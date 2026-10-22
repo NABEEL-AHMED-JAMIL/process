@@ -45,6 +45,7 @@ public final class TaskSpec {
     private final boolean enabledByDefault;
     private final boolean overridable;
     private final String aiToolName;
+    private final boolean repeatSafe;
 
     private TaskSpec(Builder builder) {
         this.code = Objects.requireNonNull(builder.code, "code");
@@ -62,6 +63,7 @@ public final class TaskSpec {
         this.enabledByDefault = builder.enabledByDefault;
         this.overridable = builder.overridable;
         this.aiToolName = builder.aiToolName == null ? builder.code : builder.aiToolName;
+        this.repeatSafe = builder.repeatSafe != null ? builder.repeatSafe : this.kind == TaskKind.READ || this.kind == TaskKind.PROCESS;
         if (!TOOL_NAME.matcher(this.aiToolName).matches()) {
             throw new IllegalStateException("An AI tool name is snake_case: " + this.aiToolName);
         }
@@ -116,6 +118,14 @@ public final class TaskSpec {
 
     public String aiToolName() { return aiToolName; }
 
+    /**
+     * Owner 2026-10-21: a try can be made again without doing anything twice -- a read, a transform, or an output that
+     * replaces what it wrote (the same file, the same report under its idempotency key). Such a step whose author set no
+     * retry is tried again when it fails with an error that says to (StepEngine's passing errors). Reads and transforms
+     * are; an output is only when its task says so.
+     */
+    public boolean repeatSafe() { return repeatSafe; }
+
     /** The entry as GET pipeline.json/steps/tasks answers it, before the workspace's enabled and availability. */
     public Map<String, Object> toEntry() {
         Map<String, Object> entry = new LinkedHashMap<>();
@@ -136,6 +146,7 @@ public final class TaskSpec {
         entry.put("enabledByDefault", this.enabledByDefault);
         entry.put("overridable", this.overridable);
         entry.put("aiToolName", this.aiToolName);
+        entry.put("repeatSafe", this.repeatSafe);
         return entry;
     }
 
@@ -167,6 +178,7 @@ public final class TaskSpec {
         private boolean enabledByDefault = true;
         private boolean overridable = true;
         private String aiToolName;
+        private Boolean repeatSafe;
 
         private Builder(String code, String name, TaskKind kind) {
             this.code = code;
@@ -232,6 +244,12 @@ public final class TaskSpec {
 
         public Builder aiToolName(String name) {
             this.aiToolName = name;
+            return this;
+        }
+
+        /** Whether a try can be made again without doing anything twice; by default a read's or a transform's can. */
+        public Builder repeatSafe(boolean safe) {
+            this.repeatSafe = safe;
             return this;
         }
 

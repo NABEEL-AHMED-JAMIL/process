@@ -1304,8 +1304,14 @@ public class StepEngine {
             int maxTries = task.map(found -> step.effectiveMaxAttempts(found.spec().maxAttempts())).orElse(step.effectiveMaxAttempts());
             int delay = task.map(found -> step.effectiveDelaySeconds(found.spec().delaySeconds())).orElse(step.effectiveDelaySeconds());
             int timeout = step.effectiveTimeoutSeconds(this.settings, task.map(found -> found.spec().timeoutSeconds()).orElse(null));
+            // Owner 2026-10-21: a step whose author set no retry, safe to repeat, is tried again when it fails with an error
+            // that says to (PassingErrors: a service or storage away for a moment), after 5, 15 and 45 seconds.
+            boolean authorSetRetry = step.getRetry() != null && step.getRetry().getMaxAttempts() != null;
+            boolean passingRetries = !authorSetRetry && task.map(found -> found.spec().repeatSafe()).orElse(false);
+            int planned = maxTries;
             Tried tried = new Tried();
             for (int t = 1; t <= maxTries; t++) {
+                tried.passing = false;
                 tried.tries = t;
                 steps.tried(row, t);
                 if (maxTries > 1) {
@@ -1369,6 +1375,7 @@ public class StepEngine {
                         Throwable cause = ex.getCause() instanceof StepFailure ? ex.getCause().getCause() : ex.getCause();
                         tried.error = reasonOf(cause == null ? ex : cause);
                         tried.timedOut = false;
+                        tried.passing = PassingErrors.is(cause == null ? ex : cause);
                     } catch (InterruptedException ex) {
                         future.cancel(true);
                         Thread.currentThread().interrupt();
@@ -1383,10 +1390,20 @@ public class StepEngine {
                 if (streams) {
                     ((StreamTry) context).discard();
                 }
-                log.line(t < maxTries ? "WARN" : "ERROR", String.format("Try %d of %d failed: %s", t, maxTries, tried.error));
-                if (t < maxTries && delay > 0) {
+                int wait = delay;
+                if (t == maxTries && passingRetries && tried.passing && maxTries - planned < PassingErrors.WAITS_SECONDS.length) {
+                    wait = PassingErrors.WAITS_SECONDS[maxTries - planned];
+                    maxTries++;
+                    log.line("WARN", String.format("Try %d failed with an error that says to try again: %s. Trying again in %d s.", t,
+                        tried.error, wait));
+                    this.audit(String.format("Step <%s>: try %d failed with an error that says to try again; trying again in %d s.",
+                        step.getKey(), t, wait));
+                } else {
+                    log.line(t < maxTries ? "WARN" : "ERROR", String.format("Try %d of %d failed: %s", t, maxTries, tried.error));
+                }
+                if (t < maxTries && wait > 0) {
                     try {
-                        sleeper.sleep(Duration.ofSeconds(delay));
+                        sleeper.sleep(Duration.ofSeconds(wait));
                     } catch (InterruptedException ex) {
                         Thread.currentThread().interrupt();
                         tried.error = "the step engine was stopped";
@@ -1652,6 +1669,8 @@ public class StepEngine {
 
     /** One step's tries. */
     private static final class Tried {
+        /** The last try failed with an error that says to try again (PassingErrors). */
+        boolean passing;
         /** ZT-P7: stopped because the run was closed meanwhile. */
         boolean closed;
         int tries;

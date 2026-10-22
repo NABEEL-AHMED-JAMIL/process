@@ -39,6 +39,7 @@ import java.io.BufferedOutputStream;
 public class UploadBucketStepTask extends RegisteredTask implements StreamingStepTask {
 
     static final TaskSpec SPEC = TaskSpec.builder("upload_bucket", "Upload to bucket", TaskKind.OUTPUT)
+        .repeatSafe(true)  // a repeat writes the same thing again (owner 2026-10-21: passing errors are tried again)
         .description("Writes the rows as a CSV, JSON or JSON Lines object in a workspace bucket (storage-service).")
         .input(TaskSpec.rows("The rows to upload."))
         .output(TaskSpec.rows("The input, unchanged."))

@@ -42,6 +42,7 @@ public class SaveFileStepTask extends RegisteredTask implements StreamingStepTas
     static final int MAX_FILES = Limits.MAX_OBJECTS;
 
     static final TaskSpec SPEC = TaskSpec.builder("save_file", "Save File", TaskKind.OUTPUT)
+        .repeatSafe(true)  // a repeat writes the same thing again (owner 2026-10-21: passing errors are tried again)
         .description("Keeps the rows as a CSV, JSON or JSON Lines file with the run -- or each row as a file of its own.")
         .input(TaskSpec.rows("The rows to save."))
         .output(TaskSpec.rows("The input, unchanged."))
