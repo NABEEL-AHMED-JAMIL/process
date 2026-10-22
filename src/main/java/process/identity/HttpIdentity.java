@@ -276,6 +276,20 @@ public class HttpIdentity implements IdentityPort {
     }
 
     @Override
+    public Boolean isActiveTeamOf(long tenantId, long teamId) {
+        try {
+            Map<?, ?> answer = this.http.postForObject(this.base + "/teams/members", this.request(Collections.singletonMap("teamId", teamId)), Map.class);
+            if (answer == null) {
+                return null;
+            }
+            return Objects.equals(longOf(answer.get("tenantId")), tenantId) && "ACTIVE".equals(textOf(answer.get("status")));
+        } catch (RestClientException ex) {
+            logger.warn("Identity could not say whether team {} is workspace {}'s: {}", teamId, tenantId, ex.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public long seats(Long tenantId) {
         if (tenantId == null) {
             return 0;

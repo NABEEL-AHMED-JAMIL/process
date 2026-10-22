@@ -3,6 +3,7 @@ package process.monitoring;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import process.identity.IdentityPort;
 
 import java.time.LocalTime;
 import java.util.Arrays;
@@ -89,6 +90,26 @@ class AlertRulesTest {
             groups.teams.add(g);
         }
         refused(groups, 2960L, "At most 20 teams");
+    }
+
+    /** ZT-M15: a rule tells only this workspace's active teams; when Identity cannot say, saving waits. */
+    @Test
+    void aRuleTellsOnlyTheWorkspacesOwnTeams() {
+        IdentityPort identity = mock(IdentityPort.class);
+        when(identity.isActiveTeamOf(2960L, 8L)).thenReturn(true);
+        when(identity.isActiveTeamOf(2960L, 9L)).thenReturn(false);
+        when(identity.isActiveTeamOf(2960L, 10L)).thenReturn(null);
+        this.rules.useIdentity(identity);
+        AlertRule ours = rule(AlertKind.RUN_FAILED);
+        ours.teams = new LinkedHashSet<>(Collections.singletonList(8L));
+        assertThat(this.rules.checked(ours, 2960L).teams).containsExactly(8L);
+        AlertRule theirs = rule(AlertKind.RUN_FAILED);
+        theirs.teams = new LinkedHashSet<>(Arrays.asList(8L, 9L));
+        refused(theirs, 2960L, "That team is not in this workspace. (team 9)");
+        AlertRule unknown = rule(AlertKind.RUN_FAILED);
+        unknown.teams = new LinkedHashSet<>(Collections.singletonList(10L));
+        assertThatThrownBy(() -> this.rules.checked(unknown, 2960L)).hasMessageContaining("Save again in a moment")
+            .matches(e -> ((AlertRules.Refused) e).getStatus() == HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @Test

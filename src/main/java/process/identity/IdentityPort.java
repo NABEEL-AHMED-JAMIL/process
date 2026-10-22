@@ -117,6 +117,14 @@ public interface IdentityPort {
         return Collections.emptyMap();
     }
 
+    /**
+     * ZT-M15: whether the id is an active team of this workspace -- TRUE, FALSE (another workspace's, archived, unknown), or
+     * null when this identity cannot say. What a definition or an alert rule may name as reviewers or recipients.
+     */
+    default Boolean isActiveTeamOf(long tenantId, long teamId) {
+        return null;
+    }
+
     /** How many people a workspace has who are not deleted: its seats. */
     long seats(Long tenantId);
 

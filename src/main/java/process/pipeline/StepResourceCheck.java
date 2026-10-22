@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.ai.AiPort;
+import process.identity.IdentityPort;
 import process.pipeline.backing.IntegrationNames;
 import process.pipeline.backing.ReportStudio;
 import process.pipeline.backing.ReportTemplates;
@@ -47,6 +48,7 @@ public class StepResourceCheck {
     private IntegrationNames integration;
     private ReportTemplates templates;
     private ReportStudio studio;
+    private IdentityPort identity;
 
     public StepResourceCheck(StepTasks tasks) {
         this.tasks = tasks;
@@ -70,6 +72,52 @@ public class StepResourceCheck {
     @Autowired(required = false)
     public void useStudio(ReportStudio studio) {
         this.studio = studio;
+    }
+
+    @Autowired(required = false)
+    public void useIdentity(IdentityPort identity) {
+        this.identity = identity;
+    }
+
+    /** ZT-M15: the sentence a team of another workspace (or an archived or unknown one) is refused with. */
+    public static final String NOT_HERE = "That team is not in this workspace.";
+
+    /**
+     * ZT-M15: every team the definition names as reviewers -- settings.review.reviewers and an Approval step's reviewers --
+     * is an active team of the pipeline's workspace. Only digits were checked, so a run's review or approval could wait on
+     * another workspace's team for ever. Unanswered (Identity down): not checked, as the other references.
+     */
+    private void reviewerTeams(PipelineDefinition definition, long tenantId, List<DefinitionProblem> problems) {
+        if (this.identity == null) {
+            return;
+        }
+        PipelineDefinition.Settings settings = definition.getSettings();
+        PipelineDefinition.Reviewers review = settings == null || settings.getReview() == null ? null : settings.getReview().getReviewers();
+        if (review != null && PipelineDefinition.Reviewers.TEAM.equals(review.getKind())) {
+            this.team(tenantId, review.getValue(), "settings.review.reviewers.value", problems);
+        }
+        List<PipelineDefinition.Step> steps = definition.getSteps();
+        for (int i = 0; i < steps.size(); i++) {
+            PipelineDefinition.Step step = steps.get(i);
+            Object who = step == null ? null : step.effectiveConfig().get("reviewers");
+            if (who instanceof Map && PipelineDefinition.Reviewers.TEAM.equals(((Map<?, ?>) who).get("kind"))) {
+                Object value = ((Map<?, ?>) who).get("value");
+                this.team(tenantId, value == null ? null : String.valueOf(value), "steps[" + i + "].config.reviewers.value", problems);
+            }
+        }
+    }
+
+    private void team(long tenantId, String value, String at, List<DefinitionProblem> problems) {
+        Long id = StepReferences.idOf(value);
+        if (id == null) {
+            return;   // the validator already said "a team: the team's id"
+        }
+        Boolean ours = this.identity.isActiveTeamOf(tenantId, id);
+        if (Boolean.FALSE.equals(ours)) {
+            problems.add(new DefinitionProblem(at, NOT_HERE + " (team " + id + ")"));
+        } else if (ours == null) {
+            this.logger.info("Team {} a pipeline names was not checked: Identity did not answer", id);
+        }
     }
 
     /**
@@ -159,6 +207,7 @@ public class StepResourceCheck {
             }
         }
         this.studioDesigns(steps, tenantId, problems);
+        this.reviewerTeams(definition, tenantId, problems);
         if (byFormat.isEmpty()) {
             return problems;
         }

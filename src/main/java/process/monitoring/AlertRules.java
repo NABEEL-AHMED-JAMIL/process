@@ -21,11 +21,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.barco.platform.tenancy.RowSecurity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
+import process.identity.IdentityPort;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
@@ -51,9 +53,16 @@ public class AlertRules {
     static final Set<String> WORKSPACE_ROLES = new HashSet<>(Arrays.asList("TENANT_ADMIN", "TENANT_USER"));
 
     private final JdbcTemplate jdbc;
+    /** ZT-M15: whose teams a rule may tell; absent in a test that builds the rules without Identity. */
+    private IdentityPort identity;
 
     public AlertRules(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    @Autowired(required = false)
+    public void useIdentity(IdentityPort identity) {
+        this.identity = identity;
     }
 
     /** A request refused as a whole: its status and sentence. */
@@ -281,6 +290,16 @@ public class AlertRules {
             }
             if (teams.stream().anyMatch(id -> id <= 0)) {
                 throw new Refused(HttpStatus.BAD_REQUEST, "teams are team ids.");
+            }
+            // ZT-M15: only this workspace's active teams; another's would be told nothing (and named nothing here).
+            for (Long team : this.identity == null ? Collections.<Long>emptySet() : teams) {
+                Boolean ours = this.identity.isActiveTeamOf(tenantId, team);
+                if (ours == null) {
+                    throw new Refused(HttpStatus.SERVICE_UNAVAILABLE, "Identity could not say whether team " + team + " is this workspace's. Save again in a moment.");
+                }
+                if (!ours) {
+                    throw new Refused(HttpStatus.BAD_REQUEST, "That team is not in this workspace. (team " + team + ")");
+                }
             }
             rule.teams = teams;
             if ((rule.bell || rule.email) && roles.isEmpty() && teams.isEmpty()) {

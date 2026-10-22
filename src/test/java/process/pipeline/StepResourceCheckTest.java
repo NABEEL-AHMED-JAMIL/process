@@ -2,6 +2,7 @@ package process.pipeline;
 
 import org.junit.jupiter.api.Test;
 import process.ai.AiPort;
+import process.identity.IdentityPort;
 import process.pipeline.backing.IntegrationNames;
 import process.pipeline.backing.ReportTemplates;
 
@@ -103,6 +104,33 @@ class StepResourceCheckTest {
         assertThat(this.problems(Definitions.of(step("labs", "read_api", config("requestId", 1084, "variables", config("loinc", "4548-4"))))))
             .isEmpty();
         assertThat(this.problems(Definitions.of(step("labs", "read_api", config("requestId", 1084, "environmentId", 7))))).isEmpty();
+    }
+
+    /**
+     * ZT-M15: the teams a definition names as reviewers -- its review's and an Approval step's -- are active teams of the
+     * pipeline's workspace; another workspace's (or an archived, or unknown) team is refused by name. Identity silent: not
+     * checked, as the other references.
+     */
+    @Test
+    void reviewerTeamsAreTheWorkspacesOwn() {
+        IdentityPort identity = mock(IdentityPort.class);
+        when(identity.isActiveTeamOf(RIVERSIDE, 8L)).thenReturn(true);
+        when(identity.isActiveTeamOf(RIVERSIDE, 9L)).thenReturn(false);
+        when(identity.isActiveTeamOf(RIVERSIDE, 10L)).thenReturn(null);
+        this.check.useIdentity(identity);
+        PipelineDefinition definition = Definitions.of(
+            step("ours", "approval", config("title", "Approve", "reviewers", config("kind", "team", "value", "8"))),
+            step("theirs", "approval", config("title", "Approve", "reviewers", config("kind", "team", "value", "9"))),
+            step("unknown", "approval", config("title", "Approve", "reviewers", config("kind", "team", "value", "10"))),
+            step("role", "approval", config("title", "Approve", "reviewers", config("kind", "role", "value", "TENANT_USER"))));
+        PipelineDefinition.Settings settings = new PipelineDefinition.Settings();
+        PipelineDefinition.Review review = PipelineDefinition.Review.of(Collections.singletonList("internal"));
+        review.setReviewers(PipelineDefinition.Reviewers.of(PipelineDefinition.Reviewers.TEAM, "9"));
+        settings.setReview(review);
+        definition.setSettings(settings);
+        assertThat(this.problems(definition)).containsExactlyInAnyOrder(
+            "settings.review.reviewers.value: That team is not in this workspace. (team 9)",
+            "steps[1].config.reviewers.value: That team is not in this workspace. (team 9)");
     }
 
     @Test
