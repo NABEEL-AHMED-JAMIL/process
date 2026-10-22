@@ -221,6 +221,8 @@ public final class Streams {
 
         @Override public Dataset dataset(String stepKey) throws Exception { return this.context.dataset(stepKey); }
 
+        @Override public List<RunFile> runFiles(String stepKey) throws Exception { return this.context.runFiles(stepKey); }
+
         @Override
         public void keepFile(String fileName, byte[] content, long rows, List<String> columns) throws Exception {
             this.context.keepFile(fileName, content, rows, columns);

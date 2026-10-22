@@ -423,7 +423,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     jobQueue.setEndTime(BusinessTime.now());
                     boolean engineLost = lost.contains(jobQueue.getJobQueueId());
                     jobQueue.setJobStatusMessage(engineLost
-                        ? String.format("Run %s was in the step engine when Core restarted, and nothing is running it now. Closed as "
+                        ? String.format("Run %s was in the step engine when Core restarted or lost its database, and nothing is running it now. Closed as "
                             + "interrupted: run it again (Run now, or Run with for its parameters).", jobQueue.getJobQueueId())
                         : refused
                         ? String.format("Job %s's worker reported %s at %s, but its callback token had expired, "
@@ -436,7 +436,7 @@ public class ProducerBulkEngine implements DispatchOutcomes {
                     this.transactionService.saveJobQueue(jobQueue);
                     if (engineLost) {
                         this.transactionService.interruptOpenSteps(jobQueue.getJobQueueId(),
-                            "Stopped: Core restarted while this step ran.");
+                            "Stopped: Core restarted, or lost its database, while this step ran.");
                     }
                     // C4: the sweep writes Interrupt, never Failed -- and it is a bad run for the SLI (MIG-196).
                     this.bulkAction.countRunEnd(before, JobStatus.Interrupt, reason);

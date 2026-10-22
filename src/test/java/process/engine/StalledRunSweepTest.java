@@ -172,9 +172,9 @@ class StalledRunSweepTest {
         ArgumentCaptor<JobQueue> saved = ArgumentCaptor.forClass(JobQueue.class);
         verify(this.transactionService).saveJobQueue(saved.capture());
         assertThat(saved.getValue().getJobStatus()).isEqualTo(JobStatus.Interrupt);
-        assertThat(saved.getValue().getJobStatusMessage()).isEqualTo("Run 8905 was in the step engine when Core restarted, and nothing "
+        assertThat(saved.getValue().getJobStatusMessage()).isEqualTo("Run 8905 was in the step engine when Core restarted or lost its database, and nothing "
             + "is running it now. Closed as interrupted: run it again (Run now, or Run with for its parameters).");
-        verify(this.transactionService).interruptOpenSteps(8905L, "Stopped: Core restarted while this step ran.");
+        verify(this.transactionService).interruptOpenSteps(8905L, "Stopped: Core restarted, or lost its database, while this step ran.");
         verify(this.bulkAction).changeJobStatus(JOB_ID, JobStatus.Interrupt);
     }
 

@@ -113,7 +113,11 @@ public class HttpAi implements AiPort {
                 return refused;
             }
             if (response.code() != 200 || answer == null) {
-                return StepResult.failed("The AI service refused the step: " + this.messageOf(answer, response));
+                StepResult refused = StepResult.failed("The AI service refused the step: " + this.messageOf(answer, response));
+                refused.httpStatus = response.code();
+                String retryAfter = response.header("Retry-After");
+                refused.retryAfterSeconds = retryAfter != null && retryAfter.trim().matches("\\d{1,4}") ? Integer.valueOf(retryAfter.trim()) : null;
+                return refused;
             }
             return stepResultOf(answer.has("data") && answer.get("data").isObject() ? answer.get("data") : answer);
         } catch (IOException unreachable) {

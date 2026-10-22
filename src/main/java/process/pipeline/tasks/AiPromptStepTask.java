@@ -78,6 +78,7 @@ public class AiPromptStepTask extends RegisteredTask {
                 .maxItems(50).title("Fields"))
             .property("onError", JsonSchema.string().enumOf("fail", "skip", "null").title("When a row fails").defaultValue("fail")
                 .description("fail the step, skip the row, or keep it with the answer empty."))
+            .property(AtOnce.SETTING, AtOnce.setting("Rows asked"))
             .property("maxCalls", JsonSchema.integer().minimum(1).maximum(Limits.MAX_CALLS).title("At most rows").defaultValue(50)))
         .backing(TaskSpec.AI)
         .timeoutSeconds(3600)
@@ -133,30 +134,41 @@ public class AiPromptStepTask extends RegisteredTask {
         int failed = 0;
         int skipped = 0;
         String model = null;
+        int atOnce = AtOnce.of(config);
+        if (atOnce > 1) {
+            context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
+        }
+        // MIG-418: the rows' calls, Calls at once at a time, answered in row order; a failure stops new calls only under fail.
+        List<AtOnce.Outcome<AiPort.StepResult>> outcomes = AtOnce.run(context.tenantId(), input.size(), atOnce, "fail".equals(onError), i -> {
+            Map<String, Object> row = input.getRows().get(i);
+            Map<String, Object> values = new HashMap<>(runValues);
+            values.putAll(row);
+            Map<String, String> variables = new LinkedHashMap<>();
+            templates.forEach((name, template) -> variables.put(name, Templates.fill(template, values)));
+            List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
+            AiPort.StepResult result = this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(),
+                String.valueOf(i + 1), promptId, variables, images, context.modelProfile(), context.sourceTaskId());
+            if (atOnce > 1 && result.httpStatus != null && (result.httpStatus == 429 || result.httpStatus == 503)) {
+                throw new AtOnce.Busy("Row " + (i + 1) + ": the AI service is busy", result.retryAfterSeconds == null ? 0 : result.retryAfterSeconds);
+            }
+            if (!result.ok()) {
+                throw new IllegalStateException("Row " + (i + 1) + ": " + (result.error == null ? "the AI step failed." : result.error));
+            }
+            return result;
+        });
         for (int i = 0; i < input.size(); i++) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("The AI step was stopped.");
+            AtOnce.Outcome<AiPort.StepResult> outcome = outcomes.get(i);
+            if (!outcome.made) {
+                break;
             }
             Map<String, Object> row = input.getRows().get(i);
             String answer;
-            try {
-                Map<String, Object> values = new HashMap<>(runValues);
-                values.putAll(row);
-                Map<String, String> variables = new LinkedHashMap<>();
-                templates.forEach((name, template) -> variables.put(name, Templates.fill(template, values)));
-                List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
-                AiPort.StepResult result = this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(),
-                    String.valueOf(i + 1), promptId, variables, images, context.modelProfile(), context.sourceTaskId());
-                if (!result.ok()) {
-                    throw new IllegalStateException("Row " + (i + 1) + ": " + (result.error == null ? "the AI step failed." : result.error));
+            if (outcome.error != null) {
+                if (outcome.error instanceof InterruptedException) {
+                    throw outcome.error;
                 }
-                answer = result.output;
-                model = result.model == null ? model : result.model;
-            } catch (InterruptedException stopped) {
-                throw stopped;
-            } catch (Exception rowFailed) {
                 if ("fail".equals(onError)) {
-                    throw rowFailed;
+                    throw outcome.error;
                 }
                 failed++;
                 if ("skip".equals(onError)) {
@@ -164,6 +176,9 @@ public class AiPromptStepTask extends RegisteredTask {
                     continue;
                 }
                 answer = null;
+            } else {
+                answer = outcome.value.output;
+                model = outcome.value.model == null ? model : outcome.value.model;
             }
             Map<String, Object> out = new LinkedHashMap<>(row);
             out.put(outputColumn, answer);

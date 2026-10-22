@@ -9,6 +9,7 @@ import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import process.pipeline.registry.TaskKind;
 import process.model.enums.JobAuditMarker;
 import process.settings.EngineDial;
@@ -44,6 +45,9 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.sql.SQLException;
+import java.sql.SQLNonTransientConnectionException;
+import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -439,6 +443,11 @@ public class StepEngine {
                     execution.stopAfter(approval, why);
                 }
             } catch (Throwable ex) {
+                if (lostItsDatabase(ex)) {
+                    this.leaveToTheSweep(run, ex);
+                    scope.close();
+                    return;
+                }
                 logger.error("The step engine stopped on run {} after its approval: {}", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
                 try {
                     this.report(run, JobStatus.Failed, "The step engine stopped: " + reasonOf(ex));
@@ -446,10 +455,9 @@ public class StepEngine {
                     logger.error("Run {} could not be reported Failed; the stall sweep will close it: {}", run.getJobQueueId(),
                         ExceptionUtil.getRootCauseMessage(unreported));
                 }
-            } finally {
-                this.release(run);
-                scope.close();
             }
+            this.release(run);
+            scope.close();
         }));
     }
 
@@ -470,6 +478,11 @@ public class StepEngine {
             this.lease(run);
             new Execution(plan).go();
         } catch (Throwable ex) {
+            if (claimed && lostItsDatabase(ex)) {
+                this.leaveToTheSweep(run, ex);
+                claimed = false;
+                return;
+            }
             logger.error("The step engine stopped on run {}: {}", run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(ex));
             try {
                 this.report(run, JobStatus.Failed, "The step engine stopped: " + reasonOf(ex));
@@ -483,6 +496,38 @@ public class StepEngine {
             }
             scope.close();
         }
+    }
+
+    /**
+     * ZT-C11: whether the engine stopped because it lost its database -- a connection closed, reset or refused, or the
+     * server in recovery (SQLState class 08, 57P01-57P03), anywhere in the cause chain. Not the run's fault, and nothing
+     * can be recorded meanwhile.
+     */
+    static boolean lostItsDatabase(Throwable failure) {
+        for (Throwable at = failure; at != null; at = at.getCause() == at ? null : at.getCause()) {
+            if (at instanceof CannotGetJdbcConnectionException
+                || at instanceof SQLTransientConnectionException || at instanceof SQLNonTransientConnectionException) {
+                return true;
+            }
+            if (at instanceof SQLException) {
+                String state = ((SQLException) at).getSQLState();
+                if (state != null && (state.startsWith("08") || "57P01".equals(state) || "57P02".equals(state) || "57P03".equals(state))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ZT-C11: a run the engine lost to its database is left as it is, in flight, and its hold is not cleared: the hold lapses
+     * and the lost-run sweep resumes the run once from the step it was on (LostRunResume), as after a Core restart, once
+     * the database is back. Before, such a run was reported Failed the moment the database answered again.
+     */
+    private void leaveToTheSweep(JobQueue run, Throwable failure) {
+        this.leased.remove(run.getJobQueueId());
+        logger.warn("Run {}: its step engine lost the database ({}); the run is left for the lost-run sweep, which resumes it once.",
+            run.getJobQueueId(), ExceptionUtil.getRootCauseMessage(failure));
     }
 
     /** A state change as the run's worker would report it, through the worker callback's own rules. */
@@ -1513,6 +1558,40 @@ public class StepEngine {
         }
 
         /** An earlier step's output, for a step that reads a second one (a join). */
+        /**
+         * MIG-419: the files step {@code stepKey} of this run made, as its latest attempt up to this one recorded them (a
+         * reused step's are its earlier attempt's); a kept file is opened from the run's datasets when read.
+         */
+        private List<StepContext.RunFile> runFiles(String stepKey, int attempt) {
+            List<StepStore.OutputRow> rows = new ArrayList<>();
+            int latest = -1;
+            for (StepStore.OutputRow row : steps.outputsOfRun(this.run.getJobQueueId())) {
+                if (stepKey.equals(row.stepKey) && row.attempt <= attempt) {
+                    if (row.attempt > latest) {
+                        rows.clear();
+                        latest = row.attempt;
+                    }
+                    if (row.attempt == latest) {
+                        rows.add(row);
+                    }
+                }
+            }
+            List<StepContext.RunFile> files = new ArrayList<>();
+            for (StepStore.OutputRow row : rows) {
+                if (RunOutput.FILE.equals(row.kind) && row.runDatasetId != null) {
+                    long id = row.runDatasetId;
+                    files.add(new StepContext.RunFile(row.name, row.format, row.byteCount, null, null, () -> {
+                        StepStore.DatasetFile file = steps.datasetById(id).orElseThrow(() ->
+                            new IllegalStateException(String.format("%s of step <%s> is no longer kept with the run.", row.name, stepKey)));
+                        return datasets.openFile(file.storageKey);
+                    }));
+                } else if (row.bucketAlias != null && row.objectKey != null) {
+                    files.add(new StepContext.RunFile(row.name, row.format, row.byteCount, row.bucketAlias, row.objectKey, null));
+                }
+            }
+            return files;
+        }
+
         private Dataset outputOf(String stepKey) {
             if (!this.outputs.containsKey(stepKey)) {
                 throw new IllegalStateException(String.format("step <%s> has no output to read: it is not an earlier step, or it failed",
@@ -1907,6 +1986,11 @@ public class StepEngine {
         @Override
         public Dataset dataset(String stepKey) {
             return this.execution.outputOf(stepKey);
+        }
+
+        @Override
+        public List<RunFile> runFiles(String stepKey) {
+            return this.execution.runFiles(stepKey, this.attempt());
         }
 
         @Override

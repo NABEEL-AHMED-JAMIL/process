@@ -2,6 +2,7 @@ package process.pipeline.backing;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -26,6 +27,8 @@ public interface ApiRunner {
         public Long environmentId;
         public Integer version;
         public Map<String, String> variables;
+        /** MIG-419: the variables whose values are JSON (Call API's row and rows), written into a JSON body as JSON. */
+        public List<String> jsonVariables;
     }
 
     /** integration-service's RunResult, as much of it as a step reads. */

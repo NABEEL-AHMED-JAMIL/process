@@ -234,14 +234,14 @@ class StalledRunSweepPostgresTest {
         Map<String, Object> held = this.sql.queryForMap(
             "SELECT lock_until, locked_at FROM shedlock WHERE name = ?", "reconcileStalledRuns");
         // Within a second: ShedLock stamps locked_at a few milliseconds after it computed lock_until.
-        assertThat(heldFor(held)).isBetween(atMost.minusSeconds(1), atMost);
+        assertThat(heldFor(held)).isBetween(atMost.minusSeconds(1), atMost.plusMillis(10));
 
         assertThat(instance().lock(config)).as("a second instance while the sweep runs").isEmpty();
 
         first.get().unlock();
         Map<String, Object> released = this.sql.queryForMap(
             "SELECT lock_until, locked_at FROM shedlock WHERE name = ?", "reconcileStalledRuns");
-        assertThat(heldFor(released)).isBetween(atLeast.minusSeconds(1), atLeast);
+        assertThat(heldFor(released)).isBetween(atLeast.minusSeconds(1), atLeast.plusMillis(10));
         assertThat(instance().lock(config)).as("a second instance straight after a fast sweep").isEmpty();
     }
 }

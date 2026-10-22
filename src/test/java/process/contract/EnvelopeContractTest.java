@@ -81,6 +81,13 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.pipeline.backing.MediaFiles$Refused"), "thrown by HttpMediaFiles to transcribe_audio and "
             + "convert_file only, inside a step's try: a busy answer is asked again, any other is the row's failure (onError) or "
             + "the step's error in media's words; no request thread meets it");
+        internal.put(declared("process.pipeline.backing.ReportStudio$Busy"), "MIG-418: thrown by HttpReportStudio inside a "
+            + "Generate report step only (media answered 429/503): asked again under Calls at once, else the step's error in media's "
+            + "words; no request thread meets it");
+        internal.put(declared("process.pipeline.tasks.AtOnce$Busy"), "MIG-418: a per-row step's busy call, caught in AtOnce and "
+            + "asked again (or the row's failure); never leaves a step");
+        internal.put(declared("process.pipeline.tasks.CallApiStepTask$Stop"), "MIG-418: carries a call that ends the step out of "
+            + "AtOnce to CallApiStepTask's own loop, which answers it as the step's error; never leaves the step");
         internal.put(DefinitionException.class, "caught in PipelineDefinitionService: a definition that does not read or "
             + "validate is answered in words, every problem at its path (MIG-230)");
         internal.put(declared("process.pipeline.StepEngine$StepFailure"), "carries a step task's checked exception off its try "

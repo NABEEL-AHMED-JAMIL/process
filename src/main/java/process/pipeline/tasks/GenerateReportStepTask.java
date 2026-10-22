@@ -98,6 +98,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             .property("perRow", JsonSchema.bool().title("One report per row").defaultValue(false)
                 .description("Each row is its own report: its own version in Reports, named from its columns (Call · {{file_name}}), "
                     + "the row as the design's data (a column a.b as a: {b}). Off: one report of all the rows."))
+            .property(AtOnce.SETTING, AtOnce.setting("One report per row: reports made"))
             .property("maxReports", JsonSchema.integer().minimum(1).maximum(MAX_REPORTS).title("At most reports").defaultValue(20)
                 .description("One report per row: an input with more rows fails before any report is made."))
             .property("onValidationError", JsonSchema.string().enumOf("FAIL_TASK", "CONTINUE_WITH_WARNING").title("When the checks refuse it")
@@ -205,6 +206,45 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         boolean checked = false;
         int number = 0;
         int made = 0;
+        int atOnce = AtOnce.of(config);
+        if (atOnce > 1) {
+            // MIG-418: the rows are at most maxReports, so they are held to be sent a few at a time.
+            List<Map<String, Object>> all = new ArrayList<>();
+            List<String> columns;
+            try (RowSource rows = context.openInput()) {
+                columns = new ArrayList<>(rows.columns());
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    all.addAll(batch);
+                }
+            }
+            if (!all.isEmpty()) {
+                this.checkDesign(context, templateId, version, columns);
+            }
+            context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
+            // Each report queued and followed at once with others; kept with the run afterwards, in row order.
+            List<AtOnce.Outcome<JsonNode>> jobs = AtOnce.run(context.tenantId(), all.size(), atOnce, i -> {
+                try {
+                    return this.queued(context, config, templateId, version, runValues, all.get(i), i + 1, json);
+                } catch (ReportStudio.Busy busy) {
+                    throw new AtOnce.Busy(busy.getMessage(), busy.retryAfterSeconds);
+                }
+            });
+            for (int i = 0; i < all.size(); i++) {
+                AtOnce.Outcome<JsonNode> job = jobs.get(i);
+                if (!job.made) {
+                    break;
+                }
+                number++;
+                if (job.error != null) {
+                    throw job.error;
+                }
+                if (this.keep(context, job.value, warnOnly, 1, taken)) {
+                    made++;
+                }
+            }
+            context.log(String.format("%d report(s) made from %d row(s), one a row.", made, number));
+            return StepResult.nothing(inputRows);
+        }
         try (RowSource rows = context.openInput()) {
             List<String> columns = new ArrayList<>(rows.columns());
             for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
@@ -243,6 +283,29 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         }
         context.log(String.format("%d report(s) made from %d row(s), one a row.", made, number));
         return StepResult.nothing(inputRows);
+    }
+
+    /** MIG-418: one row's report written to its own lines file, queued and followed until done (on a worker thread). */
+    private JsonNode queued(StreamContext context, Map<String, Object> config, String templateId, String version,
+        Map<String, Object> runValues, Map<String, Object> row, int number, List<String> json) throws Exception {
+        Map<String, Object> values = new LinkedHashMap<>(runValues);
+        values.putAll(row);
+        values.put("row", number);
+        Map<String, Object> head = this.head(context, config, templateId, version, values, number);
+        head.put("rootPath", "$[0]");
+        Path lines = context.scratch().resolve("report-row-" + number + ".ndjson");
+        try {
+            try (BufferedWriter w = Files.newBufferedWriter(lines, StandardCharsets.UTF_8)) {
+                w.write(JSON.writeValueAsString(Map.of("head", head)));
+                w.write('\n');
+                w.write(JSON.writeValueAsString(nested(structured(row, json))));
+                w.write('\n');
+            }
+            String usageKey = String.format("pipeline#%d#%s#a%d#r%d", context.jobQueueId(), context.stepKey(), context.attempt(), number);
+            return this.follow(context, lines, usageKey);
+        } finally {
+            Files.deleteIfExists(lines);
+        }
     }
 
     /** The head line: the design, its version, the name and period filled from {@code values}, and the run (and row). */
@@ -311,6 +374,11 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
      */
     private boolean make(StreamContext context, Path lines, String usageKey, boolean warnOnly, long rows, Set<String> taken)
         throws Exception {
+        return this.keep(context, this.follow(context, lines, usageKey), warnOnly, rows, taken);
+    }
+
+    /** A report queued from {@code lines} and followed until its job is done: the finished job. */
+    private JsonNode follow(StreamContext context, Path lines, String usageKey) throws Exception {
         Long userId = context.jobOwnerUserId();
         JsonNode job = this.studio.generate(context.tenantId(), userId, pipelineLabel(context), usageKey, lines);
         String jobId = job.path("jobId").asText();
@@ -319,6 +387,11 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             this.sleeper.sleep(POLL);
             job = this.studio.job(context.tenantId(), jobId);
         }
+        return job;
+    }
+
+    /** A finished job's report: its PDF kept with the run (on the step's own thread, in row order). */
+    private boolean keep(StreamContext context, JsonNode job, boolean warnOnly, long rows, Set<String> taken) throws Exception {
         String status = job.path("status").asText();
         if (!"SUCCEEDED".equals(status)) {
             String code = job.path("errorCode").asText("");

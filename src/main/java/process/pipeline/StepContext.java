@@ -1,8 +1,10 @@
 package process.pipeline;
 
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
 /** What a step task is handed for one try: its run, its config, its input, and its log. */
 public interface StepContext {
@@ -149,6 +151,47 @@ public interface StepContext {
      * replaces an earlier one's. Nothing outside a run.
      */
     default void recordOutput(RunOutput output) throws Exception {
+    }
+
+    /**
+     * MIG-419: the files an earlier step of this run made, as its latest attempt recorded them (run_output): an upload with
+     * its bucket and key, or a file kept with the run, opened through {@link RunFile#open()}. Empty when the step made none.
+     */
+    default List<RunFile> runFiles(String stepKey) throws Exception {
+        throw new UnsupportedOperationException("This context reads no other step's files.");
+    }
+
+    /** MIG-419: a file a step of this run made. */
+    final class RunFile {
+        public final String name;
+        public final String format;
+        public final Long bytes;
+        /** An upload: the workspace's connection alias and the key; null for a file kept with the run. */
+        public final String bucket;
+        public final String key;
+        private final Callable<InputStream> opener;
+
+        public RunFile(String name, String format, Long bytes, String bucket, String key,
+                       Callable<InputStream> opener) {
+            this.name = name;
+            this.format = format;
+            this.bytes = bytes;
+            this.bucket = bucket;
+            this.key = key;
+            this.opener = opener;
+        }
+
+        public boolean kept() {
+            return this.bucket == null;
+        }
+
+        /** A kept file's bytes; refused for an upload, which stays in its bucket. */
+        public InputStream open() throws Exception {
+            if (this.opener == null) {
+                throw new IllegalStateException(this.name + " is in " + this.bucket + ", not kept with the run.");
+            }
+            return this.opener.call();
+        }
     }
 
     /** A line in the step's log (step_log), shown on the step in the console's timeline. */

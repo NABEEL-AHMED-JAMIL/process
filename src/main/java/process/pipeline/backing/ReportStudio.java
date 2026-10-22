@@ -15,6 +15,17 @@ import java.util.Optional;
  */
 public interface ReportStudio {
 
+    /** MIG-418: media-service refused because it is busy (429, 503); retryAfterSeconds is its Retry-After, or 0. */
+    final class Busy extends IOException {
+        public final int retryAfterSeconds;
+
+        public Busy(String message, int retryAfterSeconds) {
+            super(message);
+            this.retryAfterSeconds = retryAfterSeconds;
+        }
+    }
+
+
     /** Why the step cannot run here (media's internal render is off); empty when it can. */
     Optional<String> unavailable();
 

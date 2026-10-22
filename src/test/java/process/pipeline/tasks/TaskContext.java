@@ -33,6 +33,8 @@ final class TaskContext implements StepContext {
     int documentReads;
     /** MIG-347: the run's {{param.*}} and {{run.*}} values; empty for a run without parameters. */
     Map<String, Object> runValues = new LinkedHashMap<>();
+    /** MIG-419: earlier steps' files by step key. */
+    final Map<String, List<RunFile>> runFiles = new LinkedHashMap<>();
 
     @Override
     public Map<String, Object> runValues() {
@@ -142,6 +144,11 @@ final class TaskContext implements StepContext {
             throw new IllegalStateException("no output " + stepKey);
         }
         return dataset;
+    }
+
+    @Override
+    public List<RunFile> runFiles(String stepKey) {
+        return this.runFiles.getOrDefault(stepKey, new ArrayList<>());
     }
 
     @Override

@@ -169,6 +169,9 @@ public class HttpIntegrationPipelines implements ApiRunner, ContractChecker, Dat
         body.putPOJO("environmentId", call.environmentId);
         body.putPOJO("version", call.version);
         body.set("variables", this.json.valueToTree(call.variables == null ? new LinkedHashMap<>() : call.variables));
+        if (call.jsonVariables != null && !call.jsonVariables.isEmpty()) {
+            body.set("jsonVariables", this.json.valueToTree(call.jsonVariables));
+        }
         JsonNode data = this.post("/api/run", body);
         ApiRunResult result = new ApiRunResult();
         result.outcome = data.path("outcome").asText(null);

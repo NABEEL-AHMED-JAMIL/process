@@ -2,16 +2,20 @@ package process.pipeline.tasks;
 
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
+import process.pipeline.StepContext.RunFile;
 import process.pipeline.backing.ApiRunner;
 import process.pipeline.data.Values;
 
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,7 +30,7 @@ class CallApiStepTaskTest {
 
     /** Answers each call from its variables: [status, body]. */
     static final class Target implements ApiRunner {
-        final List<ApiCall> calls = new ArrayList<>();
+        final List<ApiCall> calls = Collections.synchronizedList(new ArrayList<>());
         Function<Map<String, String>, Object[]> answer = v -> new Object[] {201, "{\"id\":\"c-1\",\"result\":{\"status\":\"accepted\"}}"};
         String outcome;
 
@@ -149,5 +153,181 @@ class CallApiStepTaskTest {
         assertThat(CallApiStepTask.SPEC.code()).isEqualTo("call_api");
         assertThat(CallApiStepTask.SPEC.requiredRole()).isEqualTo("TENANT_ADMIN");
         assertThat(CallApiStepTask.SPEC.backingService()).isEqualTo("integration-service");
+    }
+
+    // ---- MIG-419: a row as one object, rows in batches, a file from an earlier step ----------------------------------
+
+    private static List<Map<String, Object>> rows(int n) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            out.add(row("patient_id", "P-" + i, "clinic", i % 2 == 0 ? "north" : "south", "visits", i));
+        }
+        return out;
+    }
+
+    @Test
+    void eachRowIsSentAsOneObjectWithChosenColumnsRenamedAndNested() throws Exception {
+        TaskContext context = TaskContext.of(config("requestId", 12, "variables", config("payload", "{{row}}", "key", "{{call_key}}"),
+            "columns", Arrays.asList(config("column", "patient_id", "as", "patient.id"), config("column", "clinic", "as", "patient.clinic"),
+                config("column", "visits"))), rows(2));
+        this.task.run(context);
+        assertThat(this.api.calls).hasSize(2);
+        assertThat(Values.JSON.readTree(this.api.calls.get(1).variables.get("payload")))
+            .isEqualTo(Values.JSON.readTree("{\"patient\":{\"id\":\"P-1\",\"clinic\":\"south\"},\"visits\":1}"));
+        assertThat(this.api.calls.get(0).jsonVariables).containsExactly("payload");
+    }
+
+    @Test
+    void aColumnNamedRowStillFillsRowAsBefore() throws Exception {
+        TaskContext context = TaskContext.of(config("requestId", 12, "variables", config("n", "{{row}}")),
+            Collections.singletonList(row("row", "7", "x", 1)));
+        this.task.run(context);
+        assertThat(this.api.calls.get(0).variables).containsEntry("n", "7");
+        assertThat(this.api.calls.get(0).jsonVariables).isNullOrEmpty();
+    }
+
+    @Test
+    void rowsAreSentInBatchesAsOneArrayEachTheLastOneShorter() throws Exception {
+        this.api.answer = v -> new Object[] {200, "{\"accepted\":true}"};
+        TaskContext context = TaskContext.of(config("requestId", 12, "mode", "batch", "batchSize", 50,
+            "variables", config("body", "{\"items\": {{rows_json}}}", "page", "{{batch}} of {{batches}}", "count", "{{batch_rows}}",
+                "key", "{{call_key}}")), rows(120));
+        Dataset out = this.task.run(context).getOutput();
+        assertThat(this.api.calls).hasSize(3);
+        assertThat(this.api.calls).extracting(c -> c.variables.get("page")).containsExactly("1 of 3", "2 of 3", "3 of 3");
+        assertThat(this.api.calls).extracting(c -> c.variables.get("count")).containsExactly("50", "50", "20");
+        assertThat(Values.JSON.readTree(this.api.calls.get(2).variables.get("body")).path("items").size()).isEqualTo(20);
+        assertThat(Values.JSON.readTree(this.api.calls.get(2).variables.get("body")).path("items").get(0).path("patient_id").asText())
+            .isEqualTo("P-100");
+        assertThat(this.api.calls.get(0).jsonVariables).containsExactly("body");
+        assertThat(out.size()).isEqualTo(120);
+        assertThat(out.getRows()).allMatch(r -> Integer.valueOf(200).equals(r.get("api_status")) && Boolean.TRUE.equals(r.get("api_ok")));
+        // The same call key per batch on every try of the run, one per batch.
+        List<String> keys = new ArrayList<>();
+        this.api.calls.forEach(c -> keys.add(c.variables.get("key")));
+        assertThat(keys).doesNotHaveDuplicates();
+        this.api.calls.clear();
+        this.task.run(TaskContext.of(context.config, rows(120)));
+        assertThat(this.api.calls).extracting(c -> c.variables.get("key")).containsExactlyElementsOf(keys);
+    }
+
+    @Test
+    void aBatchsPerRowResultsAreMappedBackByPosition() throws Exception {
+        this.api.answer = v -> {
+            StringBuilder items = new StringBuilder();
+            int n = Integer.parseInt(v.get("count"));
+            for (int i = 0; i < n; i++) {
+                items.append(i == 0 ? "" : ",").append("{\"ref\":\"r-").append(v.get("page")).append("-").append(i).append("\"}");
+            }
+            return new Object[] {200, "{\"results\":[" + items + "]}"};
+        };
+        Dataset out = this.task.run(TaskContext.of(config("requestId", 12, "mode", "batch", "batchSize", 2, "resultsPath", "results",
+            "variables", config("body", "{{rows_json}}", "page", "{{batch}}", "count", "{{batch_rows}}"),
+            "fields", Collections.singletonList(config("path", "ref", "target", "ref"))), rows(3))).getOutput();
+        assertThat(out.getRows()).extracting(r -> r.get("ref")).containsExactly("r-1-0", "r-1-1", "r-2-0");
+    }
+
+    @Test
+    void moreBatchesThanAtMostCallsAreRefusedBeforeAnyCall() {
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 12, "mode", "batch", "batchSize", 10, "maxCalls", 2,
+            "variables", config("body", "{{rows_json}}")), rows(25))))
+            .hasMessageContaining("25 rows").hasMessageContaining("3 calls of 10 rows").hasMessageContaining("at most 2 calls");
+        assertThat(this.api.calls).isEmpty();
+    }
+
+    @Test
+    void aBatchTooBigToSendSaysItsSizeAndTheCap() {
+        List<Map<String, Object>> big = new ArrayList<>();
+        char[] text = new char[300_000];
+        Arrays.fill(text, 'x');
+        for (int i = 0; i < 40; i++) {
+            big.add(row("id", i, "note", new String(text)));
+        }
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 12, "mode", "batch", "batchSize", 40,
+            "variables", config("body", "{{rows_json}}")), big)))
+            .hasMessageContaining("Call 1 of 1").hasMessageContaining("MB").hasMessageContaining("at most 8 MB")
+            .hasMessageContaining("Rows per call");
+        assertThat(this.api.calls).isEmpty();
+    }
+
+    @Test
+    void aFileAnEarlierStepUploadedIsNamedByItsBucketAndKey() throws Exception {
+        TaskContext context = TaskContext.of(config("requestId", 12, "mode", "once", "file", config("step", "save"),
+            "variables", config("bucket", "{{file_bucket}}", "key", "{{file_key}}", "name", "{{file_name}}")), rows(1));
+        context.runFiles.put("save", Collections.singletonList(new RunFile("out.csv", "csv", 12L,
+            "lakeside-s3", "results/out.csv", null)));
+        this.task.run(context);
+        assertThat(this.api.calls.get(0).variables).containsEntry("bucket", "lakeside-s3").containsEntry("key", "results/out.csv")
+            .containsEntry("name", "out.csv");
+    }
+
+    @Test
+    void aFileKeptWithTheRunIsPutInTheWorkspacesFileDropAndNamedThere() throws Exception {
+        List<String> uploads = new ArrayList<>();
+        CallApiStepTask staged = new CallApiStepTask(this.api);
+        staged.useStorage((tenant, bucket, key, in, size, type) -> uploads.add(tenant + " " + bucket + " " + key + " " + size + " " + type
+            + " " + new String(in.readAllBytes())), tenant -> "lakeside-drop");
+        TaskContext context = TaskContext.of(config("requestId", 12, "mode", "once", "file", config("step", "report", "name", "report.pdf"),
+            "variables", config("bucket", "{{file_bucket}}", "key", "{{file_key}}")), rows(1));
+        context.runFiles.put("report", Arrays.asList(
+            new RunFile("other.pdf", "pdf", 3L, null, null, () -> new ByteArrayInputStream("no".getBytes())),
+            new RunFile("report.pdf", "pdf", 4L, null, null, () -> new ByteArrayInputStream("%PDF".getBytes()))));
+        staged.run(context);
+        assertThat(uploads).containsExactly(TaskContext.TENANT + " lakeside-drop intake/api/call-api/" + TaskContext.RUN + "/step/report.pdf 4 "
+            + "application/pdf %PDF");
+        assertThat(this.api.calls.get(0).variables).containsEntry("bucket", "lakeside-drop")
+            .containsEntry("key", "intake/api/call-api/" + TaskContext.RUN + "/step/report.pdf");
+    }
+
+    @Test
+    void aFileStepThatMadeNoFileSaysSo() {
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 12, "mode", "once", "file", config("step", "report"),
+            "variables", config("key", "{{file_key}}")), rows(1)))).hasMessageContaining("step <report> made no file");
+    }
+
+    // ---- MIG-418: Calls at once -------------------------------------------------------------------------------------
+
+    @Test
+    void callsAtOnceKeepsTheRowsOrderAndBacksOffABusyAnswer() throws Exception {
+        AtOnce.secondMillis = 1;
+        try {
+            AtomicInteger busy = new AtomicInteger();
+            AtomicInteger inFlight = new AtomicInteger();
+            AtomicInteger most = new AtomicInteger();
+            this.api.answer = v -> {
+                most.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
+                try {
+                    Thread.sleep((Integer.parseInt(v.get("patient").substring(2)) * 7) % 11);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                inFlight.decrementAndGet();
+                if ("P-5".equals(v.get("patient")) && busy.incrementAndGet() == 1) {
+                    return new Object[] {429, "{\"error\":\"slow down\"}"};
+                }
+                return new Object[] {201, "{\"id\":\"c-" + v.get("patient") + "\"}"};
+            };
+            List<Map<String, Object>> twenty = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                twenty.add(row("patient_id", "P-" + i));
+            }
+            Dataset out = this.task.run(TaskContext.of(config("requestId", 12, "callsAtOnce", 4, "variables", config("patient", "{{patient_id}}"),
+                "fields", Collections.singletonList(config("path", "id", "target", "referral_id"))), twenty)).getOutput();
+            assertThat(out.getRows()).extracting(r -> r.get("patient_id"))
+                .containsExactlyElementsOf(twenty.stream().map(r -> r.get("patient_id")).collect(Collectors.toList()));
+            assertThat(out.getRows()).allMatch(r -> ("c-" + r.get("patient_id")).equals(r.get("referral_id")) && Integer.valueOf(201).equals(r.get("api_status")));
+            assertThat(this.api.calls).hasSize(21);
+            assertThat(most.get()).isBetween(2, 4);
+        } finally {
+            AtOnce.secondMillis = 1000;
+        }
+    }
+
+    @Test
+    void callsAtOnceOneIsTheStepAsItWas() throws Exception {
+        this.api.answer = v -> new Object[] {429, "{}"};
+        Dataset out = this.task.run(this.context("onError", "continue")).getOutput();
+        assertThat(this.api.calls).as("a busy answer is not asked again at 1: it is the row's outcome").hasSize(2);
+        assertThat(out.getRows()).allMatch(r -> Integer.valueOf(429).equals(r.get("api_status")) && Boolean.FALSE.equals(r.get("api_ok")));
     }
 }

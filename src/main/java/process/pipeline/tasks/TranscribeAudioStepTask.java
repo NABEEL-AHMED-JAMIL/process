@@ -77,6 +77,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
             .property("onError", JsonSchema.string().enumOf("fail", "skip", "null").title("When a file fails").defaultValue("fail")
                 .description("fail the step, skip the row, or keep it with the transcript empty (and transcribe_status and "
                     + "transcribe_error say why)."))
+            .property(AtOnce.SETTING, AtOnce.setting("Files transcribed"))
             .property("maxFiles", JsonSchema.integer().minimum(1).maximum(MAX_FILES).title("At most files").defaultValue(20)
                 .description("An input with more rows fails before any file is read.")))
         .backing(TaskSpec.MEDIA)
@@ -169,14 +170,23 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
         int failed = 0;
         double seconds = 0;
         Path scratch = context.scratch();
+        int atOnce = AtOnce.of(config);
+        if (atOnce > 1) {
+            context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
+        }
+        // MIG-418: the files, Calls at once at a time (the transcriber's own busy answers are waited out per file, as before);
+        // the rows go out in the files' order. A failure stops new files only when the step fails on it.
+        List<AtOnce.Outcome<MediaFiles.Transcript>> outcomes = AtOnce.run(context.tenantId(), targets.size(), atOnce, !tracked,
+            i -> this.transcribe(context, targets.get(i), i + 1, timestamps, maxBytes, scratch));
         for (int i = 0; i < targets.size(); i++) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("Transcribe audio was stopped.");
+            AtOnce.Outcome<MediaFiles.Transcript> outcome = outcomes.get(i);
+            if (!outcome.made) {
+                break;
             }
             FileRows.Target target = targets.get(i);
             Map<String, Object> row = new LinkedHashMap<>(target.row);
-            try {
-                MediaFiles.Transcript t = this.transcribe(context, target, i + 1, timestamps, maxBytes, scratch);
+            if (outcome.error == null) {
+                MediaFiles.Transcript t = outcome.value;
                 row.put(TRANSCRIPT, t.text);
                 row.put(LANGUAGE, t.language);
                 row.put(DURATION, t.durationSeconds);
@@ -189,9 +199,11 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
                 }
                 done++;
                 seconds += t.durationSeconds == null ? 0 : t.durationSeconds;
-            } catch (InterruptedException stopped) {
-                throw stopped;
-            } catch (Exception fileFailed) {
+            } else {
+                Exception fileFailed = outcome.error;
+                if (fileFailed instanceof InterruptedException) {
+                    throw fileFailed;
+                }
                 String why = String.format("%s: %s", target.key.isEmpty() ? "Row " + (i + 1) : target.key, fileFailed.getMessage());
                 if (!tracked) {
                     throw new IllegalStateException(why, fileFailed);

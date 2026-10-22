@@ -1,5 +1,10 @@
 package process.pipeline;
 
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import java.sql.SQLException;
+import java.io.EOFException;
+import org.springframework.transaction.TransactionSystemException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -603,6 +608,31 @@ class StepEngineTest {
         this.datasets.failWrites = new IllegalStateException("disk full");
         this.runs(Definitions.of(sample("read", row("id", 1))));
         assertThat(this.worker.last()).isEqualTo("Failed: The step engine stopped: The output of step <read> could not be kept: disk full");
+    }
+
+    /**
+     * ZT-C11 (2026-10-21): Postgres restarted its backends (crash recovery) while two runs' steps ran, and both ended Failed
+     * ("Unable to rollback against JDBC Connection", "Connection is closed"). A run the engine lost to its database is
+     * not failed: its hold is left to lapse, so the lost-run sweep resumes it once, as after a Core restart.
+     */
+    @Test
+    void aRunWhoseDatabaseWentAwayIsLeftForTheLostRunSweepNotFailed() {
+        this.datasets.failWrites = new TransactionSystemException("Unable to rollback against JDBC Connection",
+            new SQLException("Connection is closed", "08003"));
+        this.runs(Definitions.of(sample("read", row("id", 1))));
+        assertThat(this.worker.statuses()).doesNotContain(JobStatus.Failed);
+        assertThat(this.steps.holds).contains("lease:" + RUN_ID).doesNotContain("end:" + RUN_ID);
+    }
+
+    @Test
+    void aFailureThatIsNotTheDatabaseGoingAwayStillFailsTheRun() {
+        assertThat(StepEngine.lostItsDatabase(new IllegalStateException("disk full"))).isFalse();
+        assertThat(StepEngine.lostItsDatabase(new SQLException("duplicate key", "23505"))).isFalse();
+        assertThat(StepEngine.lostItsDatabase(new RuntimeException(new SQLException("I/O error", "08006",
+            new EOFException())))).isTrue();
+        assertThat(StepEngine.lostItsDatabase(new DataAccessResourceFailureException("PreparedStatementCallback",
+            new SQLException("the database system is in recovery mode", "57P03")))).isTrue();
+        assertThat(StepEngine.lostItsDatabase(new CannotGetJdbcConnectionException("no connection"))).isTrue();
     }
 
     @Test

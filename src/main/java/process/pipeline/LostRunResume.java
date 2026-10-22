@@ -54,7 +54,7 @@ public class LostRunResume implements ProducerBulkEngine.LostRunResumer {
                     return false;
                 }
                 this.jdbc.update("UPDATE step_execution SET status = 'Interrupt', status_message = ?, date_updated = now() WHERE job_queue_id = ? "
-                    + "AND status IN ('Queue', 'Start', 'Running')", "Stopped: Core restarted while this step ran; the run is resumed from it.",
+                    + "AND status IN ('Queue', 'Start', 'Running')", "Stopped: Core restarted, or lost its database, while this step ran; the run is resumed from it.",
                     run.getJobQueueId());
                 RunRetries.Outcome outcome = this.retries.retry(run, job.get(), false, RunRetries.Actor.platform());
                 if (outcome.refusalKind != null) {

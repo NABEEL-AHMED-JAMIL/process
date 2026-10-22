@@ -112,6 +112,11 @@ public class HttpReportStudio implements ReportStudio {
 
     private JsonNode data(Request call, String what) throws IOException {
         try (Response response = this.http.newCall(call).execute()) {
+            if (response.code() == 429 || response.code() == 503) {
+                String after = response.header("Retry-After");
+                throw new ReportStudio.Busy(this.refusal(response, what),
+                    after != null && after.trim().matches("\\d{1,4}") ? Integer.parseInt(after.trim()) : 0);
+            }
             if (response.code() != 200 || response.body() == null) {
                 throw new IOException(this.refusal(response, what));
             }

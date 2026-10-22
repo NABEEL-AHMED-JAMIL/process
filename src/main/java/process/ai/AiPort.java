@@ -35,6 +35,9 @@ public interface AiPort {
      * or "override"), with the prompt version it pinned.
      */
     final class StepResult {
+        /** MIG-418: the AI service's own status when it refused (429, 503: busy) and its Retry-After; null otherwise. */
+        public Integer httpStatus;
+        public Integer retryAfterSeconds;
         public String status;
         public String output;
         public String error;
