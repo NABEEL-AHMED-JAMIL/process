@@ -74,6 +74,9 @@ import java.util.stream.Collectors;
 import java.util.TreeSet;
 import process.pipeline.approval.RunApprovalStore;
 import process.pipeline.approval.RunApprovalEvents;
+import process.pipeline.items.ItemReport;
+import process.pipeline.items.ItemTracker;
+import process.pipeline.items.RunItemStore;
 import java.util.Set;
 
 /**
@@ -220,6 +223,14 @@ public class StepEngine {
     private RunValuesResolver runValues = RunValuesResolver.plain();
     /** MIG-345: the attempts someone asked for (a resume, a restart); without it, every attempt starts at the first step. */
     private RunAttemptStore attempts;
+
+    /** MIG-420: the runs' items (the Run Items view); without it, no item is kept and every per-row call keys by its row number. */
+    private RunItemStore itemStore;
+
+    @Autowired(required = false)
+    public void useItems(RunItemStore itemStore) {
+        this.itemStore = itemStore;
+    }
 
     /** MIG-346: the Approval step's requests and their events; without them an Approval step fails, saying so. */
     private RunApprovalStore approvals;
@@ -594,6 +605,10 @@ public class StepEngine {
         private volatile RunValuesResolver.Outcome values;
         /** The pipeline's name (pipeline.pipeline_name), read once, when a step first asks; empty when it has none. */
         private volatile Optional<String> pipelineName;
+        /** MIG-420: this attempt's items, for an item pipeline; null for every other run. */
+        volatile ItemTracker items;
+        /** MIG-420: the run_dataset id of each dataset this attempt wrote, by its key. */
+        private final Map<String, Long> datasetIds = new ConcurrentHashMap<>();
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -795,6 +810,7 @@ public class StepEngine {
             // ZT-P17: the start marker a worker writes as it picks a run up (JobAuditMarker, WORKER-CONTRACT 4.1): the run
             // report measures execution from it, and without it every step-engine run read -1 (RunStartMarkerMonitor: 100%).
             this.audit(JobAuditMarker.JOB_STARTED.logDetail());
+            this.items = this.openItems();
             Outcome outcome;
             try {
                 outcome = this.steps(rows, resumed);
@@ -805,8 +821,129 @@ public class StepEngine {
             this.finish(outcome);
         }
 
+        /**
+         * MIG-420: this attempt's items, for an item pipeline (ItemTracker.plan): a first attempt or a restart finds them; a
+         * resume carries the ones it reruns (a retry of some items, run_attempt.item_keys, reruns only those).
+         */
+        private ItemTracker openItems() {
+            if (itemStore == null || this.definition == null) {
+                return null;
+            }
+            List<ItemTracker.StepInfo> plan = ItemTracker.plan(this.definition, tasks);
+            if (plan.isEmpty()) {
+                return null;
+            }
+            RunAttemptStore.Attempt asked = this.plan.asked;
+            boolean resume = asked != null && asked.isResume();
+            return ItemTracker.open(this.run.getJobQueueId(), this.attempt, itemStore, this.itemEngine(), plan,
+                resume ? (asked.fromStepIndex == null ? 0 : asked.fromStepIndex) : -1, resume ? asked.previousAttempt : 0,
+                resume ? asked.itemKeys : null);
+        }
+
+        /** MIG-420: the attempt's items as it left them, when it continues after an Approval step. */
+        private ItemTracker continuedItems() {
+            if (itemStore == null || this.definition == null) {
+                return null;
+            }
+            List<ItemTracker.StepInfo> plan = ItemTracker.plan(this.definition, tasks);
+            return plan.isEmpty() ? null : ItemTracker.continued(this.run.getJobQueueId(), this.attempt, itemStore, this.itemEngine(), plan);
+        }
+
+        private ItemTracker.Engine itemEngine() {
+            return new ItemTracker.Engine() {
+                @Override
+                public RowSource open(String datasetKey) throws Exception {
+                    return datasets.open(datasetKey, batchRows());
+                }
+
+                @Override
+                public String storageKeyOf(long runDatasetId) {
+                    return steps.datasetById(runDatasetId).map(file -> file.storageKey).orElse(null);
+                }
+
+                @Override
+                public void audit(String line) {
+                    Execution.this.audit(line);
+                }
+            };
+        }
+
+        /** MIG-420: what a step came to, for its items. */
+        private void itemsAfter(int index, long row, String inputKey, String outputKey, boolean completed, String error,
+                                List<ItemReport> reports, long millis) {
+            ItemTracker tracker = this.items;
+            if (tracker == null) {
+                return;
+            }
+            ItemTracker.Outcome o = new ItemTracker.Outcome();
+            o.index = index;
+            o.stepExecutionId = row;
+            o.inputKey = inputKey;
+            o.outputKey = outputKey;
+            o.outputDatasetId = outputKey == null ? null : this.datasetIds.get(outputKey);
+            o.completed = completed;
+            o.error = error;
+            o.reports = reports == null ? Collections.<ItemReport>emptyList() : new ArrayList<>(reports);
+            o.millis = millis;
+            o.runBucket = this.run.getInputBucket();
+            tracker.afterStep(o);
+        }
+
+        /**
+         * MIG-420: a retry of some items -- the step's input with only their rows, kept as the step's "items-input" dataset (so
+         * the sweep removes it with the run's others); the step reads that instead. The source (null) is read as it is.
+         */
+        private String itemInput(int index, PipelineDefinition.Step step, long row, String inputKey, StepLog log) {
+            if (inputKey == null) {
+                return null;
+            }
+            String target = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "items-input");
+            List<Integer> kept = new ArrayList<>();
+            DatasetStore.Output out = null;
+            int read = 0;
+            try (RowSource rows = datasets.open(inputKey, batchRows())) {
+                out = datasets.create(target);
+                out.declare(rows.columns());
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    for (Map<String, Object> r : batch) {
+                        if (this.items.keepRow(index, inputKey, read, r)) {
+                            out.add(r);
+                            kept.add(read);
+                        }
+                        read++;
+                    }
+                }
+                out.commit();
+            } catch (Exception ex) {
+                if (out != null) {
+                    out.abort();
+                }
+                throw new IllegalStateException(String.format("The retried items' rows could not be read for step <%s>: %s", step.getKey(),
+                    reasonOf(ex)), ex);
+            }
+            String columns;
+            try {
+                columns = JSON.writeValueAsString(out.columns());
+            } catch (JsonProcessingException ex) {
+                columns = "[]";
+            }
+            long id = steps.dataset(row, "items-input", target, kept.size(), columns, this.expiry());
+            this.sizes.put(target, (long) kept.size());
+            this.datasetIds.put(target, id);
+            this.items.filtered(inputKey, target, kept);
+            log.line("INFO", String.format("A retry of some items: this step reads their %,d of the %,d row(s) its input has.",
+                kept.size(), read));
+            return target;
+        }
+
         /** The run's end as its steps came to it: nothing for an interrupted or paused run, else Failed or Completed. */
         private void finish(Outcome outcome) {
+            String itemLine = null;
+            if (this.items != null) {
+                this.items.finish(outcome.failure == null && !outcome.interrupted && !outcome.paused, outcome.interrupted, outcome.paused,
+                    outcome.failure);
+                itemLine = outcome.interrupted || outcome.paused ? null : this.items.summary();
+            }
             if (outcome.interrupted) {
                 logger.info("Run {} was moved on while its steps ran; its remaining steps are Interrupt.", this.run.getJobQueueId());
                 return;
@@ -816,9 +953,10 @@ public class StepEngine {
                 return;
             }
             if (outcome.failure != null) {
-                report(this.run, JobStatus.Failed, outcome.failure);
+                report(this.run, JobStatus.Failed, itemLine == null ? outcome.failure : outcome.failure + " " + itemLine);
             } else {
-                report(this.run, JobStatus.Completed, outcome.summary(this.stepList.size()));
+                String line = outcome.summary(this.stepList.size());
+                report(this.run, JobStatus.Completed, itemLine == null ? line : line + " " + itemLine);
             }
         }
 
@@ -945,10 +1083,18 @@ public class StepEngine {
                     log.line("ERROR", "Not run: " + error + ".");
                     steps.ended(row, JobStatus.Failed.name(), null, errorJson(error, 0, false), "Failed: " + error + ".");
                     this.audit(String.format("%s failed: %s (on error: %s).", label, error, onError.word()));
+                    this.itemsAfter(i, row, null, null, false, error, null, 0);
                     outcome.failed(this.stepFailed(i, step, error), onError, step);
                     continue;
                 }
                 String inputKey = named ? outputs.get(step.getInput()) : latest;
+                if (this.items != null) {
+                    // MIG-420: the step that names the run's items learns which column does; a retry of some items reads theirs alone.
+                    this.items.beforeStep(i, inputKey, source.getColumns());
+                    if (this.items.filters(i)) {
+                        inputKey = this.itemInput(i, step, row, inputKey, log);
+                    }
+                }
                 Input input = new Input(inputKey, source);
                 long recordsIn = this.recordsIn(step, input, outputs, source);
                 steps.started(row, recordsIn);
@@ -988,6 +1134,7 @@ public class StepEngine {
                         : output != null ? this.keep(row, step, output) : inputKey;
                     outputs.put(step.getKey(), passed);
                     latest = passed;
+                    this.itemsAfter(i, row, inputKey, passed, true, null, tried.reports, millis);
                     this.recordReads(row, step, tried.reads);
                     String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, recordsIn,
                         out == null ? "no records" : out.toString(), tried.tries > 1 ? String.format(", on try %d", tried.tries) : "");
@@ -1001,6 +1148,7 @@ public class StepEngine {
                         failedLine + String.format(" (on error: %s).", onError.word()));
                     this.audit(String.format("%s failed after %d %s: %s (on error: %s).", label, tried.tries,
                         tried.tries == 1 ? "try" : "tries", tried.error, onError.word()));
+                    this.itemsAfter(i, row, inputKey, null, false, tried.error, tried.reports, millis);
                     outcome.failed(this.stepFailed(i, step, tried.error), onError, step);
                 }
             }
@@ -1082,6 +1230,7 @@ public class StepEngine {
             if (waited == null) {
                 return;
             }
+            this.items = this.continuedItems();
             String line = sentence(String.format("Approved by %s%s", approval.decider(), approval.comment == null ? "" : ": " + approval.comment));
             if (!steps.settleWaiting(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line)) {
                 logger.info("Run {}: approval request {} was already settled by another hand-off; nothing to do.", this.run.getJobQueueId(),
@@ -1129,6 +1278,11 @@ public class StepEngine {
                 return;
             }
             new StepLog(waited.row).line("ERROR", why);
+            this.items = this.continuedItems();
+            if (this.items != null) {
+                this.itemsAfter(approval.stepIndex, waited.row, null, null, false, why, null, 0);
+                this.items.finish(false, false, false, why);
+            }
             this.stopAll(waited.rows, approval.stepIndex + 1, JobStatus.Skip.name(),
                 String.format("Skipped: step <%s> was not approved.", approval.stepKey));
             this.audit(String.format("Step %d/%d <%s> (approval) failed: %s", approval.stepIndex + 1, this.stepList.size(), approval.stepKey,
@@ -1366,6 +1520,7 @@ public class StepEngine {
                 Context context = streams ? new StreamTry(this, step, row, input, t, log) : new Context(this, step, row, input, t, log);
                 context.sqlFields = task.map(found -> RunParameters.sqlFields(found.spec().configSchema())).orElse(Collections.<String>emptySet());
                 tried.streamed = streams;
+                tried.reports = context.reports;
                 // MIG-345: the bucket objects this try reads, fingerprinted on the way.
                 InputDigests.Recorder recorder = new InputDigests.Recorder();
                 Future<StepResult> future;
@@ -1497,7 +1652,7 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columns = "[]";
             }
-            steps.dataset(row, "output", key, output.size(), columns, this.expiry());
+            this.datasetIds.put(key, steps.dataset(row, "output", key, output.size(), columns, this.expiry()));
             this.sizes.put(key, (long) output.size());
             return key;
         }
@@ -1537,7 +1692,7 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columns = "[]";
             }
-            steps.dataset(row, "output", tried.outputKey, tried.outputRows, columns, this.expiry());
+            this.datasetIds.put(tried.outputKey, steps.dataset(row, "output", tried.outputKey, tried.outputRows, columns, this.expiry()));
             this.sizes.put(tried.outputKey, tried.outputRows);
             return tried.outputKey;
         }
@@ -1763,6 +1918,8 @@ public class StepEngine {
         List<String> outputColumns;
         /** MIG-345: the bucket objects the successful try read, fingerprinted. */
         List<InputDigests.Read> reads;
+        /** MIG-420: what the last try said about its rows' items. */
+        List<ItemReport> reports = Collections.emptyList();
     }
 
     /** MIG-346: a run waiting at an Approval step: its step rows, the waiting one, and what the steps before it passed on. */
@@ -1847,6 +2004,8 @@ public class StepEngine {
         /** MIG-347: the task's SQL settings, whose filled-in text values have their quotes doubled. */
         Set<String> sqlFields = Collections.emptySet();
         private Map<String, Object> filled;
+        /** MIG-420: what this try said about its rows' items (an item run only). */
+        final List<ItemReport> reports = Collections.synchronizedList(new ArrayList<>());
 
         Context(Execution execution, PipelineDefinition.Step step, long row, Execution.Input input, int tryNumber, StepLog log) {
             this.execution = execution;
@@ -2001,6 +2160,35 @@ public class StepEngine {
         @Override
         public void recordOutput(RunOutput output) {
             this.execution.recordOutput(this.row, output, this.kept);
+        }
+
+        /** MIG-420: the file is recorded as ever, and in an item run is the row's item's. */
+        @Override
+        public void recordOutput(RunOutput output, Map<String, Object> forRow) {
+            this.recordOutput(output);
+            if (forRow != null && this.execution.items != null) {
+                this.reports.add(ItemReport.file(forRow, output.getName(), output.getBucket(), output.getKey(), output.getBytes()));
+            }
+        }
+
+        @Override
+        public void itemFailed(Map<String, Object> forRow, String reason) {
+            if (forRow != null && this.execution.items != null) {
+                this.reports.add(ItemReport.failed(forRow, reason));
+            }
+        }
+
+        @Override
+        public void itemTook(Map<String, Object> forRow, long millis) {
+            if (forRow != null && this.execution.items != null) {
+                this.reports.add(ItemReport.took(forRow, millis));
+            }
+        }
+
+        @Override
+        public String rowTag(Map<String, Object> forRow, int index) {
+            ItemTracker tracker = this.execution.items;
+            return tracker == null ? String.valueOf(index + 1) : tracker.tagOf(forRow, index);
         }
 
         @Override

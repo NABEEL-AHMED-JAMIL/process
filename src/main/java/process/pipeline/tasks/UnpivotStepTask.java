@@ -8,6 +8,7 @@ import process.pipeline.StreamingStepTask;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -43,7 +44,7 @@ public class UnpivotStepTask extends RegisteredTask implements StreamingStepTask
                 .description("Also make a row for an empty value; otherwise it is left out.")))
         .backing(TaskSpec.CORE)
         .aiToolName("unpivot_columns")
-        .build();
+        .items(ItemRole.SHARED).build();
 
     public UnpivotStepTask() {
         super(SPEC);

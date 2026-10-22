@@ -10,6 +10,7 @@ import process.pipeline.backing.BucketStore;
 import process.pipeline.data.Limits;
 import process.pipeline.image.RulerMeasure;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -87,7 +88,7 @@ public class MeasureImageStepTask extends RegisteredTask {
             .property("maxRows", JsonSchema.integer().minimum(1).maximum(Limits.MAX_CALLS).title("At most rows").defaultValue(50)))
         .backing(TaskSpec.CORE)
         .aiToolName("measure_images")
-        .build();
+        .items(ItemRole.EACH).build();
 
     private final BucketStore buckets;
 
@@ -153,6 +154,8 @@ public class MeasureImageStepTask extends RegisteredTask {
                 measured += m.lengthCm == null ? 0 : 1;
                 noScale += m.scaleFound ? 0 : 1;
             } catch (Exception unreadable) {
+                // MIG-420: the photo's item could not be measured, and why.
+                context.itemFailed(row, unreadable.getMessage());
                 if ("fail".equals(onError)) {
                     throw new IllegalStateException("Row " + (i + 1) + ": " + unreadable.getMessage(), unreadable);
                 }

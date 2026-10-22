@@ -13,6 +13,7 @@ import process.pipeline.StreamingStepTask;
 import process.pipeline.backing.ReportStudio;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -107,7 +108,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         .backing(TaskSpec.MEDIA)
         .timeoutSeconds(900)
         .aiToolName("generate_report")
-        .build();
+        .items(ItemRole.EACH).itemsWhen("perRow", true).build();
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -184,7 +185,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             }
         }
         this.checkDesign(context, templateId, version, columns);
-        this.make(context, lines, usageKey, warnOnly, inputRows, new HashSet<>());
+        this.make(context, lines, usageKey, warnOnly, inputRows, new HashSet<>(), null);
         return StepResult.nothing(inputRows);
     }
 
@@ -221,12 +222,21 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                 this.checkDesign(context, templateId, version, columns);
             }
             context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
+            // MIG-420: each row's item key, on the step's thread, and the time each report took.
+            String[] tags = new String[all.size()];
+            for (int i = 0; i < tags.length; i++) {
+                tags[i] = context.rowTag(all.get(i), i);
+            }
+            long[] took = new long[all.size()];
             // Each report queued and followed at once with others; kept with the run afterwards, in row order.
             List<AtOnce.Outcome<JsonNode>> jobs = AtOnce.run(context.tenantId(), all.size(), atOnce, i -> {
+                long began = System.nanoTime();
                 try {
-                    return this.queued(context, config, templateId, version, runValues, all.get(i), i + 1, json);
+                    return this.queued(context, config, templateId, version, runValues, all.get(i), i + 1, tags[i], json);
                 } catch (ReportStudio.Busy busy) {
                     throw new AtOnce.Busy(busy.getMessage(), busy.retryAfterSeconds);
+                } finally {
+                    took[i] = (System.nanoTime() - began) / 1_000_000L;
                 }
             });
             for (int i = 0; i < all.size(); i++) {
@@ -235,11 +245,21 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     break;
                 }
                 number++;
+                // MIG-420: the row's item, on the step's thread, in row order.
+                context.itemTook(all.get(i), took[i]);
                 if (job.error != null) {
+                    context.itemFailed(all.get(i), job.error.getMessage());
                     throw job.error;
                 }
-                if (this.keep(context, job.value, warnOnly, 1, taken)) {
-                    made++;
+                try {
+                    if (this.keep(context, job.value, warnOnly, 1, taken, all.get(i))) {
+                        made++;
+                    }
+                } catch (InterruptedException stopped) {
+                    throw stopped;
+                } catch (Exception notKept) {
+                    context.itemFailed(all.get(i), notKept.getMessage());
+                    throw notKept;
                 }
             }
             context.log(String.format("%d report(s) made from %d row(s), one a row.", made, number));
@@ -270,11 +290,21 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                         w.write(JSON.writeValueAsString(nested(structured(row, json))));
                         w.write('\n');
                     }
+                    long began = System.nanoTime();
                     try {
-                        String usageKey = String.format("pipeline#%d#%s#a%d#r%d", context.jobQueueId(), context.stepKey(), context.attempt(), number);
-                        if (this.make(context, lines, usageKey, warnOnly, 1, taken)) {
+                        // MIG-420: in an item run the report is keyed by the row's item (rowTag), the same in every attempt.
+                        String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(),
+                            context.rowTag(row, number - 1));
+                        if (this.make(context, lines, usageKey, warnOnly, 1, taken, row)) {
                             made++;
                         }
+                        context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
+                    } catch (InterruptedException stopped) {
+                        throw stopped;
+                    } catch (Exception reportFailed) {
+                        context.itemFailed(row, reportFailed.getMessage());
+                        context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
+                        throw reportFailed;
                     } finally {
                         Files.deleteIfExists(lines);
                     }
@@ -287,7 +317,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
 
     /** MIG-418: one row's report written to its own lines file, queued and followed until done (on a worker thread). */
     private JsonNode queued(StreamContext context, Map<String, Object> config, String templateId, String version,
-        Map<String, Object> runValues, Map<String, Object> row, int number, List<String> json) throws Exception {
+        Map<String, Object> runValues, Map<String, Object> row, int number, String tag, List<String> json) throws Exception {
         Map<String, Object> values = new LinkedHashMap<>(runValues);
         values.putAll(row);
         values.put("row", number);
@@ -301,7 +331,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                 w.write(JSON.writeValueAsString(nested(structured(row, json))));
                 w.write('\n');
             }
-            String usageKey = String.format("pipeline#%d#%s#a%d#r%d", context.jobQueueId(), context.stepKey(), context.attempt(), number);
+            String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(), tag);
             return this.follow(context, lines, usageKey);
         } finally {
             Files.deleteIfExists(lines);
@@ -372,9 +402,9 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
      * One report from {@code lines}: queued, followed until done, its PDF kept with the run (a name taken already gets
      * -2, -3). False when the checks refused it and the step only warns; an exception otherwise.
      */
-    private boolean make(StreamContext context, Path lines, String usageKey, boolean warnOnly, long rows, Set<String> taken)
-        throws Exception {
-        return this.keep(context, this.follow(context, lines, usageKey), warnOnly, rows, taken);
+    private boolean make(StreamContext context, Path lines, String usageKey, boolean warnOnly, long rows, Set<String> taken,
+        Map<String, Object> forRow) throws Exception {
+        return this.keep(context, this.follow(context, lines, usageKey), warnOnly, rows, taken, forRow);
     }
 
     /** A report queued from {@code lines} and followed until its job is done: the finished job. */
@@ -391,7 +421,8 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     }
 
     /** A finished job's report: its PDF kept with the run (on the step's own thread, in row order). */
-    private boolean keep(StreamContext context, JsonNode job, boolean warnOnly, long rows, Set<String> taken) throws Exception {
+    private boolean keep(StreamContext context, JsonNode job, boolean warnOnly, long rows, Set<String> taken, Map<String, Object> forRow)
+        throws Exception {
         String status = job.path("status").asText();
         if (!"SUCCEEDED".equals(status)) {
             String code = job.path("errorCode").asText("");
@@ -399,6 +430,9 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                 job.path("error").asText("no reason given"));
             if (warnOnly && VALIDATION.contains(code)) {
                 context.warn(why + " The step goes on without a report.");
+                if (forRow != null) {
+                    context.itemFailed(forRow, why);
+                }
                 return false;
             }
             throw new IllegalStateException(why);
@@ -415,8 +449,13 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             String fileName = FileRows.unique(safeName(pdf.path("name").asText("report.pdf")), taken);
             StreamContext.KeptFile kept = context.keepFile(fileName, new ArrayList<>(), rows,
                 out -> this.studio.file(context.tenantId(), reportId, made, "PDF", out));
-            context.recordOutput(RunOutput.file(fileName, "pdf", rows, kept.bytes).withSha256(kept.sha256)
-                .withPages(pdf.path("pages").asInt(0)));
+            RunOutput output = RunOutput.file(fileName, "pdf", rows, kept.bytes).withSha256(kept.sha256).withPages(pdf.path("pages").asInt(0));
+            if (forRow == null) {
+                context.recordOutput(output);
+            } else {
+                // MIG-420: the row's report is its item's.
+                context.recordOutput(output, forRow);
+            }
         }
         JsonNode checks = job.path("checks");
         context.log(String.format("Report %s version %d made from template version %d: %s; checks %d error(s), %d warning(s)%s.",

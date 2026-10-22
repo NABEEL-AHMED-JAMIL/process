@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -94,7 +95,7 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
         .retry(3, 10)
         .timeoutSeconds(900)
         .aiToolName(CODE)
-        .build();
+        .items(ItemRole.SOURCE).itemIdentity("extraction_id").build();
 
     private final DocumentDatasets documents;
     private final DocumentReadMarks marks;

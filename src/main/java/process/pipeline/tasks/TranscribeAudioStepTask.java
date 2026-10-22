@@ -12,6 +12,7 @@ import process.pipeline.data.Limits;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -83,7 +84,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
         .backing(TaskSpec.MEDIA)
         .timeoutSeconds(7200)
         .aiToolName("transcribe_audio")
-        .build();
+        .items(ItemRole.EACH).build();
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -176,8 +177,20 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
         }
         // MIG-418: the files, Calls at once at a time (the transcriber's own busy answers are waited out per file, as before);
         // the rows go out in the files' order. A failure stops new files only when the step fails on it.
-        List<AtOnce.Outcome<MediaFiles.Transcript>> outcomes = AtOnce.run(context.tenantId(), targets.size(), atOnce, !tracked,
-            i -> this.transcribe(context, targets.get(i), i + 1, timestamps, maxBytes, scratch));
+        // MIG-420: each file's item key, on the step's thread, and the time each file took.
+        String[] tags = new String[targets.size()];
+        for (int i = 0; i < tags.length; i++) {
+            tags[i] = context.rowTag(targets.get(i).row, i);
+        }
+        long[] took = new long[targets.size()];
+        List<AtOnce.Outcome<MediaFiles.Transcript>> outcomes = AtOnce.run(context.tenantId(), targets.size(), atOnce, !tracked, i -> {
+            long began = System.nanoTime();
+            try {
+                return this.transcribe(context, targets.get(i), i + 1, tags[i], timestamps, maxBytes, scratch);
+            } finally {
+                took[i] = (System.nanoTime() - began) / 1_000_000L;
+            }
+        });
         for (int i = 0; i < targets.size(); i++) {
             AtOnce.Outcome<MediaFiles.Transcript> outcome = outcomes.get(i);
             if (!outcome.made) {
@@ -185,6 +198,8 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
             }
             FileRows.Target target = targets.get(i);
             Map<String, Object> row = new LinkedHashMap<>(target.row);
+            // MIG-420: the recording's item, on the step's thread, in the files' order.
+            context.itemTook(target.row, took[i]);
             if (outcome.error == null) {
                 MediaFiles.Transcript t = outcome.value;
                 row.put(TRANSCRIPT, t.text);
@@ -205,6 +220,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
                     throw fileFailed;
                 }
                 String why = String.format("%s: %s", target.key.isEmpty() ? "Row " + (i + 1) : target.key, fileFailed.getMessage());
+                context.itemFailed(target.row, fileFailed.getMessage());
                 if (!tracked) {
                     throw new IllegalStateException(why, fileFailed);
                 }
@@ -230,7 +246,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
     }
 
     /** One file: checked, spooled from the bucket, sent, and asked again while the transcriber is busy. */
-    private MediaFiles.Transcript transcribe(StreamContext context, FileRows.Target target, int number, boolean timestamps, long maxBytes,
+    private MediaFiles.Transcript transcribe(StreamContext context, FileRows.Target target, int number, String tag, boolean timestamps, long maxBytes,
         Path scratch) throws Exception {
         if (target.key.isEmpty()) {
             throw new IllegalArgumentException("The row names no file.");
@@ -247,7 +263,8 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
             try (InputStream in = this.buckets.open(context.tenantId(), target.bucket, target.key, maxBytes)) {
                 Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
             }
-            String usageKey = String.format("pipeline#%d#%s#a%d#r%d", context.jobQueueId(), context.stepKey(), context.attempt(), number);
+            // MIG-420: billed once per file per attempt, keyed by the file's item in an item run (its row number otherwise).
+            String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(), tag);
             Duration wait = Duration.ZERO;
             for (int attempt = 1; ; attempt++) {
                 try {

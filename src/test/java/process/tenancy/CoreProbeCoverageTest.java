@@ -8,6 +8,7 @@ import process.api.FormSubmissionRestApi;
 import process.api.DocumentTriggerRestApi;
 import process.api.InboxTriggerRestApi;
 import process.api.PipelineDefinitionRestApi;
+import process.api.RunItemRestApi;
 import process.api.RunReviewRestApi;
 import process.api.RunReviewBulkRestApi;
 import process.api.StepTimelineRestApi;
@@ -130,6 +131,8 @@ class CoreProbeCoverageTest {
         FailedRunsRestApi.class, AlertRestApi.class, HealthRestApi.class,
         // MIG-354: a workspace's data retention (policy, holds, preview, confirmations, Run now, history); the platform's minimums
         RetentionRestApi.class,
+        // MIG-420: a run's items -- list, one item, its data and files, a zip through a signed link, the CSV, counts, Home, retry
+        RunItemRestApi.class,
         // the customer API (MIG-332): an API client's token, its workspace and scopes
         CustomerPipelinesRestApi.class, CustomerEventsRestApi.class, CustomerRunsRestApi.class, CustomerFilesRestApi.class,
         // MIG-345: the retry of a run, an API client's

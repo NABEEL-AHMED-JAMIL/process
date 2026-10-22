@@ -15,7 +15,7 @@ import java.time.Instant;
 public class JdbcRunAttemptStore implements RunAttemptStore {
 
     private static final String COLUMNS = "SELECT job_queue_id, attempt, previous_attempt, mode, from_step_index, from_step_key, "
-        + "reused_steps, pipeline_definition_id, requested_via, requested_by_user_id, requested_by_client_id, requested_at FROM run_attempt ";
+        + "reused_steps, pipeline_definition_id, requested_via, requested_by_user_id, requested_by_client_id, requested_at, item_keys, item_mode FROM run_attempt ";
 
     private static final RowMapper<Attempt> ROW = (rs, n) -> {
         Attempt attempt = new Attempt();
@@ -32,6 +32,9 @@ public class JdbcRunAttemptStore implements RunAttemptStore {
         attempt.requestedByClientId = rs.getString("requested_by_client_id");
         OffsetDateTime at = rs.getObject("requested_at", OffsetDateTime.class);
         attempt.requestedAt = at == null ? null : at.toInstant();
+        // MIG-420: a retry of some items.
+        attempt.itemKeys = itemKeys(rs.getString("item_keys"));
+        attempt.itemMode = rs.getString("item_mode");
         return attempt;
     };
 
@@ -44,11 +47,33 @@ public class JdbcRunAttemptStore implements RunAttemptStore {
     @Override
     public void record(Attempt attempt) {
         this.jdbc.update("INSERT INTO run_attempt (job_queue_id, attempt, previous_attempt, mode, from_step_index, from_step_key, "
-            + "reused_steps, pipeline_definition_id, requested_via, requested_by_user_id, requested_by_client_id, requested_at, created_by) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", attempt.jobQueueId, attempt.attempt, attempt.previousAttempt, attempt.mode,
-            attempt.fromStepIndex, attempt.fromStepKey, attempt.reusedSteps, attempt.pipelineDefinitionId, attempt.requestedVia,
-            attempt.requestedByUserId, attempt.requestedByClientId, Timestamp.from(attempt.requestedAt == null ? Instant.now()
-                : attempt.requestedAt), attempt.requestedByUserId);
+            + "reused_steps, pipeline_definition_id, requested_via, requested_by_user_id, requested_by_client_id, requested_at, created_by, "
+            + "item_keys, item_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)", attempt.jobQueueId, attempt.attempt,
+            attempt.previousAttempt, attempt.mode, attempt.fromStepIndex, attempt.fromStepKey, attempt.reusedSteps, attempt.pipelineDefinitionId,
+            attempt.requestedVia, attempt.requestedByUserId, attempt.requestedByClientId, Timestamp.from(attempt.requestedAt == null
+                ? Instant.now() : attempt.requestedAt), attempt.requestedByUserId, attempt.itemKeys == null ? null : json(attempt.itemKeys),
+            attempt.itemKeys == null ? null : attempt.itemMode);
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    static String json(List<String> keys) {
+        try {
+            return JSON.writeValueAsString(keys);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    static List<String> itemKeys(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+        } catch (com.fasterxml.jackson.core.JsonProcessingException unreadable) {
+            return null;
+        }
     }
 
     @Override

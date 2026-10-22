@@ -10,6 +10,7 @@ import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -59,7 +60,7 @@ public class SaveFileStepTask extends RegisteredTask implements StreamingStepTas
                 .maxItems(Limits.MAX_COLUMNS).title("JSON columns")
                 .description("Columns holding JSON text (an AI answer's lists): a JSON file holds them as lists and objects.")))
         .aiToolName("save_file")
-        .build();
+        .items(ItemRole.EACH).itemsWhen("perRow", true).build();
 
     public SaveFileStepTask() {
         super(SPEC);
@@ -116,7 +117,8 @@ public class SaveFileStepTask extends RegisteredTask implements StreamingStepTas
                 number++;
                 String fileName = FileRows.unique(named(FileRows.fillForRow(template, runValues, row, number)), taken);
                 StreamContext.KeptFile kept = context.keepFile(fileName, columns, 1, out -> FileFormats.writeRow(columns, row, format, json, out));
-                context.recordOutput(RunOutput.file(fileName, format, 1, kept.bytes).withSha256(kept.sha256));
+                // MIG-420: the row's file is its item's.
+                context.recordOutput(RunOutput.file(fileName, format, 1, kept.bytes).withSha256(kept.sha256), row);
                 bytes += kept.bytes;
             }
             if (Thread.currentThread().isInterrupted()) {

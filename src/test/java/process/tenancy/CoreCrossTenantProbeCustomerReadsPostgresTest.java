@@ -131,7 +131,7 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
         when(IDENTITY.embedClient(eq(A), eq("cl_acme"))).thenReturn(new IdentityPort.EmbedClient(true, 200,
             Collections.singletonList("https://portal.acme.example")));
         runs = new CustomerRunsRestApi(customerRuns, new CustomerReviews(customerRuns, reviews, reviewService,
-            new Idempotency(new ApiReceipts(app))), views);
+            new Idempotency(new ApiReceipts(app))), views, null);
         // MIG-345: the retry, with the console's rules.
         StepTasks stepTasks = Definitions.builtInTasks();
         RunRetries runRetries = new RunRetries(new JdbcStepStore(app), new JdbcRunAttemptStore(app), new PipelineDefinitionStore(app),

@@ -53,7 +53,9 @@ public enum PageKey {
     QUEUE("queue", "Queue", "Operations", "/operations/queue",
         "/message.json",
         "/sourceJob.json/findSourceJobAuditLog", "/sourceJob.json/stepExecutions", "/sourceJob.json/stepLogs",
-        "/sourceJob.json/runOutputs", "/sourceJob.json/runDataset", "/sourceJob.json/review", "/aiPrompt.json/runsForJob"),
+        "/sourceJob.json/runOutputs", "/sourceJob.json/runDataset", "/sourceJob.json/review", "/aiPrompt.json/runsForJob",
+        // MIG-420: a run's items are run reads too (RunReaders decides whose); retrying them stays the Source Jobs page's.
+        "/sourceJob.json/runItems"),
     // UX review 2026-10-13 (B3): Run analytics reads run rows through /message.json/fetchLogs only (its failed-runs list).
     // The Runs explorer's facets (/message.json/runFacets) and the run writes under /message.json are the Queue's.
     REPORTS("reports", "Reports", "Operations", "/operations/reports",

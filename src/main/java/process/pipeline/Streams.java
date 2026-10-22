@@ -230,6 +230,14 @@ public final class Streams {
 
         @Override public void recordOutput(RunOutput output) throws Exception { this.context.recordOutput(output); }
 
+        @Override public void recordOutput(RunOutput output, Map<String, Object> row) throws Exception { this.context.recordOutput(output, row); }
+
+        @Override public void itemFailed(Map<String, Object> row, String reason) { this.context.itemFailed(row, reason); }
+
+        @Override public void itemTook(Map<String, Object> row, long millis) { this.context.itemTook(row, millis); }
+
+        @Override public String rowTag(Map<String, Object> row, int index) { return this.context.rowTag(row, index); }
+
         @Override public void log(String message) { this.context.log(message); }
 
         @Override public void warn(String message) { this.context.warn(message); }

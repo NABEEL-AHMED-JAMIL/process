@@ -11,6 +11,7 @@ import process.pipeline.backing.BucketStore;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -83,7 +84,7 @@ public class AiPromptStepTask extends RegisteredTask {
         .backing(TaskSpec.AI)
         .timeoutSeconds(3600)
         .aiToolName("ai_prompt_rows")
-        .build();
+        .items(ItemRole.EACH).build();
 
     private final AiPort ai;
     private final BucketStore buckets;
@@ -138,16 +139,28 @@ public class AiPromptStepTask extends RegisteredTask {
         if (atOnce > 1) {
             context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
         }
+        // MIG-420: each row's item key, worked out here on the step's thread (the calls below may run on others), and the time
+        // each call took.
+        String[] tags = new String[input.size()];
+        for (int i = 0; i < tags.length; i++) {
+            tags[i] = context.rowTag(input.getRows().get(i), i);
+        }
+        long[] took = new long[input.size()];
         // MIG-418: the rows' calls, Calls at once at a time, answered in row order; a failure stops new calls only under fail.
         List<AtOnce.Outcome<AiPort.StepResult>> outcomes = AtOnce.run(context.tenantId(), input.size(), atOnce, "fail".equals(onError), i -> {
+            long began = System.nanoTime();
             Map<String, Object> row = input.getRows().get(i);
             Map<String, Object> values = new HashMap<>(runValues);
             values.putAll(row);
             Map<String, String> variables = new LinkedHashMap<>();
             templates.forEach((name, template) -> variables.put(name, Templates.fill(template, values)));
             List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
+            // MIG-420: in an item run a row's call is keyed by its item and what it asks (itemTag), so a retry of some items never
+            // takes another item's answer, and reuses an item's own only when it asks the same.
             AiPort.StepResult result = this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(),
-                String.valueOf(i + 1), promptId, variables, images, context.modelProfile(), context.sourceTaskId());
+                itemTag(tags[i], variables, image == null ? null : row.get(Configs.text(image, "keyColumn", ""))), promptId, variables, images,
+                context.modelProfile(), context.sourceTaskId());
+            took[i] = (System.nanoTime() - began) / 1_000_000L;
             if (atOnce > 1 && result.httpStatus != null && (result.httpStatus == 429 || result.httpStatus == 503)) {
                 throw new AtOnce.Busy("Row " + (i + 1) + ": the AI service is busy", result.retryAfterSeconds == null ? 0 : result.retryAfterSeconds);
             }
@@ -163,10 +176,13 @@ public class AiPromptStepTask extends RegisteredTask {
             }
             Map<String, Object> row = input.getRows().get(i);
             String answer;
+            // MIG-420: the row's item, on the step's thread, in row order.
+            context.itemTook(row, took[i]);
             if (outcome.error != null) {
                 if (outcome.error instanceof InterruptedException) {
                     throw outcome.error;
                 }
+                context.itemFailed(row, withoutRow(outcome.error.getMessage()));
                 if ("fail".equals(onError)) {
                     throw outcome.error;
                 }
@@ -193,6 +209,35 @@ public class AiPromptStepTask extends RegisteredTask {
             context.warn(String.format("%d row(s) failed: %s.", failed, "skip".equals(onError) ? skipped + " row(s) skipped" : "their answer is empty"));
         }
         return StepResult.of(new Dataset(new ArrayList<>(columns), rows));
+    }
+
+    /** A row's error in the item's own words: without the "Row 3: " the step's message starts with. */
+    static String withoutRow(String message) {
+        return message == null ? "The AI step failed." : message.replaceFirst("^Row \\d+: ", "");
+    }
+
+    /**
+     * MIG-420: an item's call is keyed by its item and what it asks -- the filled variables and the image's key -- so a retry
+     * whose item asks the same reuses its answer (never bought twice), and one whose item now asks something else (a
+     * transcript that was empty) gets a new one, never the stale answer. A row of no item keeps its number, as before.
+     */
+    static String itemTag(String rowTag, Map<String, String> variables, Object imageKey) {
+        if (rowTag == null || !rowTag.startsWith("i")) {
+            return rowTag;
+        }
+        StringBuilder asked = new StringBuilder();
+        new java.util.TreeMap<>(variables).forEach((k, v) -> asked.append(k).append('=').append(v).append('\u0000'));
+        asked.append("image=").append(imageKey);
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(asked.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(rowTag).append('-');
+            for (int b = 0; b < 4; b++) {
+                hex.append(String.format("%02x", digest[b] & 0xff));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     /** The row's image from the bucket, as the model reads it; a row without one is an error for the row. */

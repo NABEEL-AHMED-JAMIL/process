@@ -110,6 +110,8 @@ public class CustomerEventRelay {
         /** MIG-355: kind 'alert' -- the alert, and whether it opened or resolved. */
         Long alertIncidentId;
         String alertEvent;
+        /** MIG-420: kind 'item' -- the item that finished (run.item.completed). */
+        Long runItemId;
     }
 
     /** One event to send: its type, what it is about, and its data in the customer API's shapes. */
@@ -162,7 +164,7 @@ public class CustomerEventRelay {
         List<Pending> pending = RowSecurity.acrossTenants("the customer event relay (MIG-333) reads every workspace's"
             + " unpublished api_event_out rows (ids and kinds, in order); each is built, published and stamped as its own workspace",
             () -> this.jdbc.query("SELECT out_id, tenant_id, kind, job_queue_id, job_id, run_output_id, submission_id, job_status, "
-            + "status_message, run_created_at, started_at, ended_at, attempt, occurred_at, alert_incident_id, alert_event "
+            + "status_message, run_created_at, started_at, ended_at, attempt, occurred_at, alert_incident_id, alert_event, run_item_id "
             + "FROM api_event_out WHERE published_at IS NULL ORDER BY out_id LIMIT " + BATCH, CustomerEventRelay::pending));
         int sent = 0;
         for (Pending row : pending) {
@@ -231,6 +233,9 @@ public class CustomerEventRelay {
             case "alert":
                 this.alert(row, events);
                 break;
+            case "item":
+                this.itemCompleted(row, events);
+                break;
             default:
                 logger.warn("Customer event {} has a kind this Core does not know ({}); nothing is sent.", row.outId, row.kind);
         }
@@ -288,6 +293,38 @@ public class CustomerEventRelay {
             events.add(Event.internal(RunReviewEvents.DECIDED, () -> this.reviewEvents.decided(row.tenantId, row.jobQueueId, status,
                 row.occurredAt)));
         }
+    }
+
+    /** MIG-420: the run's items and their API view; absent in hand-built tests (an item event then sends nothing). */
+    private process.pipeline.items.RunItemStore itemStore;
+    private CustomerItems items;
+
+    @Autowired(required = false)
+    public void setItems(process.pipeline.items.RunItemStore itemStore, CustomerItems items) {
+        this.itemStore = itemStore;
+        this.items = items;
+    }
+
+    /**
+     * MIG-420: run.item.completed -- an item of a run finished (done or failed) in an attempt; data {runId, pipelineId, attempt,
+     * item}, the item as GET /v1/runs/{id}/items/{itemKey} answers it (its files by file id). An item replaced since by a retry
+     * still says what that attempt did; a run deleted since sends nothing.
+     */
+    private void itemCompleted(Pending row, List<Event> events) {
+        if (row.runItemId == null || this.itemStore == null || this.items == null) {
+            return;
+        }
+        Optional<process.pipeline.items.ItemRow> item = this.itemStore.byId(row.runItemId);
+        if (!item.isPresent() || !item.get().finished() || !this.runs.found(row.tenantId, item.get().jobQueueId).isPresent()) {
+            return;
+        }
+        CustomerRuns.Found found = this.runs.found(row.tenantId, item.get().jobQueueId).get();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("runId", String.valueOf(item.get().jobQueueId));
+        data.put("pipelineId", String.valueOf(found.row.jobId));
+        data.put("attempt", item.get().attempt);
+        data.put("item", this.items.eventItem(item.get(), item.get().jobQueueId));
+        events.add(new Event(CustomerEventTypes.RUN_ITEM_COMPLETED, "run:" + item.get().jobQueueId + ":item:" + item.get().itemRef, data));
     }
 
     private void fileMade(Pending row, List<Event> events) {
@@ -468,6 +505,7 @@ public class CustomerEventRelay {
         row.occurredAt = occurred == null ? Instant.now() : occurred;
         row.alertIncidentId = (Long) rs.getObject("alert_incident_id");
         row.alertEvent = rs.getString("alert_event");
+        row.runItemId = (Long) rs.getObject("run_item_id");
         return row;
     }
 

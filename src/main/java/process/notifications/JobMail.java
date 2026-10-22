@@ -47,6 +47,53 @@ public class JobMail {
         this.identity = identity;
     }
 
+    /** MIG-420: the run's items, for an item run's mail; absent in hand-built tests. */
+    private process.pipeline.items.RunItemStore items;
+    private String consoleUrl = "http://localhost:4400";
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void useItems(process.pipeline.items.RunItemStore items) {
+        this.items = items;
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${customer.embed.console-url:http://localhost:4400}")
+    public void setConsoleUrl(String consoleUrl) {
+        this.consoleUrl = consoleUrl == null ? "" : consoleUrl.trim().replaceAll("/+$", "");
+    }
+
+    /**
+     * MIG-420: an item run's mail says how many items were done and which failed, and links to its Items tab (filtered to
+     * Failed when some did): its subject "<pipeline> finished · 48 of 50 items done, 2 failed", items_line the run's own
+     * "Items: ..." sentence, items_link the tab. Nothing for any other run.
+     */
+    void withItems(MailRequested mail, SourceJobQueueDto run, JobStatus status) {
+        if (this.items == null || run.getJobQueueId() == null || status == JobStatus.Skip) {
+            return;
+        }
+        int[] counts = this.items.counts(java.util.Collections.singletonList(run.getJobQueueId())).get(run.getJobQueueId());
+        if (counts == null || counts[0] == 0) {
+            return;
+        }
+        String message = run.getJobStatusMessage();
+        int at = message == null ? -1 : message.indexOf("Items: ");
+        if (at >= 0) {
+            // Item names are data: escaped, as an alert's detail is, before a template prints them.
+            mail.put("items_line", html(message.substring(at)));
+        }
+        mail.put("items_done", counts[1]);
+        mail.put("items_total", counts[0]);
+        mail.put("items_failed", counts[2]);
+        mail.put("items_link", html(String.format("%s/pipelines/schedules/%d/runs/%d?tab=items%s", this.consoleUrl, run.getJobId(),
+            run.getJobQueueId(), counts[2] > 0 ? "&status=failed" : "")));
+        String name = run.getJobName() == null ? "Job " + run.getJobId() : run.getJobName();
+        mail.setSubject(String.format("%s %s · %d of %d items done%s", name, status == JobStatus.Failed ? "failed" : "finished", counts[1],
+            counts[0], counts[2] > 0 ? String.format(", %d failed", counts[2]) : ""));
+    }
+
+    static String html(String text) {
+        return text == null ? null : text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
     /** Sends the Completed, Failed or Skip mail for one run. Returns the mailer's answer. */
     public String send(SourceJobQueueDto run, JobStatus status) {
         try {
@@ -75,6 +122,11 @@ public class JobMail {
                 default:
                     logger.warn("No mail template for a {} run of job {}.", status, run.getJobId());
                     return "No template for this status";
+            }
+            try {
+                this.withItems(mail, run, status);
+            } catch (RuntimeException unread) {
+                logger.warn("Run {}: its items could not be added to its mail: {}", run.getJobQueueId(), unread.getMessage());
             }
             if (run.getJobQueueId() != null) {
                 // One mail per (run, attempt, status): a worker reporting Failed twice for one attempt

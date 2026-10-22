@@ -297,10 +297,127 @@ public class RunRetries {
             plan.restartRefusal = why;
             return plan.refuse(kind, why);
         }
-        return this.resumePlan(plan, run, job, latest, checkInputs);
+        return this.resumePlan(plan, run, job, latest, checkInputs, null);
     }
 
-    private Plan resumePlan(Plan plan, JobQueue run, SourceJob job, Optional<PipelineDefinitionStore.Stored> latest, boolean checkInputs) {
+    /**
+     * MIG-420: what a retry of some of a run's items from step {@code fromIndex} would do -- as a resume's plan, but for a run
+     * that completed with failed items as well as a failed one, from the step the items need (every step before it completed).
+     */
+    public Plan planItems(JobQueue run, SourceJob job, int fromIndex, boolean checkInputs) {
+        Plan plan = new Plan();
+        plan.jobQueueId = run.getJobQueueId();
+        plan.jobId = job.getJobId();
+        plan.attempt = Math.max(1, run.getAttempt());
+        plan.nextAttempt = plan.attempt + 1;
+        String kind = null;
+        String why = null;
+        if (run.getJobStatus() != JobStatus.Failed && run.getJobStatus() != JobStatus.Completed) {
+            kind = NOT_FAILED;
+            why = String.format("Run %d is %s: its items are retried once it has finished.", run.getJobQueueId(), words(run.getJobStatus()));
+        } else if (run.isBackfillRun()) {
+            plan.backfillId = run.getBackfillId();
+            kind = NOT_RESUMABLE;
+            why = String.format("Run %d is part of backfill #%d: retry its failed dates from the backfill (Runs › Backfills).",
+                run.getJobQueueId(), run.getBackfillId());
+        } else if (job.getJobStatus() != Status.Active) {
+            kind = INACTIVE;
+            why = "The pipeline's schedule is not active; switch it on to retry its runs.";
+        } else if (job.getJobRunningStatus() != null && job.getJobRunningStatus().isInFlight()) {
+            kind = IN_FLIGHT;
+            why = "Another run of this pipeline is still in flight; one runs at a time. Retry once it has finished.";
+        } else if (plan.attempt >= MAX_ATTEMPTS) {
+            kind = NOT_RESUMABLE;
+            why = String.format("This run has had %d attempts, the most a run has; start a new run instead.", plan.attempt);
+        } else if (this.engine != null) {
+            Optional<String> paused = this.engine.workspacePause(job.getTenantId());
+            if (paused.isPresent()) {
+                kind = PAUSED;
+                why = "This workspace is " + paused.get() + ", so its runs are paused.";
+            }
+        }
+        Optional<PipelineDefinitionStore.Stored> latest = job.getTenantId() == null || job.getTaskDetail() == null ? Optional.empty()
+            : this.definitions.latestFor(job.getTenantId(), job.getTaskDetail().getPipelineId());
+        plan.latestDefinitionId = latest.map(stored -> stored.id).orElse(null);
+        if (why != null) {
+            plan.restartRefusalKind = kind;
+            plan.restartRefusal = why;
+            return plan.refuse(kind, why);
+        }
+        return this.resumePlan(plan, run, job, latest, checkInputs, fromIndex);
+    }
+
+    /**
+     * MIG-420: retries some of a run's items as the run's next attempt -- a resume from {@code fromIndex} whose steps read only
+     * those items' rows (run_attempt.item_keys), so only they are run, and billed, again; each gets a new version, the earlier
+     * kept. {@code itemMode}: "item" (the item's steps from the one after it was found) or "failed_step".
+     */
+    public Outcome retryItems(JobQueue run, SourceJob job, int fromIndex, List<String> itemKeys, String itemMode, Actor actor) {
+        Plan plan = this.planItems(run, job, fromIndex, true);
+        if (!plan.resumable()) {
+            return new Outcome(plan, RunAttemptStore.RESUME, plan.refusalKind, plan.refusal);
+        }
+        RunAttemptStore.Attempt attempt = new RunAttemptStore.Attempt();
+        attempt.jobQueueId = run.getJobQueueId();
+        attempt.attempt = plan.nextAttempt;
+        attempt.previousAttempt = plan.attempt;
+        attempt.mode = RunAttemptStore.RESUME;
+        attempt.fromStepIndex = plan.fromIndex;
+        attempt.fromStepKey = plan.fromKey;
+        attempt.reusedSteps = plan.reused.size();
+        attempt.pipelineDefinitionId = plan.definitionId;
+        attempt.requestedVia = actor.via;
+        attempt.requestedByUserId = actor.userId;
+        attempt.requestedByClientId = actor.clientId;
+        attempt.requestedAt = Instant.now();
+        attempt.itemKeys = new ArrayList<>(itemKeys);
+        attempt.itemMode = itemMode;
+        String who = RunAttemptStore.VIA_API.equals(actor.via) ? "API client " + actor.clientId : "user " + actor.userId;
+        String line = String.format("Attempt %d queued by %s: retry %d item%s %s step %d <%s>, reusing %d step(s) of attempt %d; only %s run again.",
+            attempt.attempt, who, itemKeys.size(), itemKeys.size() == 1 ? "" : "s", "item".equals(itemMode) ? "whole, from" : "from the failed",
+            plan.fromIndex + 1, plan.fromKey, plan.reused.size(), plan.attempt, itemKeys.size() == 1 ? "it is" : "they are");
+        if (actor.bulkId != null) {
+            line = line + " Bulk retry " + actor.bulkId + ".";
+        }
+        final String said = line;
+        String refused;
+        try {
+            refused = this.transaction.execute(status -> {
+                int moved = this.jdbc.update("UPDATE job_queue SET attempt = ?, job_status = 'Queue', job_send = false, end_time = NULL, "
+                    + "prepared_at = NULL, prepare_lease_until = NULL, dispatch_payload = NULL, end_reason = NULL, next_attempt_at = NULL, "
+                    + "job_status_message = ? WHERE job_queue_id = ? AND job_status = ? AND attempt = ?", attempt.attempt, said,
+                    run.getJobQueueId(), run.getJobStatus().name(), run.getAttempt());
+                if (moved != 1) {
+                    status.setRollbackOnly();
+                    return "The run moved on meanwhile (another retry, or an operator); read it again.";
+                }
+                this.attempts.record(attempt);
+                if (!run.isSideRun()) {
+                    this.bulk.changeJobStatus(job.getJobId(), JobStatus.Queue);
+                }
+                this.bulk.saveJobAuditLogs(run.getJobQueueId(), said);
+                return null;
+            });
+        } catch (RuntimeException failed) {
+            if (OneRunInFlight.isViolation(failed)) {
+                return new Outcome(plan, RunAttemptStore.RESUME, IN_FLIGHT, "Another run of this pipeline is still in flight; one runs at a "
+                    + "time. Retry once it has finished.");
+            }
+            if (isUniqueViolation(failed)) {
+                return new Outcome(plan, RunAttemptStore.RESUME, NOT_FAILED, "The run moved on meanwhile (another retry got there first); read "
+                    + "it again.");
+            }
+            throw failed;
+        }
+        if (refused != null) {
+            return new Outcome(plan, RunAttemptStore.RESUME, NOT_FAILED, refused);
+        }
+        logger.info("Run {} of job {}: {}", run.getJobQueueId(), job.getJobId(), said);
+        return new Outcome(plan, RunAttemptStore.RESUME, null, null);
+    }
+
+    private Plan resumePlan(Plan plan, JobQueue run, SourceJob job, Optional<PipelineDefinitionStore.Stored> latest, boolean checkInputs,
+        Integer forcedFrom) {
         List<StepStore.StepRow> all = this.steps.stepsOfRun(run.getJobQueueId());
         Map<Long, StepStore.StepRow> byId = new HashMap<>();
         all.forEach(row -> byId.put(row.stepExecutionId, row));
@@ -310,10 +427,25 @@ public class RunRetries {
             return plan.refuse(NOT_RESUMABLE, String.format("Attempt %d ran no steps of its own (a pipeline without steps, or one the "
                 + "engine declined), so there is no step to resume from; run it again from the start.", plan.attempt));
         }
-        StepStore.StepRow failed = ofAttempt.stream().filter(row -> !JobStatus.Completed.name().equals(row.status)).findFirst().orElse(null);
-        if (failed == null) {
-            return plan.refuse(NOT_RESUMABLE, String.format("Every step of attempt %d completed; there is no failed step to resume from. "
-                + "Run it again from the start.", plan.attempt));
+        StepStore.StepRow failed;
+        if (forcedFrom != null) {
+            // MIG-420: a retry of some items, from the step they need; every step before it must have completed.
+            failed = ofAttempt.stream().filter(row -> row.stepIndex == forcedFrom).findFirst().orElse(null);
+            if (failed == null) {
+                return plan.refuse(NOT_RESUMABLE, String.format("Attempt %d has no step %d to retry the items from.", plan.attempt, forcedFrom + 1));
+            }
+            for (StepStore.StepRow row : ofAttempt) {
+                if (row.stepIndex < forcedFrom && !JobStatus.Completed.name().equals(row.status)) {
+                    return plan.refuse(NOT_RESUMABLE, String.format("Step %d <%s> did not complete in attempt %d, so the items cannot be "
+                        + "retried from step %d; retry the run instead.", row.stepIndex + 1, row.stepKey, plan.attempt, forcedFrom + 1));
+                }
+            }
+        } else {
+            failed = ofAttempt.stream().filter(row -> !JobStatus.Completed.name().equals(row.status)).findFirst().orElse(null);
+            if (failed == null) {
+                return plan.refuse(NOT_RESUMABLE, String.format("Every step of attempt %d completed; there is no failed step to resume from. "
+                    + "Run it again from the start.", plan.attempt));
+            }
         }
         plan.fromIndex = failed.stepIndex;
         plan.fromKey = failed.stepKey;

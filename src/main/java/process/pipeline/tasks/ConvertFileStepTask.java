@@ -15,6 +15,7 @@ import process.pipeline.data.Limits;
 import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -89,7 +90,7 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
         .backing(TaskSpec.MEDIA)
         .timeoutSeconds(3600)
         .aiToolName("convert_file")
-        .build();
+        .items(ItemRole.EACH).build();
 
     private final MediaFiles media;
     private final BucketStore buckets;
@@ -186,12 +187,13 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
             }
             FileRows.Target target = targets.get(i);
             Map<String, Object> row = new LinkedHashMap<>(target.row);
+            long began = System.nanoTime();
             try {
                 String name = FileRows.fillForRow(keyTemplate, runValues, target.row, i + 1);
                 String where = toRun ? FileRows.unique(FileRows.plainName(FileRows.nameOf(name)), written)
                     : FileRows.unique(FileRows.checkedKey(name), written);
                 Path converted = scratch.resolve("converted-" + (i + 1) + "." + format);
-                MediaFiles.Converted made = this.convert(context, target, i + 1, format, maxBytes, scratch, converted);
+                MediaFiles.Converted made = this.convert(context, target, i + 1, context.rowTag(target.row, i), format, maxBytes, scratch, converted);
                 try {
                     String sha = this.write(context, toRun, outputBucket == null ? target.bucket : outputBucket, where, format, converted);
                     RunOutput output = toRun ? RunOutput.file(where, format, 1, made.bytes)
@@ -200,7 +202,8 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
                     if (made.pages != null) {
                         output = output.withPages(made.pages);
                     }
-                    context.recordOutput(output);
+                    // MIG-420: the converted file is this row's item's.
+                    context.recordOutput(output, target.row);
                 } finally {
                     Files.deleteIfExists(converted);
                 }
@@ -212,10 +215,13 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
                     row.put(ERROR, null);
                 }
                 done++;
+                context.itemTook(target.row, (System.nanoTime() - began) / 1_000_000L);
             } catch (InterruptedException stopped) {
                 throw stopped;
             } catch (Exception fileFailed) {
                 String why = String.format("%s: %s", target.key.isEmpty() ? "Row " + (i + 1) : target.key, fileFailed.getMessage());
+                context.itemFailed(target.row, fileFailed.getMessage());
+                context.itemTook(target.row, (System.nanoTime() - began) / 1_000_000L);
                 if (!tracked) {
                     throw new IllegalStateException(why, fileFailed);
                 }
@@ -237,7 +243,7 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
         return StepResult.streamed(out.size());
     }
 
-    private MediaFiles.Converted convert(StreamContext context, FileRows.Target target, int number, String format, long maxBytes, Path scratch,
+    private MediaFiles.Converted convert(StreamContext context, FileRows.Target target, int number, String tag, String format, long maxBytes, Path scratch,
         Path converted) throws Exception {
         if (target.key.isEmpty()) {
             throw new IllegalArgumentException("The row names no file.");
@@ -253,7 +259,7 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
             try (InputStream in = this.buckets.open(context.tenantId(), target.bucket, target.key, maxBytes)) {
                 Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
             }
-            String usageKey = String.format("pipeline#%d#%s#a%d#r%d", context.jobQueueId(), context.stepKey(), context.attempt(), number);
+            String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(), tag);
             Duration wait = Duration.ZERO;
             for (int attempt = 1; ; attempt++) {
                 try {

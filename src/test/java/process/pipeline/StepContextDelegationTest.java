@@ -91,6 +91,10 @@ class StepContextDelegationTest {
         if (type == RunOutput.class) {
             return RunOutput.file("kept.csv", "csv", 1, 3);
         }
+        if (type == Map.class) {
+            // MIG-420: a row, whose item the run's tracker names.
+            return Collections.singletonMap("key", "row-" + index);
+        }
         throw new AssertionError("Give the delegation test an argument for " + type.getName() + ".");
     }
 

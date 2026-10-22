@@ -11,6 +11,7 @@ import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowSource;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -61,7 +62,7 @@ public class UploadBucketStepTask extends RegisteredTask implements StreamingSte
         .timeoutSeconds(600)
         .requiredRole(TaskSpec.ROLE_ADMIN)
         .aiToolName("upload_to_bucket")
-        .build();
+        .items(ItemRole.EACH).itemsWhen("perRow", true).build();
 
     private final BucketStore buckets;
 
@@ -143,7 +144,8 @@ public class UploadBucketStepTask extends RegisteredTask implements StreamingSte
                     try (InputStream content = Files.newInputStream(spool)) {
                         this.buckets.upload(context.tenantId(), bucket, key, content, size, FileFormats.contentType(format));
                     }
-                    context.recordOutput(RunOutput.bucket(bucket, key, format, 1, size).withSha256(Streams.hex(digest.digest())));
+                    // MIG-420: the row's object is its item's.
+                    context.recordOutput(RunOutput.bucket(bucket, key, format, 1, size).withSha256(Streams.hex(digest.digest())), row);
                     bytes += size;
                 }
                 if (Thread.currentThread().isInterrupted()) {

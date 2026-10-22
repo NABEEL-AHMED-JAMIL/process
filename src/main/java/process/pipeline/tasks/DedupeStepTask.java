@@ -10,6 +10,7 @@ import process.pipeline.data.RowSource;
 import process.pipeline.data.RunMemory;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -53,7 +54,7 @@ public class DedupeStepTask extends RegisteredTask implements StreamingStepTask 
         .backing(TaskSpec.CORE)
         .timeoutSeconds(1800)
         .aiToolName("remove_duplicates")
-        .build();
+        .items(ItemRole.SHARED).build();
 
     public DedupeStepTask() {
         super(SPEC);

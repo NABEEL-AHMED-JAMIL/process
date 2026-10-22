@@ -47,6 +47,7 @@ import process.pipeline.tasks.SplitColumnStepTask;
 import process.pipeline.tasks.UnpivotStepTask;
 import process.pipeline.tasks.TranscribeAudioStepTask;
 import process.pipeline.tasks.ConvertFileStepTask;
+import process.pipeline.tasks.SplitPagesStepTask;
 
 import static org.mockito.Mockito.mock;
 
@@ -78,7 +79,8 @@ public final class AllTasks {
             new SendWebhookStepTask(this.webhooks), new ReadDocumentsStepTask(this.documents, this.documents),
             new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
             new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio),
-            new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets)));
+            new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets),
+            new SplitPagesStepTask(this.buckets)));
     }
 
     public StepTasks tasks() {

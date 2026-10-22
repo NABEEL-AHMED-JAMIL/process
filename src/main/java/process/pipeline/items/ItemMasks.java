@@ -1,0 +1,215 @@
+package process.pipeline.items;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import org.barco.platform.sensitive.SensitiveValues;
+import org.barco.platform.sensitive.SensitiveValues.Kind;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * What an item's data must not show this person (MIG-420): the workspace's data policy masking, as Ask your data applies it
+ * to a pipeline result (ai-service AskMasks). The Data Catalog's sensitive assets the person has no access to
+ * (GET analyticsCatalog.json/masks, their own token): every column one of them tags is masked by name -- in the rows, and
+ * inside a JSON answer's fields of that name -- and every pattern kind they hold is masked wherever it shows. A pipeline whose
+ * settings say its data is sensitive has its rows' columns read too (SensitiveValues.columnKind: a person's name, an email,
+ * a phone number... by the column's name and values), so masking holds from its first run, before any file is scanned.
+ * When the catalog cannot be asked, every pattern kind is masked everywhere (fail closed). A workspace administrator (and a
+ * managed session, which acts as one) has none.
+ */
+public final class ItemMasks {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    static final ItemMasks NONE = new ItemMasks(new LinkedHashMap<>(), EnumSet.noneOf(Kind.class), false, false);
+
+    private final Map<String, Kind> columns;
+    private final Set<Kind> kinds;
+    private final boolean failClosed;
+    /** A sensitive pipeline: each step's rows are read for sensitive columns too. */
+    private final boolean detect;
+
+    ItemMasks(Map<String, Kind> columns, Set<Kind> kinds, boolean failClosed, boolean detect) {
+        this.columns = columns;
+        this.kinds = kinds;
+        this.failClosed = failClosed;
+        this.detect = detect;
+    }
+
+    /** The masks from the catalog's answer (its data array); fail closed when there is none. */
+    static ItemMasks of(JsonNode data, boolean readable, boolean sensitivePipeline) {
+        if (!readable) {
+            return new ItemMasks(new LinkedHashMap<>(), EnumSet.copyOf(SensitiveValues.patternKinds()), true, sensitivePipeline);
+        }
+        Map<String, Kind> columns = new LinkedHashMap<>();
+        Set<Kind> kinds = EnumSet.noneOf(Kind.class);
+        if (data != null) {
+            for (JsonNode rule : data) {
+                rule.path("columns").properties().iterator().forEachRemaining(e -> Kind.ofTag(e.getValue().asText())
+                    .ifPresent(kind -> columns.put(e.getKey().toLowerCase(Locale.ROOT), kind)));
+                for (JsonNode k : rule.path("kinds")) {
+                    Kind.ofTag(k.asText()).ifPresent(kinds::add);
+                }
+            }
+        }
+        return new ItemMasks(columns, kinds, false, sensitivePipeline);
+    }
+
+    /** No masks: a workspace administrator's read (or a managed session's) of a pipeline that is not marked sensitive. */
+    static ItemMasks none() {
+        return NONE;
+    }
+
+    /** For a sensitive pipeline read by someone who is not an administrator: its rows' sensitive columns, read from them. */
+    ItemMasks detecting() {
+        return new ItemMasks(this.columns, this.kinds, this.failClosed, true);
+    }
+
+    public boolean any() {
+        return this.failClosed || this.detect || !this.columns.isEmpty() || !this.kinds.isEmpty();
+    }
+
+    public boolean failedClosed() {
+        return this.failClosed;
+    }
+
+    /**
+     * These rows as the person may see them; the columns masked are added to {@code masked}. A sensitive pipeline's rows are
+     * read first for the columns that hold a person's details.
+     */
+    public List<Map<String, Object>> rows(List<Map<String, Object>> rows, Collection<String> columnNames, Set<String> masked) {
+        if (!this.any() || rows.isEmpty()) {
+            return rows;
+        }
+        Map<String, Kind> byName = new LinkedHashMap<>(this.columns);
+        if (this.detect) {
+            for (String column : columnNames) {
+                List<String> sample = new ArrayList<>();
+                for (Map<String, Object> row : rows) {
+                    Object v = row.get(column);
+                    if (v != null && !(v instanceof Boolean) && !(v instanceof Number && column.toLowerCase(Locale.ROOT).endsWith("_count"))) {
+                        sample.add(String.valueOf(v));
+                    }
+                }
+                SensitiveValues.columnKind(column, sample).ifPresent(kind -> byName.putIfAbsent(column.toLowerCase(Locale.ROOT), kind));
+            }
+        }
+        List<Map<String, Object>> out = new ArrayList<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> shown = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> cell : row.entrySet()) {
+                shown.put(cell.getKey(), this.value(byName, cell.getKey(), cell.getValue(), masked));
+            }
+            out.add(shown);
+        }
+        return out;
+    }
+
+    /** One value of a column, masked by its name, its pattern kinds, or (a JSON text) inside it. */
+    Object value(Map<String, Kind> byName, String column, Object value, Set<String> masked) {
+        if (value == null || value instanceof Boolean) {
+            return value;
+        }
+        Kind kind = column == null ? null : byName.get(column.toLowerCase(Locale.ROOT));
+        String text = String.valueOf(value);
+        if (kind != null) {
+            masked.add(column);
+            return SensitiveValues.mask(text, kind);
+        }
+        if (value instanceof Number && !this.failClosed) {
+            return value;
+        }
+        String trimmed = text.trim();
+        if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+            try {
+                JsonNode node = JSON.readTree(trimmed);
+                boolean[] changed = {false};
+                JsonNode shown = this.node(byName, node, changed);
+                if (changed[0]) {
+                    masked.add(column);
+                    return JSON.writeValueAsString(shown);
+                }
+                return value;
+            } catch (Exception notJson) {
+                // plain text
+            }
+        }
+        Set<Kind> all = EnumSet.noneOf(Kind.class);
+        all.addAll(this.kinds);
+        if (this.failClosed) {
+            all.addAll(SensitiveValues.patternKinds());
+        }
+        if (all.isEmpty()) {
+            return value;
+        }
+        String out = SensitiveValues.maskText(text, all);
+        if (!out.equals(text)) {
+            masked.add(column);
+            return out;
+        }
+        return value;
+    }
+
+    private JsonNode node(Map<String, Kind> byName, JsonNode node, boolean[] changed) {
+        if (node.isObject()) {
+            ObjectNode copy = JSON.createObjectNode();
+            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                Kind kind = byName.get(field.getKey().toLowerCase(Locale.ROOT));
+                if (kind != null && field.getValue().isValueNode() && !field.getValue().isNull()) {
+                    copy.set(field.getKey(), TextNode.valueOf(SensitiveValues.mask(field.getValue().asText(), kind)));
+                    changed[0] = true;
+                } else {
+                    copy.set(field.getKey(), this.node(byName, field.getValue(), changed));
+                }
+            }
+            return copy;
+        }
+        if (node.isArray()) {
+            ArrayNode copy = JSON.createArrayNode();
+            for (JsonNode element : node) {
+                copy.add(this.node(byName, element, changed));
+            }
+            return copy;
+        }
+        if (node.isTextual()) {
+            Set<Kind> all = EnumSet.noneOf(Kind.class);
+            all.addAll(this.kinds);
+            if (this.failClosed) {
+                all.addAll(SensitiveValues.patternKinds());
+            }
+            if (!all.isEmpty()) {
+                String out = SensitiveValues.maskText(node.asText(), all);
+                if (!out.equals(node.asText())) {
+                    changed[0] = true;
+                    return TextNode.valueOf(out);
+                }
+            }
+        }
+        return node;
+    }
+
+    /** The column names this person has masked by name (for the console's "masked" mark on a field it lists). */
+    public Set<String> maskedNames(Collection<String> columnNames) {
+        Set<String> out = new LinkedHashSet<>();
+        for (String c : columnNames) {
+            if (this.columns.containsKey(c.toLowerCase(Locale.ROOT))) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+}

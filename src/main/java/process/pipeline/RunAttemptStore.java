@@ -44,6 +44,9 @@ public interface RunAttemptStore {
         public Long requestedByUserId;
         public String requestedByClientId;
         public Instant requestedAt;
+        /** MIG-420: a retry of some items -- their keys (null: the whole run), and "item" or "failed_step". */
+        public List<String> itemKeys;
+        public String itemMode;
 
         public boolean isResume() {
             return RESUME.equals(this.mode);

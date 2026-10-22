@@ -8,6 +8,7 @@ import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.RowCollector;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -55,7 +56,7 @@ public class ReadS3StepTask extends RegisteredTask {
         .retry(3, 10)
         .timeoutSeconds(600)
         .aiToolName("read_s3")
-        .build();
+        .items(ItemRole.SOURCE).itemsWhen("format", "list").itemIdentity("key").build();
 
     private final BucketStore buckets;
     private final ObjectReadMarks marks;

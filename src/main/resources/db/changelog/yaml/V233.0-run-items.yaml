@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 233.0-run-items
+      author: nabeel.amd93
+      description: "MIG-420 Run Items view: run_item (one row per item a pipeline processes, per attempt -- status, the failed step, the reason, each step's pointer into its kept output, timings, parent for sub-items) and run_item_file (each item's files), tenant tables under row security as V221; run_attempt.item_keys / item_mode (a retry of some items); api_event_out kind 'item' (run.item.completed); file_access_log kinds for item files, zips and links; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V233.0-run-items/V233__run_items.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V233.0-run-items/V233__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

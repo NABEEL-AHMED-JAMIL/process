@@ -12,6 +12,7 @@ import process.pipeline.data.RowsFile;
 import process.pipeline.data.RunMemory;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -80,7 +81,7 @@ public class AggregateStepTask extends RegisteredTask implements StreamingStepTa
                 .required("as", JsonSchema.string().minLength(1).maxLength(128).title("As column")))
                 .minItems(1).maxItems(50).title("Aggregations")))
         .aiToolName("aggregate_rows")
-        .build();
+        .items(ItemRole.SHARED).build();
 
     public AggregateStepTask() {
         super(SPEC);

@@ -52,6 +52,25 @@ final class TaskContext implements StepContext {
         return this.documentValues;
     }
 
+    /** MIG-420: an item run -- each row's item (null: no items, rows keep their numbers) -- and what the step said of each. */
+    java.util.function.Function<Map<String, Object>, String> itemOf;
+    final List<String> itemEvents = java.util.Collections.synchronizedList(new ArrayList<>());
+
+    @Override
+    public String rowTag(Map<String, Object> row, int index) {
+        return this.itemOf == null ? String.valueOf(index + 1) : "i" + this.itemOf.apply(row);
+    }
+
+    @Override
+    public void itemFailed(Map<String, Object> row, String reason) {
+        this.itemEvents.add(Thread.currentThread().getName() + " failed " + (this.itemOf == null ? row : this.itemOf.apply(row)) + ": " + reason);
+    }
+
+    @Override
+    public void itemTook(Map<String, Object> row, long millis) {
+        this.itemEvents.add(Thread.currentThread().getName() + " took " + (this.itemOf == null ? row : this.itemOf.apply(row)));
+    }
+
     TaskContext(Map<String, Object> config, Dataset input) {
         this.config = config;
         this.input = input;

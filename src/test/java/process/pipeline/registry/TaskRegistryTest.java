@@ -48,7 +48,9 @@ class TaskRegistryTest {
             // Report Studio phase 5: a Report Studio report from the rows, with the step's own design or a template.
             entry("generate_report", "Output"),
             // A file a row: a recording to text, a document to another format (media-service's transcriber and converter).
-            entry("transcribe_audio", "Process"), entry("convert_file", "Process"));
+            entry("transcribe_audio", "Process"), entry("convert_file", "Process"),
+            // MIG-420: a PDF into its pages, each a sub-item of its document.
+            entry("split_pages", "Process"));
     }
 
     /**

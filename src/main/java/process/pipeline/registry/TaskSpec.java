@@ -46,6 +46,12 @@ public final class TaskSpec {
     private final boolean overridable;
     private final String aiToolName;
     private final boolean repeatSafe;
+    /** MIG-420: what the task does with a run's items, when its config says so (itemsWhen); else PASS. */
+    private final ItemRole itemRole;
+    private final String itemsWhenField;
+    private final java.util.List<Object> itemsWhenValues;
+    private final String itemIdentity;
+    private final String itemSubKey;
 
     private TaskSpec(Builder builder) {
         this.code = Objects.requireNonNull(builder.code, "code");
@@ -64,6 +70,11 @@ public final class TaskSpec {
         this.overridable = builder.overridable;
         this.aiToolName = builder.aiToolName == null ? builder.code : builder.aiToolName;
         this.repeatSafe = builder.repeatSafe != null ? builder.repeatSafe : this.kind == TaskKind.READ || this.kind == TaskKind.PROCESS;
+        this.itemRole = builder.itemRole == null ? ItemRole.PASS : builder.itemRole;
+        this.itemsWhenField = builder.itemsWhenField;
+        this.itemsWhenValues = builder.itemsWhenValues;
+        this.itemIdentity = builder.itemIdentity;
+        this.itemSubKey = builder.itemSubKey;
         if (!TOOL_NAME.matcher(this.aiToolName).matches()) {
             throw new IllegalStateException("An AI tool name is snake_case: " + this.aiToolName);
         }
@@ -126,6 +137,45 @@ public final class TaskSpec {
      */
     public boolean repeatSafe() { return repeatSafe; }
 
+    /** MIG-420: the task's item role as declared, whatever a step's config says. */
+    public ItemRole itemRole() { return itemRole; }
+
+    /**
+     * MIG-420: what a step of this task does with the run's items, by its config: the declared role when the config field it
+     * names holds one of its values (a missing field is its schema's default), else PASS.
+     */
+    public ItemRole itemRoleFor(Map<String, Object> config) {
+        if (this.itemsWhenField == null || this.itemRole == ItemRole.PASS) {
+            return this.itemRole;
+        }
+        Object value = config == null ? null : config.get(this.itemsWhenField);
+        if (value == null) {
+            value = this.defaultOf(this.itemsWhenField);
+        }
+        for (Object wanted : this.itemsWhenValues) {
+            if (wanted != null && value != null && String.valueOf(wanted).equals(String.valueOf(value))) {
+                return this.itemRole;
+            }
+        }
+        return ItemRole.PASS;
+    }
+
+    /** MIG-420: the column a SOURCE step names each item by ("key", "extraction_id"); null for none. */
+    public String itemIdentity() { return itemIdentity; }
+
+    /** MIG-420: the column a FAN_OUT step names each sub-item by ("page"); null for none. */
+    public String itemSubKey() { return itemSubKey; }
+
+    @SuppressWarnings("unchecked")
+    private Object defaultOf(String field) {
+        Object properties = this.configSchema.get("properties");
+        if (!(properties instanceof Map)) {
+            return null;
+        }
+        Object property = ((Map<String, Object>) properties).get(field);
+        return property instanceof Map ? ((Map<String, Object>) property).get("default") : null;
+    }
+
     /** The entry as GET pipeline.json/steps/tasks answers it, before the workspace's enabled and availability. */
     public Map<String, Object> toEntry() {
         Map<String, Object> entry = new LinkedHashMap<>();
@@ -147,6 +197,20 @@ public final class TaskSpec {
         entry.put("overridable", this.overridable);
         entry.put("aiToolName", this.aiToolName);
         entry.put("repeatSafe", this.repeatSafe);
+        // MIG-420: the Task Registry says what each task does with a run's items (the Items tab follows it).
+        Map<String, Object> items = new LinkedHashMap<>();
+        items.put("role", this.itemRole.word());
+        items.put("note", this.itemRole.note());
+        if (this.itemsWhenField != null && this.itemRole != ItemRole.PASS) {
+            items.put("when", Collections.singletonMap(this.itemsWhenField, this.itemsWhenValues));
+        }
+        if (this.itemIdentity != null) {
+            items.put("identity", this.itemIdentity);
+        }
+        if (this.itemSubKey != null) {
+            items.put("subKey", this.itemSubKey);
+        }
+        entry.put("items", items);
         return entry;
     }
 
@@ -179,6 +243,11 @@ public final class TaskSpec {
         private boolean overridable = true;
         private String aiToolName;
         private Boolean repeatSafe;
+        private ItemRole itemRole;
+        private String itemsWhenField;
+        private java.util.List<Object> itemsWhenValues;
+        private String itemIdentity;
+        private String itemSubKey;
 
         private Builder(String code, String name, TaskKind kind) {
             this.code = code;
@@ -250,6 +319,31 @@ public final class TaskSpec {
         /** Whether a try can be made again without doing anything twice; by default a read's or a transform's can. */
         public Builder repeatSafe(boolean safe) {
             this.repeatSafe = safe;
+            return this;
+        }
+
+        /** MIG-420: what the task does with a run's items (the Run Items view). */
+        public Builder items(ItemRole role) {
+            this.itemRole = role;
+            return this;
+        }
+
+        /** MIG-420: the role holds only when this config field is one of these values (else PASS). */
+        public Builder itemsWhen(String field, Object... values) {
+            this.itemsWhenField = field;
+            this.itemsWhenValues = java.util.Arrays.asList(values);
+            return this;
+        }
+
+        /** MIG-420: the column a SOURCE step names each item by. */
+        public Builder itemIdentity(String column) {
+            this.itemIdentity = column;
+            return this;
+        }
+
+        /** MIG-420: the column a FAN_OUT step names each sub-item by. */
+        public Builder itemSubKey(String column) {
+            this.itemSubKey = column;
             return this;
         }
 

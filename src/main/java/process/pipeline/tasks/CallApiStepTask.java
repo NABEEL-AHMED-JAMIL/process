@@ -14,6 +14,7 @@ import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 import process.storage.remote.StorageServiceClient;
@@ -144,6 +145,7 @@ public class CallApiStepTask extends RegisteredTask {
         .requiredRole(TaskSpec.ROLE_ADMIN)
         .retry(1, 0)
         .timeoutSeconds(1800)
+        .items(ItemRole.EACH).itemsWhen("mode", "each", "batch")
         .build();
 
     private final ApiRunner runner;
@@ -270,9 +272,21 @@ public class CallApiStepTask extends RegisteredTask {
         if (atOnce > 1) {
             context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
         }
+        // MIG-420: each row's item key, worked out here on the step's thread (the calls may run on others), and each call's time.
+        String[] tags = new String[sources.size()];
+        for (int r = 0; r < tags.length; r++) {
+            tags[r] = once ? String.valueOf(r + 1) : context.rowTag(sources.get(r), r);
+        }
+        long[] took = new long[total];
         // MIG-418: the calls, Calls at once at a time; each built when it is made, never every batch at once.
         List<AtOnce.Outcome<Sent>> outcomes = AtOnce.run(context.tenantId(), total, atOnce, i -> {
-            Sent made = this.send(context, config, templates, runValues, sources, sent, batch, once, batchSize, total, i, atOnce > 1);
+            long began = System.nanoTime();
+            Sent made;
+            try {
+                made = this.send(context, config, templates, runValues, sources, sent, batch, once, batchSize, total, i, atOnce > 1, tags);
+            } finally {
+                took[i] = (System.nanoTime() - began) / 1_000_000L;
+            }
             // A blocked call, or one not ok when the step fails on it, stops the calls after it, as one after another always did.
             if ("BLOCKED".equals(made.result.outcome) || failFast && this.problem(made.result, okWhen) != null) {
                 throw new Stop(made);
@@ -289,6 +303,19 @@ public class CallApiStepTask extends RegisteredTask {
             }
             Sent call = outcome.error instanceof Stop ? ((Stop) outcome.error).made : outcome.value;
             ApiRunner.ApiRunResult result = call.result;
+            String said = this.problem(result, okWhen);
+            if (!once) {
+                // MIG-420: each of the call's rows' items, on the step's thread, in row order: its time, and its failure in the
+                // call's words (a blocked call, or one not ok) -- before a call that fails the step throws.
+                for (Map<String, Object> row : call.part) {
+                    context.itemTook(row, took[i]);
+                    if ("BLOCKED".equals(result.outcome)) {
+                        context.itemFailed(row, "The API request was blocked" + (result.message == null ? "." : ": " + result.message));
+                    } else if (said != null) {
+                        context.itemFailed(row, said);
+                    }
+                }
+            }
             if ("BLOCKED".equals(result.outcome)) {
                 // The address guard (or a run variable reaching for the address) refused it: never a branch to take.
                 throw new IllegalStateException("The API request was blocked" + (result.message == null ? "." : ": " + result.message));
@@ -358,7 +385,7 @@ public class CallApiStepTask extends RegisteredTask {
      */
     private Sent send(StepContext context, Map<String, Object> config, Map<String, String> templates, Map<String, Object> runValues,
         List<Map<String, Object>> sources, List<Map<String, Object>> sent, boolean batch, boolean once, int batchSize, int total, int i,
-        boolean backOff) throws Exception {
+        boolean backOff, String[] tags) throws Exception {
         List<Map<String, Object>> part = batch ? sources.subList(i * batchSize, Math.min(sources.size(), (i + 1) * batchSize))
             : Collections.singletonList(sources.get(i));
         Map<String, Object> values = new HashMap<>(runValues);
@@ -369,13 +396,13 @@ public class CallApiStepTask extends RegisteredTask {
             values.put("batch", i + 1);
             values.put("batches", total);
             values.put("batch_rows", part.size());
-            values.put("call_key", batchKey(context.tenantId(), context.jobQueueId(), context.stepKey(), i));
+            values.put("call_key", batchKeyOf(context, tags, i * batchSize, part.size(), i));
         } else {
             Map<String, Object> source = part.get(0);
             values.putAll(source);
             // {{row}}: the row as one object -- unless the rows have a column of that name, which fills it as before.
             values.putIfAbsent("row", Values.JSON.writeValueAsString(rowObject(source, sent)));
-            values.put("call_key", callKey(context.tenantId(), context.jobQueueId(), context.stepKey(), i));
+            values.put("call_key", callKeyOf(context, tags[i], i));
         }
         Map<String, String> variables = new LinkedHashMap<>();
         List<String> json = new ArrayList<>();
@@ -553,6 +580,40 @@ public class CallApiStepTask extends RegisteredTask {
         String text = body.isTextual() ? body.asText() : body.toString();
         text = text.replaceAll("\\s+", " ").trim();
         return text.length() <= LOGGED_BODY_CHARS ? text : text.substring(0, LOGGED_BODY_CHARS) + "…";
+    }
+
+    /**
+     * MIG-420: a row's {{call_key}} -- by its number, as callKey always was, or in an item run by its item's token
+     * (StepContext.rowTag, worked out on the step's thread), so a retry of some items, which reads only their rows, sends each
+     * item the key it had and never another item's.
+     */
+    static String callKeyOf(StepContext context, String tag, int index) {
+        if (tag == null || tag.equals(String.valueOf(index + 1))) {
+            return callKey(context.tenantId(), context.jobQueueId(), context.stepKey(), index);
+        }
+        return UUID.nameUUIDFromBytes(String.format("call-api:%d:%d:%s:%s", context.tenantId(), context.jobQueueId(), context.stepKey(), tag)
+            .getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    /** MIG-420: {@link #callKeyOf} for a row (its tag asked for here, on the caller's thread). */
+    static String callKeyOf(StepContext context, Map<String, Object> row, int index) {
+        return callKeyOf(context, context.rowTag(row, index), index);
+    }
+
+    /**
+     * MIG-420: a batch's {{call_key}} -- by its number, as batchKey, or in an item run by its rows' item tokens, so a retry
+     * whose batches hold other rows never sends the key an earlier batch of other items had.
+     */
+    static String batchKeyOf(StepContext context, String[] tags, int from, int size, int batch) {
+        StringBuilder items = new StringBuilder();
+        for (int r = from; r < from + size; r++) {
+            if (tags[r] == null || tags[r].equals(String.valueOf(r + 1))) {
+                return batchKey(context.tenantId(), context.jobQueueId(), context.stepKey(), batch);
+            }
+            items.append(tags[r]).append(',');
+        }
+        return UUID.nameUUIDFromBytes(String.format("call-api:%d:%d:%s:batch:%s", context.tenantId(), context.jobQueueId(), context.stepKey(),
+            items).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     /** MIG-419: one per run, step and batch -- the same on every try of the run. */

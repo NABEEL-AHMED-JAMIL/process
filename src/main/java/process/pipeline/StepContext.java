@@ -194,6 +194,36 @@ public interface StepContext {
         }
     }
 
+    /**
+     * MIG-420 (Run Items): a file this step made for one row's item -- recorded in the run's manifest as
+     * {@link #recordOutput(RunOutput)} records it, and listed with that item's files. Outside an item run, the manifest alone.
+     */
+    default void recordOutput(RunOutput output, Map<String, Object> row) throws Exception {
+        this.recordOutput(output);
+    }
+
+    /**
+     * MIG-420: this row's item could not be done by this step, and why, in words a person reads ("the answer did not match
+     * the schema"). A per-row step says so for every row it skips, keeps empty or fails on; the step's own on-error still
+     * decides what happens to the run. Nothing outside an item run.
+     */
+    default void itemFailed(Map<String, Object> row, String reason) {
+    }
+
+    /** MIG-420: how long this step spent on this row's item (its call, its file), for the item's own time. */
+    default void itemTook(Map<String, Object> row, long millis) {
+    }
+
+    /**
+     * MIG-420: the key a per-row step's call for this row is made under (an AI row, a transcription, a report, an API
+     * call's {{call_key}}): the row's number from 1 -- or, in an item run, a short token of the row's item, the same in
+     * every attempt and whatever rows were left out, so a retry of some items reuses (and never mixes up) the answers of
+     * the others.
+     */
+    default String rowTag(Map<String, Object> row, int index) {
+        return String.valueOf(index + 1);
+    }
+
     /** A line in the step's log (step_log), shown on the step in the console's timeline. */
     void log(String message);
 

@@ -9,6 +9,7 @@ import process.pipeline.data.RowSink;
 import process.pipeline.data.RowSource;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -60,7 +61,7 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
                     + "as it is.")))
         .backing(TaskSpec.CORE)
         .aiToolName("append_rows")
-        .build();
+        .items(ItemRole.SHARED).build();
 
     public AppendStepTask() {
         super(SPEC);

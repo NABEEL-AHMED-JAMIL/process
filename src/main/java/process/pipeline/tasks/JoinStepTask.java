@@ -7,6 +7,7 @@ import process.pipeline.StepResult;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
+import process.pipeline.registry.ItemRole;
 import process.pipeline.registry.TaskKind;
 import process.pipeline.registry.TaskSpec;
 
@@ -43,7 +44,7 @@ public class JoinStepTask extends RegisteredTask {
                 .description("inner: matched rows only; left: every row of the input."))
             .property("prefix", JsonSchema.string().maxLength(32).title("Prefix for clashing columns").defaultValue("right_")))
         .aiToolName("join_datasets")
-        .build();
+        .items(ItemRole.SHARED).build();
 
     public JoinStepTask() {
         super(SPEC);

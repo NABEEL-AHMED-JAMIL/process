@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import process.customer.CustomerItems;
 import process.customer.CustomerResponses;
 import process.customer.CustomerReviews;
 import process.customer.CustomerRunViews;
@@ -31,11 +32,14 @@ public class CustomerRunsRestApi {
     private final CustomerRuns runs;
     private final CustomerReviews reviews;
     private final CustomerRunViews views;
+    /** MIG-420: a run's items. */
+    private final CustomerItems items;
 
-    public CustomerRunsRestApi(CustomerRuns runs, CustomerReviews reviews, CustomerRunViews views) {
+    public CustomerRunsRestApi(CustomerRuns runs, CustomerReviews reviews, CustomerRunViews views, CustomerItems items) {
         this.runs = runs;
         this.reviews = reviews;
         this.views = views;
+        this.items = items;
     }
 
     /** ?limit= &cursor= &pipelineId= &status= &createdAfter= &updatedAfter=: the workspace's runs, newest first. */
@@ -61,6 +65,20 @@ public class CustomerRunsRestApi {
     @GetMapping("/{runId}/outputs")
     public ResponseEntity<Map<String, Object>> outputs(@PathVariable("runId") String runId) {
         return CustomerResponses.of(this.runs.outputs(runId));
+    }
+
+    /** MIG-420: ?limit= &cursor= &status= &parentId=: the run's items, in order. */
+    @GetMapping("/{runId}/items")
+    public ResponseEntity<Map<String, Object>> items(@PathVariable("runId") String runId,
+        @RequestParam(value = "limit", required = false) Integer limit, @RequestParam(value = "cursor", required = false) String cursor,
+        @RequestParam(value = "status", required = false) String status, @RequestParam(value = "parentId", required = false) String parentId) {
+        return CustomerResponses.of(this.items.list(runId, limit, cursor, status, parentId));
+    }
+
+    /** MIG-420: one item, by its id ("2", a page "3.12") or a key with no '/'. */
+    @GetMapping("/{runId}/items/{itemKey}")
+    public ResponseEntity<Map<String, Object>> item(@PathVariable("runId") String runId, @PathVariable("itemKey") String itemKey) {
+        return CustomerResponses.of(this.items.get(runId, itemKey));
     }
 
     @GetMapping("/{runId}/review")

@@ -25,6 +25,8 @@ public final class CustomerEventTypes {
     /** MIG-355: a workspace's alert rule fired, and its alert resolved (a rule with the webhook channel). */
     public static final String ALERT_OPENED = "alert.opened";
     public static final String ALERT_RESOLVED = "alert.resolved";
+    /** MIG-420: one item of a run finished -- done or failed -- in an attempt. */
+    public static final String RUN_ITEM_COMPLETED = "run.item.completed";
 
     /** The payload's own version: what {version, subject, data} means. A type's data changes additively within it. */
     public static final int PAYLOAD_VERSION = 1;
