@@ -1295,9 +1295,7 @@ public class RunItems {
         for (ItemRow row : selected.items) {
             files += this.countFilesOf(row, stepKey, null);
         }
-        if (files == 0) {
-            return Answer.refused(404, "The selected items have no files to download.");
-        }
+        // ZT-I21: an item with no files of its own (a row of a table pipeline) still has its folder -- its item.json, masked.
         Long userId = TenantContext.getAppUserId();
         String refs = selected.items.stream().map(r -> r.itemRef).collect(Collectors.joining(","));
         String[] issued = this.links.issue(selected.owned.run.getTenantId(), userId == null ? 0 : userId, selected.owned.run.getJobQueueId(),

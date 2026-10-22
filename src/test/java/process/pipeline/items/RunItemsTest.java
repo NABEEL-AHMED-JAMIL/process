@@ -22,6 +22,10 @@ import process.pipeline.StepTasks;
 import process.security.TenantContext;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import java.util.TreeMap;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -238,5 +242,41 @@ class RunItemsTest {
         String old = past.issue(TENANT, 1015L, RUN, "1", null)[0];
         assertThat(new ItemLinks("test-service-token").check(old)).isNull();
         assertThat(new ItemLinks("another-token").check(token)).as("signed by another key").isNull();
+    }
+
+    /**
+     * MIG-421, ZT-I21 (live run 1855): a zip of selected items is a folder per item -- its files and its item.json, masked for
+     * the person -- even for items with no file of their own (rows of a table pipeline), which v2 first refused ("no files").
+     */
+    @Test
+    void aZipOfSelectedItemsIsAFolderEachWithItsMaskedValuesThoughTheyHaveNoFiles() throws Exception {
+        this.as("TENANT_USER", 1016L);
+        this.maskedForThePerson();
+        RunItems.ListRequest selection = new RunItems.ListRequest();
+        selection.jobQueueId = RUN;
+        selection.refs = Arrays.asList("1", "2");
+        JsonNode counted = this.data(this.items.selection(selection));
+        assertThat(counted.path("items").asInt()).isEqualTo(2);
+        assertThat(counted.path("failed").asInt()).isEqualTo(1);
+        JsonNode link = this.data(this.items.zipLinkOfMany(selection, null));
+        assertThat(link.path("items").asInt()).isEqualTo(2);
+        RunItems.Answer zip = this.items.zip(RUN, link.path("token").asText());
+        assertThat(zip.status).isEqualTo(200);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        zip.stream.writeTo(out);
+        Map<String, String> entries = new TreeMap<>();
+        try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()))) {
+            for (ZipEntry e = in.getNextEntry(); e != null; e = in.getNextEntry()) {
+                entries.put(e.getName(), new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            }
+        }
+        assertThat(entries.keySet()).containsExactly("1-r-1.pdf/item.json", "2-r-2.pdf/item.json");
+        assertThat(entries.get("1-r-1.pdf/item.json")).contains("\"risk\" : \"High\"").doesNotContain("Ana Lopez");
+        assertThat(entries.get("2-r-2.pdf/item.json")).contains("\"status\" : \"failed\"").doesNotContain("Ben Ortiz");
+        // All matching less the unticked.
+        RunItems.ListRequest all = new RunItems.ListRequest();
+        all.jobQueueId = RUN;
+        all.except = Collections.singletonList("1");
+        assertThat(this.data(this.items.selection(all)).path("refs").toString()).isEqualTo("[\"2\"]");
     }
 }
