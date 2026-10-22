@@ -29,6 +29,7 @@ import process.pipeline.registry.TaskRegistry;
 import process.pipeline.registry.TaskSpec;
 import process.pipeline.tasks.AggregateStepTask;
 import process.pipeline.tasks.SampleStepTask;
+import process.pipeline.tasks.ReadS3StepTask;
 import process.pipeline.tasks.SaveFileStepTask;
 import process.pipeline.tasks.SplitPagesStepTask;
 
@@ -100,7 +101,7 @@ class RunItemsEngineTest {
     @BeforeEach
     void setUp() {
         StepTasks tasks = new StepTasks(new ArrayList<>(Arrays.asList(new SampleStepTask(), new PerItem(), new SaveFileStepTask(),
-            new AggregateStepTask(), new SplitPagesStepTask(this.buckets))));
+            new AggregateStepTask(), new SplitPagesStepTask(this.buckets), new ReadS3StepTask(this.buckets))));
         DefinitionValidator validator = new DefinitionValidator(new TaskRegistry(tasks, new InMemoryTaskOverrideStore()));
         this.engine = new StepEngine(this.definitions, this.steps, tasks, validator, this.datasets, new Worker(), this.transactions,
             TransactionOperations.withoutTransaction(), Executors.newSingleThreadExecutor(), this.tryThreads, duration -> { });
@@ -397,6 +398,50 @@ class RunItemsEngineTest {
         assertThat(this.run.getJobStatusMessage()).endsWith("Items: 1 of 1 done.");
     }
 
+    /**
+     * ZT-I9, ZT-I10 (live run 1849): with a Read S3 listing before the split, "Retry page" read none of the document's rows --
+     * the listing's row was taken for one of its pages' (a page keeps copies of its document's earlier entries) -- and the page
+     * was then marked done though no step had read it. The listing's row is the document's, the page is split again, and a
+     * retried item no step reaches keeps its earlier outcome.
+     */
+    @Test
+    void retryingAPageAfterAListingReadsItsDocumentAgainAndOnlyThatPage() throws Exception {
+        this.buckets.objects.put("riverside-health-s3/referrals/referral-0412.pdf", pdf("Patient referral", null, "Plan of care"));
+        this.saves(Definitions.of(step("list", "read_s3", config("bucket", "riverside-health-s3", "prefix", "referrals/", "format", "list")),
+            step("pages", "split_pages", config("bucket", "riverside-health-s3")), step("read_page", "per_item")));
+        this.runs();
+        assertThat(this.item("referrals/referral-0412.pdf#2").status).isEqualTo("failed");
+        this.buckets.objects.put("riverside-health-s3/referrals/referral-0412.pdf", pdf("Patient referral", "Medications", "Plan of care"));
+        int before = this.billed.size();
+
+        assertThat(this.retries.retryItems(this.run, this.job, 1, Collections.singletonList("referrals/referral-0412.pdf#2"), "item",
+            RunRetries.Actor.person(USER, true)).queued()).isTrue();
+        this.runs();
+
+        assertThat(this.steps.row(RUN_ID, 2, "pages").recordsIn).as("the document's row, read again").isEqualTo(1L);
+        assertThat(this.billed.subList(before, this.billed.size())).hasSize(1).allMatch(l -> l.contains("referral-0412.pdf#2 "));
+        assertThat(this.item("referrals/referral-0412.pdf#2").status).isEqualTo("done");
+        assertThat(this.item("referrals/referral-0412.pdf").childFailed).isZero();
+    }
+
+    @Test
+    void aRetriedItemNoStepReachesKeepsItsEarlierOutcome() throws Exception {
+        this.buckets.objects.put("riverside-health-s3/referrals/referral-0412.pdf", pdf("Patient referral", null, "Plan of care"));
+        this.saves(Definitions.of(step("list", "read_s3", config("bucket", "riverside-health-s3", "prefix", "referrals/", "format", "list")),
+            step("pages", "split_pages", config("bucket", "riverside-health-s3")), step("read_page", "per_item")));
+        this.runs();
+        // The document is gone from its folder: the retry's split has no page 2 to make.
+        this.buckets.objects.put("riverside-health-s3/referrals/referral-0412.pdf", pdf("Patient referral"));
+
+        assertThat(this.retries.retryItems(this.run, this.job, 1, Collections.singletonList("referrals/referral-0412.pdf#2"), "item",
+            RunRetries.Actor.person(USER, true)).queued()).isTrue();
+        this.runs();
+
+        ItemRow page = this.item("referrals/referral-0412.pdf#2");
+        assertThat(page.status).as("never done when nothing read it").isEqualTo("failed");
+        assertThat(page.reason).startsWith("Not retried: no step of the retry read this item's rows.");
+    }
+
     /** A PDF whose pages say these lines; a null line is a page with no text. */
     static byte[] pdf(String... pages) throws Exception {
         try (PDDocument doc = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -425,7 +470,13 @@ class RunItemsEngineTest {
         @Override public Optional<String> unavailable() { return Optional.empty(); }
 
         @Override public Listing list(long tenantId, String bucket, String prefix, int limit) {
-            return new Listing(Collections.emptyList(), false);
+            List<Listed> found = new ArrayList<>();
+            this.objects.forEach((key, bytes) -> {
+                if (key.startsWith(bucket + "/" + prefix)) {
+                    found.add(new Listed(key.substring(bucket.length() + 1), bytes.length));
+                }
+            });
+            return new Listing(found, false);
         }
 
         @Override public byte[] read(long tenantId, String bucket, String key, long maxBytes) {

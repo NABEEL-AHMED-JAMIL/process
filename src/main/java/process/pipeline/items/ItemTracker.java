@@ -181,6 +181,8 @@ public final class ItemTracker {
     /** A dataset's storage key -> row position -> item key. */
     private final Map<String, Map<Integer, String>> mappings = new HashMap<>();
     private final Set<String> dirty = new LinkedHashSet<>();
+    /** ZT-I10: the items a step of this attempt took part in (a retried item no step reached is not done). */
+    private final Set<String> touched = new HashSet<>();
     private final List<ItemRow.FileRow> files = new ArrayList<>();
 
     private String identity;
@@ -419,14 +421,26 @@ public final class ItemTracker {
                 String key = storage.computeIfAbsent(entry.ds, this.engine::storageKeyOf);
                 if (datasetKey.equals(key)) {
                     for (Integer p : entry.rows) {
-                        // A sub-item's row is its own; a parent's entry after the split points at its sub-items' rows.
-                        built.merge(p, row.itemKey, (a, b) -> a.length() >= b.length() ? a : b);
+                        // ZT-I9: a row before the split is its document's -- a page's copies of its document's earlier entries
+                        // point at the document's row, which stays the document's; a row after the split is the page's.
+                        built.merge(p, row.itemKey, ItemTracker::ownerOf);
                     }
                 }
             }
         }
         this.mappings.put(datasetKey, built);
         return built;
+    }
+
+    /** Of two items pointing at one row, the one it belongs to: a document over its own page's copy, else the deeper one. */
+    static String ownerOf(String a, String b) {
+        if (b.startsWith(a + "#")) {
+            return a;
+        }
+        if (a.startsWith(b + "#")) {
+            return b;
+        }
+        return a.length() >= b.length() ? a : b;
     }
 
     /**
@@ -739,6 +753,10 @@ public final class ItemTracker {
                 entry.note = this.note(step, row, entry, said);
             }
             row.put(entry);
+            this.touched.add(row.itemKey);
+            if (row.parentKey != null) {
+                this.touched.add(row.parentKey);
+            }
             row.fileCount += made;
             if (row.startedAt == null) {
                 row.startedAt = now;
@@ -1113,6 +1131,19 @@ public final class ItemTracker {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         if (!paused) {
             for (ItemRow row : this.items.values()) {
+                if (!row.finished() && this.fromIndex >= 0 && !this.touched.contains(row.itemKey) && !this.before.isEmpty()
+                    && this.before.containsKey(row.itemKey)) {
+                    // ZT-I10: a retried item whose rows no step of the retry read: not done -- it keeps its earlier outcome.
+                    ItemRow was = this.before.get(row.itemKey);
+                    row.status = was.status;
+                    row.failedStepIndex = was.failedStepIndex;
+                    row.failedStepKey = was.failedStepKey;
+                    row.reason = ItemRow.FAILED.equals(was.status)
+                        ? ItemRow.cut("Not retried: no step of the retry read this item's rows. Earlier: " + was.reason, 2000) : was.reason;
+                    row.endedAt = now;
+                    this.dirty.add(row.itemKey);
+                    continue;
+                }
                 if (!row.finished()) {
                     if (completed) {
                         row.status = ItemRow.DONE;
