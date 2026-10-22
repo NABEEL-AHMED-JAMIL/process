@@ -490,6 +490,37 @@ class RunItemsEngineTest {
         assertThat(this.item("referrals/referral-0412.pdf").childFailed).isZero();
     }
 
+    /**
+     * ZT-I14 (live run 1854): retrying one page split every other document of the run again -- the split's reuse of a
+     * document's pages was lost when its pages' own rows were taken for theirs. Only the page's document is split again; the
+     * other documents' pages are reused, and a step over the whole table still counts every page.
+     */
+    @Test
+    void retryingAPageSplitsOnlyItsDocumentAndTheOthersPagesAreReused() throws Exception {
+        this.buckets.objects.put("riverside-health-s3/referrals/a.pdf", pdf("Patient referral", null, "Plan of care"));
+        this.buckets.objects.put("riverside-health-s3/referrals/b.pdf", pdf("Lab results", "Imaging"));
+        this.saves(Definitions.of(step("list", "read_s3", config("bucket", "riverside-health-s3", "prefix", "referrals/", "format", "list")),
+            step("pages", "split_pages", config("bucket", "riverside-health-s3")), step("read_page", "per_item"),
+            step("per_doc", "aggregate", config("groupBy", Collections.singletonList("key"),
+                "aggregations", Collections.singletonList(config("op", "count", "as", "pages"))))));
+        this.runs();
+        assertThat(this.item("referrals/a.pdf#2").status).isEqualTo("failed");
+        this.buckets.objects.put("riverside-health-s3/referrals/a.pdf", pdf("Patient referral", "Medications", "Plan of care"));
+        int before = this.billed.size();
+
+        assertThat(this.retries.retryItems(this.run, this.job, 1, Collections.singletonList("referrals/a.pdf#2"), "item",
+            RunRetries.Actor.person(USER, true)).queued()).isTrue();
+        this.runs();
+
+        assertThat(this.steps.row(RUN_ID, 2, "pages").recordsIn).as("a.pdf alone is split again").isEqualTo(1L);
+        assertThat(this.steps.logText(RUN_ID, 2, "pages")).noneMatch(l -> l.contains("ran again here"));
+        assertThat(this.billed.subList(before, this.billed.size())).hasSize(1).allMatch(l -> l.contains("a.pdf#2 "));
+        assertThat(this.steps.row(RUN_ID, 2, "per_doc").recordsIn).as("every page of both documents").isEqualTo(5L);
+        assertThat(this.item("referrals/a.pdf#2").status).isEqualTo("done");
+        assertThat(this.item("referrals/b.pdf").attempt).isEqualTo(1);
+        assertThat(this.run.getJobStatusMessage()).endsWith("Items: 2 of 2 done.");
+    }
+
     @Test
     void aRetriedItemNoStepReachesKeepsItsEarlierOutcome() throws Exception {
         this.buckets.objects.put("riverside-health-s3/referrals/referral-0412.pdf", pdf("Patient referral", null, "Plan of care"));

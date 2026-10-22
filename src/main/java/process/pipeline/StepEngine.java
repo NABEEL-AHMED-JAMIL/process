@@ -976,21 +976,20 @@ public class StepEngine {
             if (carries.isEmpty()) {
                 return found;
             }
-            // Storage key -> position -> {item, row's item key}.
-            Map<String, Map<Integer, String[]>> wanted = new LinkedHashMap<>();
+            // Storage key -> position -> each {item, row's item key} that reuses it.
+            Map<String, Map<Integer, List<String[]>>> wanted = new LinkedHashMap<>();
             for (ItemTracker.Carry c : carries.values()) {
                 for (int k = 0; k < c.size(); k++) {
-                    wanted.computeIfAbsent(c.storageKeys.get(k), x -> new HashMap<>()).put(c.positions.get(k), new String[] {c.key,
-                        c.rowKeys.get(k)});
+                    wanted.computeIfAbsent(c.storageKeys.get(k), x -> new HashMap<>()).computeIfAbsent(c.positions.get(k),
+                        x -> new ArrayList<>()).add(new String[] {c.key, c.rowKeys.get(k)});
                 }
             }
-            for (Map.Entry<String, Map<Integer, String[]>> e : wanted.entrySet()) {
+            for (Map.Entry<String, Map<Integer, List<String[]>>> e : wanted.entrySet()) {
                 int position = 0;
                 try (RowSource rows = datasets.open(e.getKey(), batchRows())) {
                     for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
                         for (Map<String, Object> r : batch) {
-                            String[] whose = e.getValue().get(position++);
-                            if (whose != null) {
+                            for (String[] whose : e.getValue().getOrDefault(position++, Collections.<String[]>emptyList())) {
                                 found.computeIfAbsent(whose[0], x -> new ArrayList<>()).add(new Object[] {whose[1], r});
                             }
                         }
@@ -998,9 +997,11 @@ public class StepEngine {
                 } catch (Exception unread) {
                     log.line("WARN", String.format("An earlier output of step <%s> could not be read (%s): its items run again.",
                         step.getKey(), reasonOf(unread)));
-                    for (String[] whose : e.getValue().values()) {
-                        found.remove(whose[0]);
-                        carries.remove(whose[0]);
+                    for (List<String[]> lost : e.getValue().values()) {
+                        for (String[] whose : lost) {
+                            found.remove(whose[0]);
+                            carries.remove(whose[0]);
+                        }
                     }
                 }
             }

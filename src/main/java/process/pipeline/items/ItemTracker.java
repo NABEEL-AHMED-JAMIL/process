@@ -465,7 +465,8 @@ public final class ItemTracker {
         }
         Map<Long, String> storage = new HashMap<>();
         for (ItemRow was : this.before.values()) {
-            if (this.runsAt(index, was.itemKey)) {
+            if (this.runsAt(index, was.itemKey) || (split && was.parentKey != null)) {
+                // A split reads documents: a page's rows are its document's there (ZT-I12, live run 1854).
                 continue;
             }
             Carry carry = new Carry(was.itemKey);
