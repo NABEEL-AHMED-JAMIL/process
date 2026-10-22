@@ -1,5 +1,6 @@
 package process.pipeline.items;
 
+import process.pipeline.PipelineDefinition;
 import process.security.TenantContext;
 import org.springframework.stereotype.Service;
 import process.model.repository.JobQueueRepository;
@@ -182,7 +183,7 @@ public class ItemRetries {
         return ItemTracker.sourceOf(plan);
     }
 
-    private process.pipeline.PipelineDefinition definitionOf(long jobQueueId) {
+    private PipelineDefinition definitionOf(long jobQueueId) {
         return this.items.definitionOf(jobQueueId);
     }
 }

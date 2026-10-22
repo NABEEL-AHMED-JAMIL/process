@@ -132,6 +132,12 @@ class ManagedSessionOnlyTest {
         AUDITED.put("FormSubmissionRestApi.export", "form submissions CSV");
         AUDITED.put("SourceJobRestApi.downloadListSourceJob", "schedules export");
         AUDITED.put("SourceTaskRestApi.downloadListSourceTask", "pipelines export");
+        // MIG-420: a run item, its step's data, a file, the item's files as a zip, the items as CSV.
+        AUDITED.put("RunItemRestApi.detail", "run item");
+        AUDITED.put("RunItemRestApi.data", "run item data");
+        AUDITED.put("RunItemRestApi.file", "run item file");
+        AUDITED.put("RunItemRestApi.zip", "run item files (zip)");
+        AUDITED.put("RunItemRestApi.csv", "run items (CSV)");
     }
 
     @AfterEach

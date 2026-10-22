@@ -1,5 +1,7 @@
 package process.customer;
 
+import process.pipeline.items.ItemRow;
+import process.pipeline.items.RunItemStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -296,11 +298,11 @@ public class CustomerEventRelay {
     }
 
     /** MIG-420: the run's items and their API view; absent in hand-built tests (an item event then sends nothing). */
-    private process.pipeline.items.RunItemStore itemStore;
+    private RunItemStore itemStore;
     private CustomerItems items;
 
     @Autowired(required = false)
-    public void setItems(process.pipeline.items.RunItemStore itemStore, CustomerItems items) {
+    public void setItems(RunItemStore itemStore, CustomerItems items) {
         this.itemStore = itemStore;
         this.items = items;
     }
@@ -314,7 +316,7 @@ public class CustomerEventRelay {
         if (row.runItemId == null || this.itemStore == null || this.items == null) {
             return;
         }
-        Optional<process.pipeline.items.ItemRow> item = this.itemStore.byId(row.runItemId);
+        Optional<ItemRow> item = this.itemStore.byId(row.runItemId);
         if (!item.isPresent() || !item.get().finished() || !this.runs.found(row.tenantId, item.get().jobQueueId).isPresent()) {
             return;
         }

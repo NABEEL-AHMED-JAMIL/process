@@ -1,5 +1,6 @@
 package process.pipeline.items;
 
+import java.sql.PreparedStatement;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -146,7 +147,7 @@ public class JdbcRunItemStore implements RunItemStore {
         }
         Long[] ids = jobQueueIds.toArray(new Long[0]);
         this.jdbc.query(con -> {
-            java.sql.PreparedStatement ps = con.prepareStatement("SELECT job_queue_id, count(*), "
+            PreparedStatement ps = con.prepareStatement("SELECT job_queue_id, count(*), "
                 + "count(*) FILTER (WHERE status = 'done' AND child_failed = 0), "
                 + "count(*) FILTER (WHERE status = 'failed' OR child_failed > 0), count(*) FILTER (WHERE status = 'running') "
                 + "FROM run_item WHERE job_queue_id = ANY (?) AND current AND parent_key IS NULL GROUP BY job_queue_id");

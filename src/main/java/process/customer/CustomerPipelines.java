@@ -1,5 +1,8 @@
 package process.customer;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import process.pipeline.StepTasks;
+import process.pipeline.items.ItemTracker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.barco.platform.api.Cursors;
@@ -56,10 +59,10 @@ public class CustomerPipelines {
     private final RunIntake intake;
     private final Idempotency idempotency;
     /** MIG-420: the registry, to tell an item pipeline (its runs send run.item.completed); absent in hand-built tests. */
-    private process.pipeline.StepTasks tasks;
+    private StepTasks tasks;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void useTasks(process.pipeline.StepTasks tasks) {
+    @Autowired(required = false)
+    public void useTasks(StepTasks tasks) {
         this.tasks = tasks;
     }
 
@@ -257,7 +260,7 @@ public class CustomerPipelines {
             emits.add(CustomerEventTypes.FILE_AVAILABLE);
         }
         // MIG-420: an item pipeline's runs announce each item as it finishes.
-        if (this.tasks != null && entry.definition != null && !process.pipeline.items.ItemTracker.plan(entry.definition, this.tasks).isEmpty()) {
+        if (this.tasks != null && entry.definition != null && !ItemTracker.plan(entry.definition, this.tasks).isEmpty()) {
             emits.add(CustomerEventTypes.RUN_ITEM_COMPLETED);
         }
         view.put("emits", emits);

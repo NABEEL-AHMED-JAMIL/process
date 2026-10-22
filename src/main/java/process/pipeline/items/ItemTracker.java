@@ -1,5 +1,6 @@
 package process.pipeline.items;
 
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import process.pipeline.PipelineDefinition;
@@ -1164,7 +1165,7 @@ public final class ItemTracker {
                     }
                 }
                 row.durationMs = timed ? ms : row.startedAt == null || row.endedAt == null ? null
-                    : java.time.Duration.between(row.startedAt, row.endedAt).toMillis();
+                    : Duration.between(row.startedAt, row.endedAt).toMillis();
             }
         }
         this.countChildren();

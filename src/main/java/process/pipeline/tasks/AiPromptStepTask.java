@@ -1,5 +1,9 @@
 package process.pipeline.tasks;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.TreeMap;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -226,16 +230,16 @@ public class AiPromptStepTask extends RegisteredTask {
             return rowTag;
         }
         StringBuilder asked = new StringBuilder();
-        new java.util.TreeMap<>(variables).forEach((k, v) -> asked.append(k).append('=').append(v).append('\u0000'));
+        new TreeMap<>(variables).forEach((k, v) -> asked.append(k).append('=').append(v).append('\u0000'));
         asked.append("image=").append(imageKey);
         try {
-            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(asked.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(asked.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder(rowTag).append('-');
             for (int b = 0; b < 4; b++) {
                 hex.append(String.format("%02x", digest[b] & 0xff));
             }
             return hex.toString();
-        } catch (java.security.NoSuchAlgorithmException impossible) {
+        } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }
     }

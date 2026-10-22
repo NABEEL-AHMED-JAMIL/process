@@ -1,5 +1,6 @@
 package process.tenancy;
 
+import org.springframework.http.ResponseEntity;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -203,8 +204,8 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
         assertThat(fx.foreignRows()).isEqualTo(before);
     }
 
-    private static process.pipeline.items.ItemRetries.Request retry(long run) {
-        process.pipeline.items.ItemRetries.Request request = new process.pipeline.items.ItemRetries.Request();
+    private static ItemRetries.Request retry(long run) {
+        ItemRetries.Request request = new ItemRetries.Request();
         request.setJobQueueId(run);
         request.setFailed(true);
         request.setFrom("failed_step");
@@ -232,7 +233,7 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
         assertThat(fx.probe("GET sourceJob.json/runItems/zip(forged)", ADMIN_OF_A, () -> items.zip(A_RUN, token + "x")))
             .startsWith("HTTP 403");
         // Row security alone: A's session sees A's item rows and files, none of B's.
-        String seen = fx.probe("row security run_item", ADMIN_OF_A, () -> org.springframework.http.ResponseEntity.ok(
+        String seen = fx.probe("row security run_item", ADMIN_OF_A, () -> ResponseEntity.ok(
             fx.db.appJdbc().queryForList("SELECT label FROM run_item UNION ALL SELECT file_name || ':' || job_queue_id FROM run_item_file")));
         assertThat(seen).contains("acme run message.m4a").doesNotContain("bravo").doesNotContain(":" + B_RUN);
         assertThat(fx.leaks).isEmpty();

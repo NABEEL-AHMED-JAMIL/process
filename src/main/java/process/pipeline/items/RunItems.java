@@ -1,5 +1,11 @@
 package process.pipeline.items;
 
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.function.Supplier;
+import process.pipeline.registry.ItemRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -448,7 +454,7 @@ public class RunItems {
             return new Search(s.toLowerCase(Locale.ROOT), null, null);
         }
 
-        boolean matches(ItemRow row, java.util.function.Supplier<Map<String, Object>> fields) {
+        boolean matches(ItemRow row, Supplier<Map<String, Object>> fields) {
             if (this.text != null) {
                 if (row.label.toLowerCase(Locale.ROOT).contains(this.text) || row.itemKey.toLowerCase(Locale.ROOT).contains(this.text)
                     || row.itemRef.equals(this.text) || (row.reason != null && row.reason.toLowerCase(Locale.ROOT).contains(this.text))) {
@@ -633,7 +639,7 @@ public class RunItems {
         // What a sub-item is called: a split's pages, else sub-items.
         String noun = null;
         for (ItemTracker.StepInfo step : steps.list) {
-            if (step.role == process.pipeline.registry.ItemRole.FAN_OUT && step.subKey != null) {
+            if (step.role == ItemRole.FAN_OUT && step.subKey != null) {
                 noun = "page".equals(step.subKey) ? "page" : step.subKey.replace('_', ' ');
             }
         }
@@ -696,7 +702,7 @@ public class RunItems {
         Search filter = Search.of(search);
         ItemMasks siblingMasks = filter == null ? null : this.masksFor(owned.get().job, steps.definition);
         Rows siblingRows = new Rows(this.datasets, this.steps);
-        List<ItemRow> siblings = all.stream().filter(r -> java.util.Objects.equals(r.parentKey, current.parentKey))
+        List<ItemRow> siblings = all.stream().filter(r -> Objects.equals(r.parentKey, current.parentKey))
             .filter(r -> r == current || r.itemKey.equals(current.itemKey) || (matchesStatus(r, wanted)
                 && (filter == null || filter.matches(r, () -> this.fieldsOf(siblingRows, r, siblingMasks, null)))))
             .sorted((a, b) -> Integer.compare(a.position, b.position)).collect(Collectors.toList());
@@ -789,7 +795,7 @@ public class RunItems {
         return out;
     }
 
-    static final Set<String> PREVIEWABLE = new HashSet<>(java.util.Arrays.asList("png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "json",
+    static final Set<String> PREVIEWABLE = new HashSet<>(Arrays.asList("png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "json",
         "csv", "jsonl", "md", "html", "m4a", "mp3", "wav", "ogg"));
 
     static String extensionOf(String name) {
@@ -964,10 +970,10 @@ public class RunItems {
             return out -> {
                 try (InputStream in = this.datasets.openFile(key)) {
                     copy(in, out, MAX_FILE_BYTES);
-                } catch (java.io.IOException | RuntimeException failed) {
+                } catch (IOException | RuntimeException failed) {
                     throw failed;
                 } catch (Exception failed) {
-                    throw new java.io.IOException(failed.getMessage(), failed);
+                    throw new IOException(failed.getMessage(), failed);
                 }
             };
         }
@@ -990,13 +996,13 @@ public class RunItems {
         throw new Gone("This file cannot be read here.");
     }
 
-    static void copy(InputStream in, OutputStream out, long most) throws java.io.IOException {
+    static void copy(InputStream in, OutputStream out, long most) throws IOException {
         byte[] chunk = new byte[64 * 1024];
         long total = 0;
         for (int n = in.read(chunk); n >= 0; n = in.read(chunk)) {
             total += n;
             if (total > most) {
-                throw new java.io.IOException("The file is bigger than the console downloads.");
+                throw new IOException("The file is bigger than the console downloads.");
             }
             out.write(chunk, 0, n);
         }
@@ -1015,7 +1021,7 @@ public class RunItems {
             case "webp": return "image/webp";
             case "pdf": return "application/pdf";
             case "json": return "application/json";
-            case "jsonl": return "application/x-ndjson";
+            case "jsonl": return "application/x-ndjson; charset=utf-8";
             case "csv": return "text/csv";
             case "txt":
             case "md": return "text/plain; charset=utf-8";
@@ -1110,7 +1116,7 @@ public class RunItems {
                     ItemRow.FileRow f = (ItemRow.FileRow) pair[0];
                     String entry = safe(f.stepKey) + "/" + unique(safe(f.fileName), taken);
                     zip.putNextEntry(new ZipEntry(entry));
-                    ((StreamingResponseBody) pair[1]).writeTo(new java.io.FilterOutputStream(zip) {
+                    ((StreamingResponseBody) pair[1]).writeTo(new FilterOutputStream(zip) {
                         @Override
                         public void close() {
                             // the zip stays open for the next entry
@@ -1186,7 +1192,7 @@ public class RunItems {
         return Answer.file(name, "text/csv", out -> {
             Writer writer = new OutputStreamWriter(out, StandardCharsets.UTF_8);
             try (CSVPrinter csv = new CSVPrinter(writer, CSVFormat.DEFAULT)) {
-                List<String> header = new ArrayList<>(java.util.Arrays.asList("#", "item", "key", "status", "failed_step", "reason", "duration_ms",
+                List<String> header = new ArrayList<>(Arrays.asList("#", "item", "key", "status", "failed_step", "reason", "duration_ms",
                     "files"));
                 for (ItemTracker.StepInfo step : steps.list) {
                     header.add(step.name);
@@ -1241,7 +1247,7 @@ public class RunItems {
             return refused;
         }
         List<Long> ids = jobQueueIds == null ? Collections.<Long>emptyList()
-            : jobQueueIds.stream().filter(java.util.Objects::nonNull).distinct().limit(MAX_PAGE).collect(Collectors.toList());
+            : jobQueueIds.stream().filter(Objects::nonNull).distinct().limit(MAX_PAGE).collect(Collectors.toList());
         Map<Long, int[]> counts = this.store.counts(ids);
         Map<String, Object> data = new LinkedHashMap<>();
         for (Map.Entry<Long, int[]> e : counts.entrySet()) {

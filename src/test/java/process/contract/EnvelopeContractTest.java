@@ -116,6 +116,8 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(FormFields.Refused.class, "caught in FormService.save: a form definition refused in words (Wave 5 Forms lite)");
         internal.put(FormFields.Unanswered.class, "caught in FormSubmissionService.submit: answers refused in words, each at its "
             + "field (Wave 5 Forms lite)");
+        internal.put(declared("process.pipeline.items.RunItems$Gone"), "MIG-420: thrown by RunItems.open for an item's file that is "
+            + "no longer kept; caught in RunItems -- the file answers 410 in the envelope (logged), the zip leaves it out");
         return internal;
     }
 

@@ -1,5 +1,6 @@
 package process.pipeline;
 
+import process.pipeline.tasks.ReadS3StepTask;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -93,7 +94,7 @@ class RunRetriesTest {
     @BeforeEach
     void setUp() {
         List<StepTask> registered = new ArrayList<>(Arrays.asList(new SampleStepTask(), new SelectStepTask(), new Counted(), new Gate(),
-            new Metered(), new ReadFileStepTask(this.buckets), new process.pipeline.tasks.ReadS3StepTask(this.buckets)));
+            new Metered(), new ReadFileStepTask(this.buckets), new ReadS3StepTask(this.buckets)));
         StepTasks tasks = new StepTasks(registered);
         DefinitionValidator validator = new DefinitionValidator(new TaskRegistry(tasks, new InMemoryTaskOverrideStore()));
         this.engine = new StepEngine(this.definitions, this.steps, tasks, validator, this.datasets, this.worker, this.transactions,

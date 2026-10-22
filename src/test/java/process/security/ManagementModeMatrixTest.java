@@ -107,6 +107,13 @@ class ManagementModeMatrixTest {
         // MIG-345: retrying a failed run is running an existing schedule's run again, as Run now (owner 2026-09-29).
         CUSTOMERS_IN_EITHER_MODE.put("StepTimelineRestApi.retryRun", "retrying a failed run, from its failed step or the start: Run "
             + "now's rule (MIG-345)");
+        // MIG-420: a run's items, their files and counts are reads (POST for their filters, @ReadOnlyList); retrying failed items
+        // is retrying the run for those items, as the run's retry.
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.listRunItems", read + " (a run's items, MIG-420)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.listRunItemFiles", read + " (an item step's files, MIG-420)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.countRunItems", read + " (item counts of runs, MIG-420)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.retryRunItems", "retrying a run's failed items as its next attempt: the run "
+            + "retry's rule, Run now's (MIG-420)");
         // MIG-355: many failed runs retried at once, each by the single retry's rules; and Runs › Failed is a read (POST for its filters).
         CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.bulkRetry", "retrying failed runs, each as the single retry: Run now's rule (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.failedRuns", "a read: the failed runs, their facets and error patterns (POST for its "

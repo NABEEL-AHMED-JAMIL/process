@@ -1,5 +1,7 @@
 package process.pipeline.registry;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,7 +51,7 @@ public final class TaskSpec {
     /** MIG-420: what the task does with a run's items, when its config says so (itemsWhen); else PASS. */
     private final ItemRole itemRole;
     private final String itemsWhenField;
-    private final java.util.List<Object> itemsWhenValues;
+    private final List<Object> itemsWhenValues;
     private final String itemIdentity;
     private final String itemSubKey;
 
@@ -245,7 +247,7 @@ public final class TaskSpec {
         private Boolean repeatSafe;
         private ItemRole itemRole;
         private String itemsWhenField;
-        private java.util.List<Object> itemsWhenValues;
+        private List<Object> itemsWhenValues;
         private String itemIdentity;
         private String itemSubKey;
 
@@ -331,7 +333,7 @@ public final class TaskSpec {
         /** MIG-420: the role holds only when this config field is one of these values (else PASS). */
         public Builder itemsWhen(String field, Object... values) {
             this.itemsWhenField = field;
-            this.itemsWhenValues = java.util.Arrays.asList(values);
+            this.itemsWhenValues = Arrays.asList(values);
             return this;
         }
 

@@ -1,5 +1,8 @@
 package process.pipeline;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
@@ -55,12 +58,12 @@ public class JdbcRunAttemptStore implements RunAttemptStore {
             attempt.itemKeys == null ? null : attempt.itemMode);
     }
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     static String json(List<String> keys) {
         try {
             return JSON.writeValueAsString(keys);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException impossible) {
+        } catch (JsonProcessingException impossible) {
             throw new IllegalStateException(impossible);
         }
     }
@@ -70,8 +73,8 @@ public class JdbcRunAttemptStore implements RunAttemptStore {
             return null;
         }
         try {
-            return JSON.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
-        } catch (com.fasterxml.jackson.core.JsonProcessingException unreadable) {
+            return JSON.readValue(json, new TypeReference<List<String>>() { });
+        } catch (JsonProcessingException unreadable) {
             return null;
         }
     }

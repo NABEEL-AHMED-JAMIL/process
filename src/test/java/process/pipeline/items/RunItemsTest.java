@@ -1,5 +1,8 @@
 package process.pipeline.items;
 
+import java.time.Clock;
+import java.time.Duration;
+import process.pipeline.StepStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -74,7 +77,7 @@ class RunItemsTest {
         when(this.runs.findById(RUN)).thenReturn(Optional.of(run));
         when(this.jobs.findById(JOB)).thenReturn(Optional.of(job));
         // The step's output: one row per referral, a person's name and an AI answer with a nested name.
-        long step = this.steps.plan(RUN, 1, 1L, Collections.singletonList(new process.pipeline.StepStore.Planned(1, "extract", "ai_prompt",
+        long step = this.steps.plan(RUN, 1, 1L, Collections.singletonList(new StepStore.Planned(1, "extract", "ai_prompt",
             "fail"))).get(0);
         String key = DatasetStore.keyOf(RUN, 1, "extract", "output");
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -231,7 +234,7 @@ class RunItemsTest {
         TenantContext.set(1007L, "TENANT_ADMIN", 1015L, "x");
         assertThat(this.items.zip(RUN, token).status).as("another workspace").isEqualTo(403);
         // Expired: a link from a clock three minutes back.
-        ItemLinks past = new ItemLinks("test-service-token", java.time.Clock.offset(java.time.Clock.systemUTC(), java.time.Duration.ofMinutes(-3)));
+        ItemLinks past = new ItemLinks("test-service-token", Clock.offset(Clock.systemUTC(), Duration.ofMinutes(-3)));
         String old = past.issue(TENANT, 1015L, RUN, "1", null)[0];
         assertThat(new ItemLinks("test-service-token").check(old)).isNull();
         assertThat(new ItemLinks("another-token").check(token)).as("signed by another key").isNull();

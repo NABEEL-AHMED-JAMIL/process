@@ -1,5 +1,9 @@
 package process.notifications;
 
+import java.util.Collections;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import process.pipeline.items.RunItemStore;
 import process.identity.IdentityPort;
 import org.barco.notifications.contract.JobStatusChanged;
 import org.barco.notifications.contract.MailRequested;
@@ -48,15 +52,15 @@ public class JobMail {
     }
 
     /** MIG-420: the run's items, for an item run's mail; absent in hand-built tests. */
-    private process.pipeline.items.RunItemStore items;
+    private RunItemStore items;
     private String consoleUrl = "http://localhost:4400";
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void useItems(process.pipeline.items.RunItemStore items) {
+    @Autowired(required = false)
+    public void useItems(RunItemStore items) {
         this.items = items;
     }
 
-    @org.springframework.beans.factory.annotation.Value("${customer.embed.console-url:http://localhost:4400}")
+    @Value("${customer.embed.console-url:http://localhost:4400}")
     public void setConsoleUrl(String consoleUrl) {
         this.consoleUrl = consoleUrl == null ? "" : consoleUrl.trim().replaceAll("/+$", "");
     }
@@ -70,7 +74,7 @@ public class JobMail {
         if (this.items == null || run.getJobQueueId() == null || status == JobStatus.Skip) {
             return;
         }
-        int[] counts = this.items.counts(java.util.Collections.singletonList(run.getJobQueueId())).get(run.getJobQueueId());
+        int[] counts = this.items.counts(Collections.singletonList(run.getJobQueueId())).get(run.getJobQueueId());
         if (counts == null || counts[0] == 0) {
             return;
         }

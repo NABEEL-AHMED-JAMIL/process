@@ -1,5 +1,7 @@
 package process.pipeline.tasks;
 
+import java.util.Collections;
+import java.util.function.Function;
 import process.pipeline.Dataset;
 import process.pipeline.RunDocuments;
 import process.pipeline.RunOutput;
@@ -53,8 +55,8 @@ final class TaskContext implements StepContext {
     }
 
     /** MIG-420: an item run -- each row's item (null: no items, rows keep their numbers) -- and what the step said of each. */
-    java.util.function.Function<Map<String, Object>, String> itemOf;
-    final List<String> itemEvents = java.util.Collections.synchronizedList(new ArrayList<>());
+    Function<Map<String, Object>, String> itemOf;
+    final List<String> itemEvents = Collections.synchronizedList(new ArrayList<>());
 
     @Override
     public String rowTag(Map<String, Object> row, int index) {
