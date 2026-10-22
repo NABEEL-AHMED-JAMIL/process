@@ -37,6 +37,14 @@ public interface RunItemStore {
 
     int countFiles(long jobQueueId, String itemKey, int attempt, String stepKey, String search);
 
+    /**
+     * ZT-I16: a document's files with its sub-items' (a page's image and text), each at its current version, filtered, a page, in
+     * step and page order.
+     */
+    List<ItemRow.FileRow> familyFiles(long jobQueueId, String parentKey, String stepKey, String search, int offset, int limit);
+
+    int countFamilyFiles(long jobQueueId, String parentKey, String stepKey, String search);
+
     Optional<ItemRow.FileRow> file(long runItemFileId);
 
     /** Per run: {items, done, failed, running} over its current top-level items; a run with none is left out. */

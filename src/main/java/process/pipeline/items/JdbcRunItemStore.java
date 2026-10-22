@@ -119,8 +119,34 @@ public class JdbcRunItemStore implements RunItemStore {
         return n == null ? 0 : n;
     }
 
+    /** A document and its sub-items, each at its current version. */
+    private static final String FAMILY = " JOIN run_item i ON i.job_queue_id = f.job_queue_id AND i.item_key = f.item_key AND i.attempt = f.attempt"
+        + " AND i.current AND (i.item_key = ? OR i.parent_key = ?) ";
+
+    @Override
+    public List<ItemRow.FileRow> familyFiles(long jobQueueId, String parentKey, String stepKey, String search, int offset, int limit) {
+        List<Object> args = new ArrayList<>(Arrays.asList(parentKey, parentKey, jobQueueId));
+        String where = filter(new StringBuilder("WHERE f.job_queue_id = ?"), stepKey, search, args);
+        args.add(limit);
+        args.add(offset);
+        return this.jdbc.query("SELECT " + FILE_COLUMNS + FAMILY + where
+            + " ORDER BY f.step_index, i.parent_key NULLS FIRST, i.position, f.run_item_file_id LIMIT ? OFFSET ?", JdbcRunItemStore::file,
+            args.toArray());
+    }
+
+    @Override
+    public int countFamilyFiles(long jobQueueId, String parentKey, String stepKey, String search) {
+        List<Object> args = new ArrayList<>(Arrays.asList(parentKey, parentKey, jobQueueId));
+        String where = filter(new StringBuilder("WHERE f.job_queue_id = ?"), stepKey, search, args);
+        Integer n = this.jdbc.queryForObject("SELECT count(*) FROM run_item_file f" + FAMILY + where, Integer.class, args.toArray());
+        return n == null ? 0 : n;
+    }
+
     private static String filesWhere(String stepKey, String search, List<Object> args) {
-        StringBuilder where = new StringBuilder("WHERE f.job_queue_id = ? AND f.item_key = ? AND f.attempt = ?");
+        return filter(new StringBuilder("WHERE f.job_queue_id = ? AND f.item_key = ? AND f.attempt = ?"), stepKey, search, args);
+    }
+
+    private static String filter(StringBuilder where, String stepKey, String search, List<Object> args) {
         if (stepKey != null && !stepKey.isEmpty()) {
             where.append(" AND f.step_key = ?");
             args.add(stepKey);

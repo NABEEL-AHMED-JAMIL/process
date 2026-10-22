@@ -159,7 +159,8 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
     }
 
     private static long fileRefOf(long run) {
-        return fx.db.jdbc().queryForObject("SELECT run_item_file_id FROM run_item_file WHERE job_queue_id = ?", Long.class, run);
+        return fx.db.jdbc().queryForObject("SELECT run_item_file_id FROM run_item_file WHERE job_queue_id = ? AND file_name = 'insight.json'",
+            Long.class, run);
     }
 
     @Test
@@ -210,6 +211,43 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
         request.setFailed(true);
         request.setFrom("failed_step");
         return request;
+    }
+
+    /** A document (ref 2) with one page (2.1) and the page's image, in this run; B's page carries B's marker. */
+    private static void document(JdbcTemplate sql, long run, String image) {
+        long step = sql.queryForObject("SELECT step_execution_id FROM step_execution WHERE job_queue_id = ? AND step_key = 'ask'", Long.class, run);
+        sql.update("INSERT INTO run_item (job_queue_id, attempt, item_key, item_ref, label, position, status, steps, child_count, file_count, "
+            + "started_at, ended_at) VALUES (?, 1, 'docs/p.pdf', '2', 'p.pdf', 2, 'done', '[]'::jsonb, 1, 0, now(), now())", run);
+        sql.update("INSERT INTO run_item (job_queue_id, attempt, item_key, item_ref, parent_key, label, position, status, steps, file_count, "
+            + "started_at, ended_at) VALUES (?, 1, 'docs/p.pdf#1', '2.1', 'docs/p.pdf', 'Page 1', 1, 'done', '[]'::jsonb, 1, now(), now())", run);
+        sql.update("INSERT INTO run_item_file (job_queue_id, attempt, item_key, step_index, step_key, role, step_execution_id, file_name) "
+            + "VALUES (?, 1, 'docs/p.pdf#1', 1, 'ask', 'output', ?, ?)", run, step, image);
+    }
+
+    @Test
+    void aDocumentsFilesAreItsPagesInItsOwnRunAlone() throws Exception {
+        // ZT-I16 (live run 1856): a document's "40 files" opened "0 files" -- its pages' files were never its own.
+        JdbcTemplate sql = fx.db.jdbc();
+        document(sql, A_RUN, "p-page-01.png");
+        document(sql, B_RUN, "bravo-page-01.png");
+        try {
+            RunItems.FilesRequest request = new RunItems.FilesRequest();
+            request.setJobQueueId(A_RUN);
+            request.ref = "2";
+            request.stepKey = "ask";
+            assertThat(fx.probe("POST sourceJob.json/runItems/files(A's document)", ADMIN_OF_A, () -> items.listRunItemFiles(request)))
+                .contains("\"total\":1").contains("p-page-01.png").doesNotContain("bravo");
+            long page = sql.queryForObject("SELECT run_item_file_id FROM run_item_file WHERE file_name = 'bravo-page-01.png'", Long.class);
+            assertThat(fx.probe("GET sourceJob.json/runItems/file(B's page under A's document)", ADMIN_OF_A,
+                () -> items.file(A_RUN, "2", page, false))).startsWith("HTTP 404");
+            request.setJobQueueId(B_RUN);
+            assertThat(fx.probe("POST sourceJob.json/runItems/files(B's document)", ADMIN_OF_A, () -> items.listRunItemFiles(request)))
+                .contains(REFUSED).doesNotContain("bravo");
+            assertThat(fx.leaks).isEmpty();
+        } finally {
+            sql.update("DELETE FROM run_item_file WHERE item_key LIKE 'docs/p.pdf%'");
+            sql.update("DELETE FROM run_item WHERE item_key LIKE 'docs/p.pdf%'");
+        }
     }
 
     @Test

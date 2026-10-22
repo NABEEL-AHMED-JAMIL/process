@@ -130,6 +130,33 @@ public class InMemoryRunItemStore implements RunItemStore {
         return this.matching(jobQueueId, itemKey, attempt, stepKey, search).size();
     }
 
+    private List<ItemRow.FileRow> family(long jobQueueId, String parentKey, String stepKey, String search) {
+        Map<String, ItemRow> members = new LinkedHashMap<>();
+        for (ItemRow r : this.rows) {
+            if (r.jobQueueId == jobQueueId && r.current && (r.itemKey.equals(parentKey) || parentKey.equals(r.parentKey))) {
+                members.put(r.itemKey + "@" + r.attempt, r);
+            }
+        }
+        return this.files.stream().filter(f -> f.jobQueueId == jobQueueId && members.containsKey(f.itemKey + "@" + f.attempt)
+            && (stepKey == null || stepKey.equals(f.stepKey))
+            && (search == null || search.isEmpty() || f.fileName.toLowerCase().contains(search.toLowerCase())))
+            .sorted(Comparator.<ItemRow.FileRow>comparingInt(f -> f.stepIndex)
+                .thenComparing(f -> members.get(f.itemKey + "@" + f.attempt).parentKey != null)
+                .thenComparingInt(f -> members.get(f.itemKey + "@" + f.attempt).position))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public synchronized List<ItemRow.FileRow> familyFiles(long jobQueueId, String parentKey, String stepKey, String search, int offset, int limit) {
+        List<ItemRow.FileRow> all = this.family(jobQueueId, parentKey, stepKey, search);
+        return all.subList(Math.min(offset, all.size()), Math.min(all.size(), offset + limit));
+    }
+
+    @Override
+    public synchronized int countFamilyFiles(long jobQueueId, String parentKey, String stepKey, String search) {
+        return this.family(jobQueueId, parentKey, stepKey, search).size();
+    }
+
     @Override
     public synchronized Optional<ItemRow.FileRow> file(long runItemFileId) {
         return this.files.stream().filter(f -> f.runItemFileId == runItemFileId).findFirst();

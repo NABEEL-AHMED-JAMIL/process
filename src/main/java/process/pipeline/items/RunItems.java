@@ -749,9 +749,9 @@ public class RunItems {
         }
         stepViews.sort((a, b) -> Integer.compare((Integer) a.get("index"), (Integer) b.get("index")));
         data.put("steps", stepViews);
-        int count = this.store.countFiles(jobQueueId, row.itemKey, row.attempt, null, null);
+        int count = this.countFilesOf(row, null, null);
         data.put("fileCount", count);
-        data.put("files", this.filesView(this.store.files(jobQueueId, row.itemKey, row.attempt, null, null, 0, 20), steps));
+        data.put("files", this.filesView(this.filesOf(row, null, null, 0, 20), steps));
         List<Map<String, Object>> vs = new ArrayList<>();
         for (ItemRow v : versions) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -900,7 +900,7 @@ public class RunItems {
         }
         int size = Math.max(1, Math.min(MAX_PAGE, request.size == null ? 15 : request.size));
         int page = Math.max(0, request.page == null ? 0 : request.page);
-        int total = this.store.countFiles(row.jobQueueId, row.itemKey, row.attempt, request.stepKey, request.search);
+        int total = this.countFilesOf(row, request.stepKey, request.search);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("ref", row.itemRef);
         data.put("label", row.label);
@@ -908,12 +908,11 @@ public class RunItems {
         data.put("page", page);
         data.put("size", size);
         long bytes = 0;
-        for (ItemRow.FileRow f : this.store.files(row.jobQueueId, row.itemKey, row.attempt, request.stepKey, null, 0, 10_000)) {
+        for (ItemRow.FileRow f : this.filesOf(row, request.stepKey, null, 0, 10_000)) {
             bytes += f.byteCount == null ? 0 : f.byteCount;
         }
         data.put("bytes", bytes);
-        data.put("files", this.filesView(this.store.files(row.jobQueueId, row.itemKey, row.attempt, request.stepKey, request.search, page * size,
-            size), this.stepsOf(row.jobQueueId)));
+        data.put("files", this.filesView(this.filesOf(row, request.stepKey, request.search, page * size, size), this.stepsOf(row.jobQueueId)));
         return Answer.ok(String.format("%d file(s).", total), data);
     }
 
@@ -934,7 +933,10 @@ public class RunItems {
         ItemRow row = ref == null ? null : byRef(this.store.current(jobQueueId), ref.trim());
         boolean belongs = file.isPresent() && row != null && file.get().jobQueueId == jobQueueId
             && (file.get().itemKey.equals(row.itemKey) || this.store.versions(jobQueueId, row.itemKey).stream()
-                .anyMatch(v -> v.attempt == file.get().attempt && v.itemKey.equals(file.get().itemKey)));
+                .anyMatch(v -> v.attempt == file.get().attempt && v.itemKey.equals(file.get().itemKey))
+                // ZT-I16: a page's file, at the page's current version, is its document's too.
+                || (family(row) && file.get().itemKey.startsWith(row.itemKey + "#") && this.store.versions(jobQueueId, file.get().itemKey)
+                    .stream().anyMatch(v -> v.current && v.attempt == file.get().attempt)));
         if (!belongs) {
             this.accessLog.log(run, ItemAccessLog.ITEM_FILE, action, null, false, 404, "File not found for this item.");
             return Answer.refused(404, "File not found for this item.");
@@ -1054,7 +1056,7 @@ public class RunItems {
         if (this.links == null || !this.links.available()) {
             return Answer.refused(503, "Download links cannot be made right now.");
         }
-        int count = this.store.countFiles(jobQueueId, row.itemKey, row.attempt, stepKey, null);
+        int count = this.countFilesOf(row, stepKey, null);
         if (count == 0) {
             return Answer.refused(404, "This item has no files to download.");
         }
@@ -1093,7 +1095,7 @@ public class RunItems {
         if (row == null) {
             return Answer.refused(404, ITEM_NOT_FOUND);
         }
-        List<ItemRow.FileRow> files = this.store.files(jobQueueId, row.itemKey, row.attempt, link.stepKey, null, 0, 5_000);
+        List<ItemRow.FileRow> files = this.filesOf(row, link.stepKey, null, 0, 5_000);
         List<Object[]> opened = new ArrayList<>();
         long total = 0;
         for (ItemRow.FileRow f : files) {
@@ -1379,9 +1381,24 @@ public class RunItems {
         return this.store.current(jobQueueId);
     }
 
-    /** For the customer API: one item's files at its current attempt. */
+    /** For the customer API: one item's files at its current attempt (a document's with its pages'). */
     public List<ItemRow.FileRow> filesOf(ItemRow row) {
-        return this.store.files(row.jobQueueId, row.itemKey, row.attempt, null, null, 0, 1_000);
+        return this.filesOf(row, null, null, 0, 1_000);
+    }
+
+    /** ZT-I16: a document's current version owns its pages' files too (a split's page images, a per-page step's files). */
+    private static boolean family(ItemRow row) {
+        return row.parentKey == null && row.childCount > 0 && row.current;
+    }
+
+    private List<ItemRow.FileRow> filesOf(ItemRow row, String stepKey, String search, int offset, int limit) {
+        return family(row) ? this.store.familyFiles(row.jobQueueId, row.itemKey, stepKey, search, offset, limit)
+            : this.store.files(row.jobQueueId, row.itemKey, row.attempt, stepKey, search, offset, limit);
+    }
+
+    private int countFilesOf(ItemRow row, String stepKey, String search) {
+        return family(row) ? this.store.countFamilyFiles(row.jobQueueId, row.itemKey, stepKey, search)
+            : this.store.countFiles(row.jobQueueId, row.itemKey, row.attempt, stepKey, search);
     }
 
     /** For the customer API: step names of a run. */
