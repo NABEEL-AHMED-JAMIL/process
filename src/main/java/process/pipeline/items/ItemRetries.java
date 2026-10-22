@@ -1,5 +1,6 @@
 package process.pipeline.items;
 
+import java.util.HashSet;
 import process.pipeline.PipelineDefinition;
 import process.security.TenantContext;
 import org.springframework.stereotype.Service;
@@ -22,9 +23,10 @@ import java.util.Set;
 /**
  * Retry failed items (MIG-420): some of a run's items -- the ones named, or every failed one -- run again as the run's next
  * attempt, and only they. "item": the item's steps again from the one after the step that found it (a page: from the step that
- * split it); "failed_step": from the earliest step the items failed at. Each retried item gets a new version; the earlier one
- * is kept, shown as earlier. Only their calls are made, and billed, again: every per-row call is keyed by its item
- * (ItemTracker.tagOf), so an AI answer that was fine is reused, never re-bought. The rules are a resume's (RunRetries): the run's
+ * split it); "failed_step": each from the step it failed at -- the attempt resumes at the earliest of them, and an item that had
+ * passed a per-item step before its own failed step reuses its earlier output there (ZT-I11). Each retried item gets a new
+ * version; the earlier one is kept, shown as earlier. Only their calls are made, and billed, again: every per-row call is keyed
+ * by its item (ItemTracker.tagOf), so an AI answer that was fine is reused, never re-bought. The rules are a resume's (RunRetries): the run's
  * owner or an administrator, a finished run, no other run of the pipeline in flight, the kept outputs before the step not
  * expired, the input files unchanged.
  */
@@ -137,7 +139,9 @@ public class ItemRetries {
             return RunItems.Answer.refused(409, "This run's pipeline no longer works item by item; retry the run instead.");
         }
         int from = Integer.MAX_VALUE;
+        Set<Integer> failedAt = new HashSet<>();
         for (ItemRow row : chosen) {
+            failedAt.add(row.failedStepIndex == null ? source : row.failedStepIndex);
             int at;
             if (WHOLE.equals(mode)) {
                 at = row.parentKey != null ? this.fanOutOf(plan) : plan.get(source).role == ItemRole.SOURCE ? source + 1 : source;
@@ -170,8 +174,11 @@ public class ItemRetries {
         data.put("fromStep", outcome.plan.fromName);
         data.put("fromStepIndex", outcome.plan.fromIndex);
         data.put("reused", outcome.plan.reused.size());
+        // ZT-I11: items that failed at different steps each run again from their own (an earlier step they passed is reused).
+        String fromWhere = !WHOLE.equals(mode) && failedAt.size() > 1
+            ? String.format("their failed steps (the first at %s)", outcome.plan.fromName) : outcome.plan.fromName;
         return RunItems.Answer.ok(String.format("Retrying %d item%s from %s: attempt %d.", keys.size(), keys.size() == 1 ? "" : "s",
-            outcome.plan.fromName, outcome.plan.nextAttempt), data);
+            fromWhere, outcome.plan.nextAttempt), data);
     }
 
     private int fanOutOf(List<ItemTracker.StepInfo> plan) {

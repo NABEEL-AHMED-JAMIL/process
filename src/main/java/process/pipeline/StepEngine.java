@@ -75,9 +75,11 @@ import java.util.TreeSet;
 import process.pipeline.approval.RunApprovalStore;
 import process.pipeline.approval.RunApprovalEvents;
 import process.pipeline.items.ItemReport;
+import process.pipeline.items.ItemRetries;
 import process.pipeline.items.ItemTracker;
 import process.pipeline.items.RunItemStore;
 import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Runs a pipeline as ordered steps (MIG-230), for a run whose pipeline has a stored definition that is not its legacy
@@ -609,6 +611,8 @@ public class StepEngine {
         volatile ItemTracker items;
         /** MIG-420: the run_dataset id of each dataset this attempt wrote, by its key. */
         private final Map<String, Long> datasetIds = new ConcurrentHashMap<>();
+        /** ZT-I11: the step running now without some retried items it reuses the earlier output of; null for any other. */
+        private Carrying carrying;
 
         Execution(StepPlan plan) {
             this.plan = plan;
@@ -837,7 +841,7 @@ public class StepEngine {
             boolean resume = asked != null && asked.isResume();
             return ItemTracker.open(this.run.getJobQueueId(), this.attempt, itemStore, this.itemEngine(), plan,
                 resume ? (asked.fromStepIndex == null ? 0 : asked.fromStepIndex) : -1, resume ? asked.previousAttempt : 0,
-                resume ? asked.itemKeys : null);
+                resume ? asked.itemKeys : null, resume && ItemRetries.FAILED_STEP.equals(asked.itemMode));
         }
 
         /** MIG-420: the attempt's items as it left them, when it continues after an Approval step. */
@@ -890,23 +894,41 @@ public class StepEngine {
         }
 
         /**
-         * MIG-420: a retry of some items -- the step's input with only their rows, kept as the step's "items-input" dataset (so
-         * the sweep removes it with the run's others); the step reads that instead. The source (null) is read as it is.
+         * MIG-420: a retry of some items, at a step that works item by item (a per-item step, a split): the step runs the rows
+         * of the items it retries -- kept as its "items-input" dataset, so the sweep removes it with the run's others -- and
+         * reuses every other item's earlier output there, as it does a retried item's at a step it passed before the step it
+         * failed at (ZT-I11): those are neither run nor billed again, and the step's output still holds every item's rows, so a
+         * later step over the whole table reads them all (ZT-I12). Any other step reads its input as it is, as does the source.
          */
         private String itemInput(int index, PipelineDefinition.Step step, long row, String inputKey, StepLog log) {
-            if (inputKey == null) {
-                return null;
+            if (inputKey == null || !this.items.perItemAt(index)) {
+                return inputKey;
             }
             String target = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "items-input");
             List<Integer> kept = new ArrayList<>();
             DatasetStore.Output out = null;
             int read = 0;
+            Set<String> again = new HashSet<>();
+            Map<String, List<Object[]>> earlier = this.earlierRows(this.items.carries(index), step, log);
+            Carrying carry = new Carrying(index);
             try (RowSource rows = datasets.open(inputKey, batchRows())) {
                 out = datasets.create(target);
                 out.declare(rows.columns());
                 for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
                     for (Map<String, Object> r : batch) {
-                        if (this.items.keepRow(index, inputKey, read, r)) {
+                        String key = this.items.itemAt(inputKey, read, r);
+                        if (key == null || carry.has(key)) {
+                            // A row of no item is never run again by a per-item step; another row of a reused item is in its rows.
+                            read++;
+                            continue;
+                        }
+                        boolean runs = this.items.runsAt(index, key);
+                        if (!runs && earlier.containsKey(key)) {
+                            carry.add(key, kept.size(), earlier.remove(key));
+                        } else {
+                            if (!runs) {
+                                again.add(key);
+                            }
                             out.add(r);
                             kept.add(read);
                         }
@@ -933,7 +955,136 @@ public class StepEngine {
             this.items.filtered(inputKey, target, kept);
             log.line("INFO", String.format("A retry of some items: this step reads their %,d of the %,d row(s) its input has.",
                 kept.size(), read));
+            if (!carry.groups.isEmpty()) {
+                this.carrying = carry;
+                log.line("INFO", String.format("%,d item%s not run again here: %s earlier output at this step is reused, not run or "
+                    + "billed again.", carry.groups.size(), carry.groups.size() == 1 ? "" : "s", carry.groups.size() == 1 ? "its" : "their"));
+            }
+            if (!again.isEmpty()) {
+                log.line("WARN", String.format("%,d item%s not retried ran again here: %s earlier output at this step could not be "
+                    + "reused.", again.size(), again.size() == 1 ? "" : "s", again.size() == 1 ? "its" : "their"));
+            }
             return target;
+        }
+
+        /**
+         * ZT-I11/ZT-I12: each reused item's earlier rows at this step, in order, as {row's item key, row}, read from the datasets
+         * its earlier entries point at; an item whose rows cannot all be read is left out (the step then runs it).
+         */
+        private Map<String, List<Object[]>> earlierRows(Map<String, ItemTracker.Carry> carries, PipelineDefinition.Step step, StepLog log) {
+            Map<String, List<Object[]>> found = new LinkedHashMap<>();
+            if (carries.isEmpty()) {
+                return found;
+            }
+            // Storage key -> position -> {item, row's item key}.
+            Map<String, Map<Integer, String[]>> wanted = new LinkedHashMap<>();
+            for (ItemTracker.Carry c : carries.values()) {
+                for (int k = 0; k < c.size(); k++) {
+                    wanted.computeIfAbsent(c.storageKeys.get(k), x -> new HashMap<>()).put(c.positions.get(k), new String[] {c.key,
+                        c.rowKeys.get(k)});
+                }
+            }
+            for (Map.Entry<String, Map<Integer, String[]>> e : wanted.entrySet()) {
+                int position = 0;
+                try (RowSource rows = datasets.open(e.getKey(), batchRows())) {
+                    for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                        for (Map<String, Object> r : batch) {
+                            String[] whose = e.getValue().get(position++);
+                            if (whose != null) {
+                                found.computeIfAbsent(whose[0], x -> new ArrayList<>()).add(new Object[] {whose[1], r});
+                            }
+                        }
+                    }
+                } catch (Exception unread) {
+                    log.line("WARN", String.format("An earlier output of step <%s> could not be read (%s): its items run again.",
+                        step.getKey(), reasonOf(unread)));
+                    for (String[] whose : e.getValue().values()) {
+                        found.remove(whose[0]);
+                        carries.remove(whose[0]);
+                    }
+                }
+            }
+            for (ItemTracker.Carry c : carries.values()) {
+                List<Object[]> rows = found.get(c.key);
+                if (rows == null || rows.size() != c.size()) {
+                    found.remove(c.key);
+                }
+            }
+            return found;
+        }
+
+        /**
+         * ZT-I11/ZT-I12: the step's output with the reused items' earlier rows where their input rows were -- kept as the step's
+         * output (its own rows stay as its "items-work" dataset), so the next step, and a later resume, read every item's rows
+         * in the order the run had them.
+         */
+        private String withCarried(long row, PipelineDefinition.Step step, String own, StepLog log) {
+            Carrying carry = this.carrying;
+            String target = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "items-output");
+            DatasetStore.Output out = null;
+            List<Integer> ownAt = new ArrayList<>();
+            Map<Integer, String> carriedAt = new HashMap<>();
+            int position = 0;
+            int g = 0;
+            try (RowSource rows = datasets.open(own, batchRows())) {
+                out = datasets.create(target);
+                List<String> columns = new ArrayList<>(rows.columns());
+                for (Carrying.Group group : carry.groups) {
+                    for (Object[] r : group.rows) {
+                        for (String c : this.cells(r).keySet()) {
+                            if (!columns.contains(c)) {
+                                columns.add(c);
+                            }
+                        }
+                    }
+                }
+                out.declare(columns);
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    for (Map<String, Object> r : batch) {
+                        for (; g < carry.groups.size() && carry.groups.get(g).before <= ownAt.size(); g++) {
+                            position = this.addGroup(out, carry.groups.get(g), position, carriedAt);
+                        }
+                        out.add(r);
+                        ownAt.add(position++);
+                    }
+                }
+                for (; g < carry.groups.size(); g++) {
+                    position = this.addGroup(out, carry.groups.get(g), position, carriedAt);
+                }
+                out.commit();
+            } catch (Exception ex) {
+                if (out != null) {
+                    out.abort();
+                }
+                throw new IllegalStateException(String.format("The reused items' rows could not be added to the output of step <%s>: %s",
+                    step.getKey(), reasonOf(ex)), ex);
+            }
+            String columns;
+            try {
+                columns = JSON.writeValueAsString(out.columns());
+            } catch (JsonProcessingException ex) {
+                columns = "[]";
+            }
+            this.datasetIds.put(target, steps.dataset(row, "output", target, position, columns, this.expiry()));
+            this.sizes.put(target, (long) position);
+            this.items.carried(target, ownAt.stream().mapToInt(Integer::intValue).toArray(), carriedAt);
+            log.line("INFO", String.format("Output: its own %,d row(s) and the reused items' %,d, in the run's order.", ownAt.size(),
+                carriedAt.size()));
+            return target;
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> cells(Object[] keyed) {
+            return (Map<String, Object>) keyed[1];
+        }
+
+        private int addGroup(DatasetStore.Output out, Carrying.Group group, int position, Map<Integer, String> carriedAt) throws Exception {
+            int at = position;
+            for (Object[] r : group.rows) {
+                out.add(this.cells(r));
+                carriedAt.put(at++, (String) r[0]);
+            }
+            return at;
         }
 
         /** The run's end as its steps came to it: nothing for an interrupted or paused run, else Failed or Completed. */
@@ -1088,6 +1239,7 @@ public class StepEngine {
                     continue;
                 }
                 String inputKey = named ? outputs.get(step.getInput()) : latest;
+                this.carrying = null;
                 if (this.items != null) {
                     // MIG-420: the step that names the run's items learns which column does; a retry of some items reads theirs alone.
                     this.items.beforeStep(i, inputKey, source.getColumns());
@@ -1130,8 +1282,13 @@ public class StepEngine {
                 if (tried.result != null) {
                     Dataset output = tried.result.getOutput();
                     Long out = tried.result.getRecordsOut();
-                    String passed = tried.outputKey != null ? this.recordStreamed(row, tried)
-                        : output != null ? this.keep(row, step, output) : inputKey;
+                    boolean carries = this.carrying != null && this.carrying.index == i;
+                    String own = carries ? "items-work" : "output";
+                    String passed = tried.outputKey != null ? this.recordStreamed(row, tried, own)
+                        : output != null ? this.keep(row, step, output, own) : inputKey;
+                    if (carries) {
+                        passed = this.withCarried(row, step, passed, log);
+                    }
                     outputs.put(step.getKey(), passed);
                     latest = passed;
                     this.itemsAfter(i, row, inputKey, passed, true, null, tried.reports, millis);
@@ -1638,7 +1795,8 @@ public class StepEngine {
         }
 
         /** The output, to the dataset store, and its reference, to run_dataset; the reference. */
-        private String keep(long row, PipelineDefinition.Step step, Dataset output) {
+        /** A step's output, kept as its run dataset {@code name}: "output" (ZT-I11: "items-work" when reused rows join it). */
+        private String keep(long row, PipelineDefinition.Step step, Dataset output, String name) {
             String key = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "output");
             try {
                 datasets.write(key, output);
@@ -1652,7 +1810,7 @@ public class StepEngine {
             } catch (JsonProcessingException ex) {
                 columns = "[]";
             }
-            this.datasetIds.put(key, steps.dataset(row, "output", key, output.size(), columns, this.expiry()));
+            this.datasetIds.put(key, steps.dataset(row, name, key, output.size(), columns, this.expiry()));
             this.sizes.put(key, (long) output.size());
             return key;
         }
@@ -1685,14 +1843,14 @@ public class StepEngine {
         }
 
         /** The run_dataset row of a streamed output; the reference. */
-        private String recordStreamed(long row, Tried tried) {
+        private String recordStreamed(long row, Tried tried, String name) {
             String columns;
             try {
                 columns = JSON.writeValueAsString(tried.outputColumns);
             } catch (JsonProcessingException ex) {
                 columns = "[]";
             }
-            this.datasetIds.put(tried.outputKey, steps.dataset(row, "output", tried.outputKey, tried.outputRows, columns, this.expiry()));
+            this.datasetIds.put(tried.outputKey, steps.dataset(row, name, tried.outputKey, tried.outputRows, columns, this.expiry()));
             this.sizes.put(tried.outputKey, tried.outputRows);
             return tried.outputKey;
         }
@@ -1902,6 +2060,41 @@ public class StepEngine {
     }
 
     /** One step's tries. */
+    /**
+     * ZT-I11/ZT-I12: the items a per-item step of a retry does not run again, each with its earlier rows ({row's item key, row})
+     * and how many of the step's own input rows came before it, so its rows go back where they were.
+     */
+    private static final class Carrying {
+        final int index;
+        final List<Group> groups = new ArrayList<>();
+        private final Set<String> carried = new HashSet<>();
+
+        static final class Group {
+            final String key;
+            final int before;
+            final List<Object[]> rows;
+
+            Group(String key, int before, List<Object[]> rows) {
+                this.key = key;
+                this.before = before;
+                this.rows = rows;
+            }
+        }
+
+        Carrying(int index) {
+            this.index = index;
+        }
+
+        boolean has(String key) {
+            return this.carried.contains(key);
+        }
+
+        void add(String key, int before, List<Object[]> rows) {
+            this.carried.add(key);
+            this.groups.add(new Group(key, before, rows));
+        }
+    }
+
     private static final class Tried {
         /** The last try failed with an error that says to try again (PassingErrors). */
         boolean passing;

@@ -197,7 +197,7 @@ class RunItemsEngineTest {
                 Object key = row.get("key") != null && row.get("page") != null ? row.get("key") + "#" + row.get("page") : row.get("key");
                 billed.add("attempt " + context.attempt() + " " + key + " " + context.rowTag(row, i));
                 Map<String, Object> answered = new LinkedHashMap<>(row);
-                if (broken.contains(String.valueOf(key))) {
+                if (broken.contains(String.valueOf(key)) || broken.contains(key + "@" + context.stepKey())) {
                     context.itemFailed(row, "The model's answer did not match the schema.");
                     answered.put("answer", null);
                 } else {
@@ -314,6 +314,72 @@ class RunItemsEngineTest {
         assertThat(this.items.files).filteredOn(f -> f.attempt == 2 && "output".equals(f.role)).extracting(f -> f.itemKey)
             .containsExactly("voice-intake/call-b.m4a");
         assertThat(this.steps.logText(RUN_ID, 2, "ask")).anyMatch(l -> l.contains("this step reads their 1 of the 3 row(s) its input has"));
+    }
+
+    @Test
+    void retryingFromTheFailedStepsReusesWhatAnItemPassedBeforeItsOwnFailedStep() {
+        // ZT-I11: b failed at <ask>, a at <again>; a retry of both from their failed steps runs <ask> for b alone -- a's
+        // earlier answer there is reused, neither called nor billed again -- and <again> for both.
+        this.broken.add("in/b.m4a@ask");
+        this.broken.add("in/a.m4a@again");
+        PipelineDefinition twoSteps = Definitions.of(sample("read", row("key", "in/a.m4a"), row("key", "in/b.m4a"), row("key", "in/c.m4a")),
+            step("ask", "per_item"), step("again", "per_item"));
+        this.saves(twoSteps);
+        this.runs();
+        assertThat(this.item("in/a.m4a").failedStepKey).isEqualTo("again");
+        assertThat(this.item("in/b.m4a").failedStepKey).isEqualTo("ask");
+        this.broken.clear();
+        int before = this.billed.size();
+
+        assertThat(this.retries.retryItems(this.run, this.job, 1, Arrays.asList("in/a.m4a", "in/b.m4a"), "failed_step",
+            RunRetries.Actor.person(USER, false)).queued()).isTrue();
+        this.runs();
+
+        assertThat(this.billed.subList(before, this.billed.size())).extracting(l -> l.substring(0, l.lastIndexOf(' ')))
+            .as("a's <ask> call is not made again").containsExactlyInAnyOrder("attempt 2 in/b.m4a", "attempt 2 in/a.m4a", "attempt 2 in/b.m4a");
+        assertThat(this.billed.subList(before, before + 1)).allMatch(l -> l.contains(" in/b.m4a "));
+        assertThat(this.run.getJobStatus()).isEqualTo(JobStatus.Completed);
+        assertThat(this.run.getJobStatusMessage()).endsWith("Items: 3 of 3 done.");
+        ItemRow a = this.item("in/a.m4a");
+        assertThat(a.attempt).isEqualTo(2);
+        assertThat(a.status).isEqualTo("done");
+        assertThat(a.step(1).reusedFrom).as("its <ask> answer is attempt 1's").isEqualTo(1);
+        assertThat(a.step(1).ms).isEqualTo(1200L);
+        assertThat(a.step(2).reusedFrom).isNull();
+        ItemRow b = this.item("in/b.m4a");
+        assertThat(b.status).isEqualTo("done");
+        assertThat(b.step(1).reusedFrom).isNull();
+        assertThat(this.steps.row(RUN_ID, 2, "ask").recordsIn).as("<ask> read b's row alone").isEqualTo(1L);
+        assertThat(this.steps.row(RUN_ID, 2, "again").recordsIn).as("<again> ran both, a with its attempt-1 answer").isEqualTo(2L);
+        assertThat(this.steps.logText(RUN_ID, 2, "ask")).anyMatch(l -> l.contains("2 items not run again here"));
+        assertThat(this.item("in/c.m4a").attempt).isEqualTo(1);
+    }
+
+    @Test
+    void aRetrysStepsOverTheWholeTableStillReadEveryItemsRows() {
+        // ZT-I12 (live run 1853): a retry of one item ran its per-item steps for it alone and the steps over the whole table
+        // (a whole-table file, an aggregate) then had only its row -- the run's latest file lost the other items. The others'
+        // earlier rows are reused at the per-item steps, in the run's order, so the whole-table steps read them all again.
+        this.broken.add("in/b.m4a");
+        this.saves(Definitions.of(sample("read", row("key", "in/a.m4a"), row("key", "in/b.m4a"), row("key", "in/c.m4a")),
+            step("ask", "per_item"), step("total", "aggregate", config("groupBy", Collections.singletonList("key"),
+                "aggregations", Collections.singletonList(config("op", "count", "as", "rows"))))));
+        this.runs();
+        this.broken.clear();
+        int before = this.billed.size();
+
+        assertThat(this.retries.retryItems(this.run, this.job, 1, Collections.singletonList("in/b.m4a"), "failed_step",
+            RunRetries.Actor.person(USER, false)).queued()).isTrue();
+        this.runs();
+
+        assertThat(this.billed.subList(before, this.billed.size())).as("b alone is called again").hasSize(1).allMatch(l -> l.contains(" in/b.m4a "));
+        assertThat(this.steps.row(RUN_ID, 2, "ask").recordsIn).isEqualTo(1L);
+        assertThat(this.steps.row(RUN_ID, 2, "total").recordsIn).as("the aggregate reads every item's row").isEqualTo(3L);
+        assertThat(this.steps.row(RUN_ID, 2, "total").recordsOut).isEqualTo(3L);
+        assertThat(this.steps.logText(RUN_ID, 2, "ask")).anyMatch(l -> l.contains("in the run's order"));
+        assertThat(this.item("in/b.m4a").status).isEqualTo("done");
+        assertThat(this.item("in/a.m4a").attempt).isEqualTo(1);
+        assertThat(this.run.getJobStatusMessage()).endsWith("Items: 3 of 3 done.");
     }
 
     @Test

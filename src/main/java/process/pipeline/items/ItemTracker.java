@@ -1,5 +1,6 @@
 package process.pipeline.items;
 
+import java.util.function.IntPredicate;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,6 +201,12 @@ public final class ItemTracker {
     private int previousAttempt;
     private boolean restart;
     private boolean retired;
+    /** ZT-I11: a retry from each item's failed step -- an item reuses its earlier output at the steps it had passed. */
+    private boolean fromFailedStep;
+    /** ZT-I12: a step over the whole table (a join, an aggregate) ran in this retry: earlier per-item outputs after it may no longer match. */
+    private boolean carryBroken;
+    /** ZT-I11/ZT-I12: the step the engine ran with some items' earlier output in its own: where each row of the output came from. */
+    private Pending pending;
 
     private ItemTracker(long jobQueueId, int attempt, RunItemStore store, Engine engine, List<StepInfo> steps) {
         this.jobQueueId = jobQueueId;
@@ -217,10 +224,21 @@ public final class ItemTracker {
      */
     public static ItemTracker open(long jobQueueId, int attempt, RunItemStore store, Engine engine, List<StepInfo> steps, int resumeFrom,
         int previousAttempt, List<String> itemKeys) {
+        return open(jobQueueId, attempt, store, engine, steps, resumeFrom, previousAttempt, itemKeys, false);
+    }
+
+    /**
+     * As {@link #open(long, int, RunItemStore, Engine, List, int, int, List)}; {@code fromFailedStep}: a retry of the items from
+     * each one's own failed step -- at a per-item step an item had passed in its earlier attempt, its earlier output is reused,
+     * neither run nor billed again (ZT-I11).
+     */
+    public static ItemTracker open(long jobQueueId, int attempt, RunItemStore store, Engine engine, List<StepInfo> steps, int resumeFrom,
+        int previousAttempt, List<String> itemKeys, boolean fromFailedStep) {
         if (store == null || steps == null || steps.isEmpty() || sourceOf(steps) < 0) {
             return null;
         }
         ItemTracker tracker = new ItemTracker(jobQueueId, attempt, store, engine, steps);
+        tracker.fromFailedStep = fromFailedStep && itemKeys != null;
         try {
             tracker.start(resumeFrom, previousAttempt, itemKeys);
         } catch (RuntimeException unread) {
@@ -296,26 +314,31 @@ public final class ItemTracker {
             this.items.put(row.itemKey, row);
             this.dirty.add(row.itemKey);
             // The reused steps' files are the item's in this attempt too.
-            for (ItemRow.FileRow f : this.store.files(this.jobQueueId, was.itemKey, was.attempt, null, null, 0, 10_000)) {
-                if (f.stepIndex < resumeFrom) {
-                    ItemRow.FileRow copy = new ItemRow.FileRow();
-                    copy.jobQueueId = this.jobQueueId;
-                    copy.attempt = this.attempt;
-                    copy.itemKey = f.itemKey;
-                    copy.stepIndex = f.stepIndex;
-                    copy.stepKey = f.stepKey;
-                    copy.role = f.role;
-                    copy.stepExecutionId = f.stepExecutionId;
-                    copy.fileName = f.fileName;
-                    copy.bucketAlias = ItemRow.FileRow.INPUT.equals(f.role) ? f.bucketAlias : null;
-                    copy.objectKey = ItemRow.FileRow.INPUT.equals(f.role) ? f.objectKey : null;
-                    copy.byteCount = f.byteCount;
-                    this.files.add(copy);
-                    row.fileCount++;
-                }
-            }
+            this.copyFiles(row, was, index -> index < resumeFrom);
         }
         this.flush();
+    }
+
+    /** An earlier version's files of the steps {@code wanted} names, as this attempt's too. */
+    private void copyFiles(ItemRow row, ItemRow was, IntPredicate wanted) {
+        for (ItemRow.FileRow f : this.store.files(this.jobQueueId, was.itemKey, was.attempt, null, null, 0, 10_000)) {
+            if (wanted.test(f.stepIndex)) {
+                ItemRow.FileRow copy = new ItemRow.FileRow();
+                copy.jobQueueId = this.jobQueueId;
+                copy.attempt = this.attempt;
+                copy.itemKey = f.itemKey;
+                copy.stepIndex = f.stepIndex;
+                copy.stepKey = f.stepKey;
+                copy.role = f.role;
+                copy.stepExecutionId = f.stepExecutionId;
+                copy.fileName = f.fileName;
+                copy.bucketAlias = ItemRow.FileRow.INPUT.equals(f.role) ? f.bucketAlias : null;
+                copy.objectKey = ItemRow.FileRow.INPUT.equals(f.role) ? f.objectKey : null;
+                copy.byteCount = f.byteCount;
+                this.files.add(copy);
+                row.fileCount++;
+            }
+        }
     }
 
     /** What an earlier row teaches: its identity and sub key, its number, its sub-items' numbers. */
@@ -370,22 +393,135 @@ public final class ItemTracker {
         return this.off == null && this.retry != null && this.fromIndex >= 0 && index >= this.fromIndex && !this.before.isEmpty();
     }
 
-    /**
-     * For a retry of some items: whether the row at {@code position} of the dataset {@code key} stays in the step's input -- a
-     * row of an item it reruns (or of a document one of whose pages it reruns), and, for a per-item step, never a row of no
-     * item. Positions it cannot place stay for a step that combines or passes rows, and go for one that works item by item.
-     */
-    public boolean keepRow(int stepIndex, String datasetKey, int position, Map<String, Object> row) {
+    /** The item the row at {@code position} of the dataset {@code datasetKey} belongs to, or null. */
+    public String itemAt(String datasetKey, int position, Map<String, Object> row) {
         Map<Integer, String> mapping = this.mappingOf(datasetKey);
         String key = mapping == null ? null : mapping.get(position);
-        if (key == null) {
-            // A row the earlier attempt never pointed at (the input of the step that named the items): by its key column.
-            key = this.keyOf(row);
+        // A row the earlier attempt never pointed at (the input of the step that named the items): by its key column.
+        return key != null ? key : this.keyOf(row);
+    }
+
+    /** ZT-I11/ZT-I12: an item's earlier output rows at a step: where each is kept, and whose it is (the item, or one of its pages). */
+    public static final class Carry {
+        public final String key;
+        /** Per row: its dataset's storage key, its position there and its item's key, in order. */
+        public final List<String> storageKeys = new ArrayList<>();
+        public final List<Integer> positions = new ArrayList<>();
+        public final List<String> rowKeys = new ArrayList<>();
+
+        Carry(String key) {
+            this.key = key;
         }
-        if (key == null) {
-            return !this.steps.get(stepIndex).role.makesItemPipeline();
+
+        public int size() {
+            return this.positions.size();
         }
-        return this.reruns(key);
+    }
+
+    /**
+     * ZT-I11/ZT-I12: whether step {@code index} of a retry works item by item -- a per-item step or a split: it runs the
+     * retried items' rows and reuses every other item's earlier output (false from the first step over the whole table on,
+     * whose rows may no longer be what they were; such a step and every step after it read their input as it is).
+     */
+    public boolean perItemAt(int index) {
+        ItemRole role = this.steps.get(index).role;
+        return this.filters(index) && !this.carryBroken && (role == ItemRole.EACH || role == ItemRole.FAN_OUT);
+    }
+
+    /**
+     * Whether step {@code index} of this retry runs the item {@code key}: one it retries (or a document one of whose pages it
+     * retries) -- unless, retried from its failed step, it failed at a later step than this one (ZT-I11).
+     */
+    public boolean runsAt(int index, String key) {
+        if (key == null || !this.reruns(key)) {
+            return false;
+        }
+        if (this.fromFailedStep) {
+            ItemRow was = this.before.get(key);
+            return was == null || was.failedStepIndex == null || was.failedStepIndex <= index;
+        }
+        return true;
+    }
+
+    /**
+     * ZT-I11/ZT-I12: at per-item step {@code index} of a retry, every item the step does not run again with its earlier
+     * output rows there (a split's: its pages' rows) -- the step reuses them, so its output keeps every item's rows and a
+     * later step over the whole table reads them all; nothing is run or billed again for them. An item whose rows there are
+     * not all pointed at (more than an item keeps), or whose dataset is gone, is left out (the step then runs it).
+     */
+    public Map<String, Carry> carries(int index) {
+        Map<String, Carry> found = new LinkedHashMap<>();
+        if (!this.perItemAt(index)) {
+            return found;
+        }
+        boolean split = this.steps.get(index).role == ItemRole.FAN_OUT;
+        Map<String, List<ItemRow>> children = new HashMap<>();
+        if (split) {
+            for (ItemRow row : this.before.values()) {
+                if (row.parentKey != null) {
+                    children.computeIfAbsent(row.parentKey, k -> new ArrayList<>()).add(row);
+                }
+            }
+        }
+        Map<Long, String> storage = new HashMap<>();
+        for (ItemRow was : this.before.values()) {
+            if (this.runsAt(index, was.itemKey)) {
+                continue;
+            }
+            Carry carry = new Carry(was.itemKey);
+            boolean whole = this.place(was, index, carry, storage);
+            if (split && was.parentKey == null) {
+                for (ItemRow child : children.getOrDefault(was.itemKey, Collections.<ItemRow>emptyList())) {
+                    whole &= this.place(child, index, carry, storage);
+                }
+            }
+            if (whole && carry.size() > 0) {
+                found.put(was.itemKey, carry);
+            }
+        }
+        return found;
+    }
+
+    /** An earlier row's rows at a step, added to {@code carry}; false when they cannot all be pointed at. */
+    private boolean place(ItemRow row, int index, Carry carry, Map<Long, String> storage) {
+        ItemRow.StepEntry entry = row.step(index);
+        if (entry == null || entry.ds == null || entry.rows == null || entry.rows.isEmpty()) {
+            return true;
+        }
+        if (entry.n == null || entry.n != entry.rows.size()) {
+            return false;
+        }
+        String key = storage.computeIfAbsent(entry.ds, this.engine::storageKeyOf);
+        if (key == null) {
+            return false;
+        }
+        for (Integer p : entry.rows) {
+            carry.storageKeys.add(key);
+            carry.positions.add(p);
+            carry.rowKeys.add(row.itemKey);
+        }
+        return true;
+    }
+
+    /** ZT-I11/ZT-I12: where each row of a step's output came from: the step's own rows (their positions), and reused ones' items. */
+    private static final class Pending {
+        final String outputKey;
+        final int[] ownAt;
+        final Map<Integer, String> carriedAt;
+
+        Pending(String outputKey, int[] ownAt, Map<Integer, String> carriedAt) {
+            this.outputKey = outputKey;
+            this.ownAt = ownAt;
+            this.carriedAt = carriedAt;
+        }
+    }
+
+    /**
+     * ZT-I11/ZT-I12: the output {@code outputKey} of the step about to be reported holds the step's own rows at {@code ownAt}
+     * (its j-th row at ownAt[j]) and, at the positions of {@code carriedAt}, the earlier rows of the items it reused.
+     */
+    public void carried(String outputKey, int[] ownAt, Map<Integer, String> carriedAt) {
+        this.pending = new Pending(outputKey, ownAt.clone(), new HashMap<>(carriedAt));
     }
 
     /** The positions a filter kept, in order: the filtered dataset's rows keep their items. */
@@ -572,6 +708,12 @@ public final class ItemTracker {
     private void step(Outcome o) {
         StepInfo step = this.steps.get(o.index);
         Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        Pending carry = this.pending != null && o.completed && this.pending.outputKey.equals(o.outputKey) ? this.pending : null;
+        this.pending = null;
+        Set<String> reused = carry == null ? Collections.<String>emptySet() : new HashSet<>(carry.carriedAt.values());
+        if (this.fromIndex >= 0 && o.index >= this.fromIndex && step.role == ItemRole.SHARED) {
+            this.carryBroken = true;
+        }
         Map<String, List<ItemReport>> reports = new HashMap<>();
         Map<Integer, String> inMap = this.mappingOf(o.inputKey);
         List<Rows> out = o.completed && o.outputKey != null && !o.outputKey.equals(o.inputKey) ? this.read(o.outputKey) : null;
@@ -614,6 +756,22 @@ public final class ItemTracker {
         } else if (out == null) {
             // The step passed its input on: its rows are the input's.
             outMap = inMap == null ? Collections.<Integer, String>emptyMap() : inMap;
+        } else if (carry != null) {
+            // The step's own rows as it made them, then the reused rows where they were put.
+            List<Rows> own = new ArrayList<>();
+            for (int j = 0; j < carry.ownAt.length && carry.ownAt[j] < out.size(); j++) {
+                own.add(new Rows(j, out.get(carry.ownAt[j]).row));
+            }
+            outMap = new HashMap<>();
+            for (Map.Entry<Integer, String> e : this.mapOutput(step, inMap, own, reports, now).entrySet()) {
+                outMap.put(carry.ownAt[e.getKey()], e.getValue());
+            }
+            for (Map.Entry<Integer, String> e : carry.carriedAt.entrySet()) {
+                if (e.getKey() < out.size()) {
+                    outMap.put(e.getKey(), e.getValue());
+                    this.follow(out.get(e.getKey()).row, e.getValue());
+                }
+            }
         } else {
             outMap = this.mapOutput(step, inMap, out, reports, now);
         }
@@ -748,6 +906,18 @@ public final class ItemTracker {
                         row.status = ItemRow.DONE;
                         row.endedAt = now;
                     }
+                }
+            }
+            if (reused.contains(row.itemKey) && ItemRow.StepEntry.DONE.equals(entry.status)) {
+                // ZT-I11: it passed this step in its earlier attempt: that output is its own here, not run or billed again.
+                ItemRow was = this.before.get(row.itemKey);
+                ItemRow.StepEntry earlier = was == null ? null : was.step(o.index);
+                if (earlier != null) {
+                    entry.reusedFrom = earlier.reusedFrom != null ? earlier.reusedFrom : was.attempt;
+                    entry.ms = earlier.ms;
+                    entry.files = earlier.files;
+                    int index = o.index;
+                    this.copyFiles(row, was, i -> i == index);
                 }
             }
             if (entry.note == null) {
