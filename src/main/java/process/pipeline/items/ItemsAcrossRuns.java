@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
@@ -14,6 +17,7 @@ import process.pipeline.PipelineDefinition;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.RunOwnership;
 import process.pipeline.StepStore;
+import process.pipeline.backing.ReportStudio;
 import process.pipeline.data.RowSource;
 import process.security.JobOwnership;
 import process.security.ManagedSessionOnly;
@@ -23,6 +27,7 @@ import process.util.BusinessTime;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -34,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -61,6 +67,10 @@ public class ItemsAcrossRuns {
     static final int MAX_VALUE = 300;
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Logger LOG = LoggerFactory.getLogger(ItemsAcrossRuns.class);
+    /** ZT-I24: how long a run's report numbers from Report Studio are kept, and for how many runs at most. */
+    static final long NUMBERS_TTL_MILLIS = 10 * 60_000L;
+    static final int NUMBERS_KEPT = 500;
 
     private final RunItems items;
     private final RunItemStore store;
@@ -68,6 +78,9 @@ public class ItemsAcrossRuns {
     private final StepStore steps;
     private final PipelineDefinitionStore definitions;
     private final DatasetStore datasets;
+    private ReportStudio studio;
+    /** tenant:run -> when read, and the run's reports by their PDF's sha256 (label, version). */
+    private final Map<String, Object[]> numbers = new ConcurrentHashMap<>();
 
     public ItemsAcrossRuns(RunItems items, RunItemStore store, SourceJobRepository jobs, StepStore steps, PipelineDefinitionStore definitions,
         DatasetStore datasets) {
@@ -77,6 +90,12 @@ public class ItemsAcrossRuns {
         this.steps = steps;
         this.definitions = definitions;
         this.datasets = datasets;
+    }
+
+    /** ZT-I24: Report Studio, to name an older run's report PDF by its number. */
+    @Autowired(required = false)
+    public void useStudio(ReportStudio studio) {
+        this.studio = studio;
     }
 
     /** The list's body: the schedule, the search (or an exact key), the status, the window, the page, the fields to show. */
@@ -231,6 +250,7 @@ public class ItemsAcrossRuns {
                 shown.stream().map(s -> s.item.itemKey).collect(Collectors.toSet()))) {
                 reports.putIfAbsent(r.jobQueueId + "|" + r.itemKey, r);
             }
+            this.nameByNumber(job.getTenantId(), reports.values());
         }
         Map<Long, Integer> versions = new HashMap<>();
         Map<Long, RunItems.Steps> plans = new HashMap<>();
@@ -283,8 +303,11 @@ public class ItemsAcrossRuns {
             RunItemStore.KeptReport report = reports.get(run + "|" + row.item.itemKey);
             if (report != null) {
                 Map<String, Object> r = new LinkedHashMap<>();
+                // ZT-I24: a Report Studio report is its number and version; only a plain file is its file's name.
+                boolean numbered = report.reportLabel != null && report.reportVersion > 0;
+                r.put("number", numbered ? report.reportLabel : null);
                 r.put("label", report.reportLabel != null ? report.reportLabel : report.fileName);
-                r.put("version", report.reportVersion > 0 ? report.reportVersion : null);
+                r.put("version", numbered ? report.reportVersion : null);
                 r.put("fileName", report.fileName);
                 r.put("fileRef", report.fileRef);
                 r.put("madeAttempt", report.madeAttempt);
@@ -328,6 +351,58 @@ public class ItemsAcrossRuns {
             data.put("note", "Only the runs you review are listed.");
         }
         return RunItems.Answer.ok(String.format("%d run(s) of %d item(s).", verified.size(), keyCounts.size()), data);
+    }
+
+    /**
+     * ZT-I24: a report PDF of a run older than its own record of its reports (run_item_report, V234) is named by its number:
+     * Report Studio says which report each PDF of the run is, by the PDF's sha256 the run kept. A file no report made, or
+     * Report Studio not answering, stays its file's name.
+     */
+    void nameByNumber(Long tenantId, Collection<RunItemStore.KeptReport> shown) {
+        if (this.studio == null || tenantId == null) {
+            return;
+        }
+        for (RunItemStore.KeptReport r : shown) {
+            if (r.reportLabel != null || r.sha256 == null || r.sha256.isEmpty()) {
+                continue;
+            }
+            Map<String, Object[]> byHash = this.numbersOf(tenantId, r.jobQueueId);
+            Object[] found = byHash == null ? null : byHash.get(r.sha256);
+            if (found != null) {
+                r.reportId = (String) found[0];
+                r.reportLabel = (String) found[1];
+                r.reportVersion = (Integer) found[2];
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object[]> numbersOf(long tenantId, long jobQueueId) {
+        String key = tenantId + ":" + jobQueueId;
+        Object[] kept = this.numbers.get(key);
+        long now = System.currentTimeMillis();
+        if (kept != null && now - (Long) kept[0] < NUMBERS_TTL_MILLIS) {
+            return (Map<String, Object[]>) kept[1];
+        }
+        Map<String, Object[]> byHash = new HashMap<>();
+        try {
+            for (JsonNode v : this.studio.runReports(tenantId, jobQueueId)) {
+                String sha = v.path("sha256").asText("");
+                if (!sha.isEmpty() && v.path("reportLabel").isTextual() && v.path("version").asInt(0) > 0) {
+                    byHash.put(sha, new Object[] {v.path("reportId").asText(null), v.path("reportLabel").asText(), v.path("version").asInt()});
+                }
+            }
+        } catch (Exception unanswered) {
+            LOG.debug("Report Studio did not name run {}'s reports: {}", jobQueueId, unanswered.getMessage());
+            // Asked again in a minute, not on every page of the list.
+            this.numbers.put(key, new Object[] {now - NUMBERS_TTL_MILLIS + 60_000L, Collections.<String, Object[]>emptyMap()});
+            return null;
+        }
+        if (this.numbers.size() >= NUMBERS_KEPT) {
+            this.numbers.clear();
+        }
+        this.numbers.put(key, new Object[] {now, byHash});
+        return byHash;
     }
 
     /** Whether the item answers the search as the person sees it: its name or key, or its masked values. */
@@ -471,6 +546,8 @@ public class ItemsAcrossRuns {
         newer.row.steps.forEach(e -> keys.add(e.key));
         older.row.steps.forEach(e -> keys.add(e.key));
         int changed = 0;
+        // ZT-I23: the changes listed at an earlier step; a later step that only carries one on does not list it again.
+        List<Map<String, Object>> listed = new ArrayList<>();
         RunItems.Rows rows = new RunItems.Rows(this.datasets, this.steps);
         for (String stepKey : keys) {
             ItemRow.StepEntry now = entry(newer.row, stepKey);
@@ -492,7 +569,20 @@ public class ItemsAcrossRuns {
                 changes.removeIf(ch -> isKeyChange(ch, olderKey, newerKey));
             }
             s.put("same", changes.isEmpty() && before != null && after != null);
+            List<Map<String, Object>> folded = fold(changes);
+            List<Map<String, Object>> own = new ArrayList<>();
+            int carried = 0;
+            for (Map<String, Object> ch : folded) {
+                if (listedBefore(listed, ch)) {
+                    carried++;
+                } else {
+                    own.add(ch);
+                }
+            }
+            listed.addAll(own);
+            changes = own;
             s.put("changes", changes);
+            s.put("carried", carried);
             s.put("truncated", truncated);
             if (before == null || after == null) {
                 s.put("note", before == null && after == null ? "Neither run kept data for this step."
@@ -667,6 +757,105 @@ public class ItemsAcrossRuns {
             add(out, path, "changed", before, after);
         }
         return out.size() >= MAX_CHANGES;
+    }
+
+    /**
+     * ZT-I23: one change said once within a step. A nested JSON column read as what it holds ({@code insight_json.followUp})
+     * and the flattened columns a step made from it ({@code followUp}) carry the same value: one entry, under the clearest
+     * (shortest) name, the other names in {@code alsoAt}. A change of letter case only is marked {@code caseOnly}.
+     */
+    static List<Map<String, Object>> fold(List<Map<String, Object>> changes) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> ch : changes) {
+            Map<String, Object> same = null;
+            for (Map<String, Object> o : out) {
+                if (sameValue(o, ch) && related(namesOf(o), String.valueOf(ch.get("path")))) {
+                    same = o;
+                    break;
+                }
+            }
+            if (same == null) {
+                Map<String, Object> c = new LinkedHashMap<>(ch);
+                if (caseOnly(c)) {
+                    c.put("caseOnly", true);
+                }
+                out.add(c);
+                continue;
+            }
+            String kept = String.valueOf(same.get("path"));
+            String other = String.valueOf(ch.get("path"));
+            List<String> also = alsoAt(same);
+            if (clearer(other, kept)) {
+                same.put("path", other);
+                also.add(0, kept);
+            } else {
+                also.add(other);
+            }
+            same.put("alsoAt", also);
+        }
+        return out;
+    }
+
+    /** Whether an earlier step listed this change already (the same value under a name that is, or holds, this one). */
+    static boolean listedBefore(List<Map<String, Object>> listed, Map<String, Object> change) {
+        for (Map<String, Object> earlier : listed) {
+            if (!sameValue(earlier, change)) {
+                continue;
+            }
+            for (String name : namesOf(change)) {
+                if (related(namesOf(earlier), name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean sameValue(Map<String, Object> x, Map<String, Object> y) {
+        return Objects.equals(x.get("kind"), y.get("kind")) && Objects.equals(x.get("before"), y.get("before"))
+            && Objects.equals(x.get("after"), y.get("after"));
+    }
+
+    /** A name and another are one field's: equal, or one is the other inside a column ({@code insight_json.followUp}, {@code followUp}). */
+    private static boolean related(List<String> names, String path) {
+        for (String name : names) {
+            if (name.equals(path) || name.endsWith("." + path) || path.endsWith("." + name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> alsoAt(Map<String, Object> change) {
+        Object also = change.get("alsoAt");
+        return also instanceof List ? (List<String>) also : new ArrayList<>();
+    }
+
+    private static List<String> namesOf(Map<String, Object> change) {
+        List<String> names = new ArrayList<>();
+        names.add(String.valueOf(change.get("path")));
+        names.addAll(alsoAt(change));
+        return names;
+    }
+
+    /** The clearer of two names of one field: the one with fewer parts, then the shorter. */
+    private static boolean clearer(String a, String b) {
+        int pa = a.split("[.\\[]").length;
+        int pb = b.split("[.\\[]").length;
+        return pa != pb ? pa < pb : a.length() < b.length();
+    }
+
+    /** "Synthetic" to "synthetic": two texts that differ only in letter case. */
+    static boolean caseOnly(Map<String, Object> change) {
+        Object before = change.get("before");
+        Object after = change.get("after");
+        if (!"changed".equals(change.get("kind")) || !(before instanceof String) || !(after instanceof String)) {
+            return false;
+        }
+        String b = (String) before;
+        String a = (String) after;
+        return b.startsWith("\"") && a.startsWith("\"") && !b.equals(a) && b.toLowerCase(Locale.ROOT).equals(a.toLowerCase(Locale.ROOT));
     }
 
     /** A change that is only the two items' own keys (a top-level value, before the older key, after the newer one). */

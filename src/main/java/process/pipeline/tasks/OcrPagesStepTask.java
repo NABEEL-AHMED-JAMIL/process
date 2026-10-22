@@ -70,6 +70,8 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
     static final String WORDS = "ocr_words";
     static final String STATUS = "ocr_status";
     static final String NOTE = "ocr_note";
+    /** ZT-I25: how far the page was turned, clockwise in degrees (0, 90, 180, 270), before its words were read. */
+    static final String ROTATION = "ocr_rotation";
 
     static final String SOURCE_OCR = "ocr";
     static final String SOURCE_TEXT_LAYER = "text-layer";
@@ -83,7 +85,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
             + "hand and sent to Review with its image beside the text. Billed per page read (ocr.pages).")
         .input(TaskSpec.rows("Rows naming a page image an earlier step of the run kept (Split pages: page_image, page_text)."))
         .output(TaskSpec.rows("The input's columns, then ocr_text, ocr_sureness (0-100), ocr_source (ocr or text-layer), ocr_words, "
-            + "ocr_status (ok, check or failed) and ocr_note."))
+            + "ocr_status (ok, check or failed), ocr_note and ocr_rotation (degrees the page was turned, clockwise, to be read upright)."))
         .config(JsonSchema.object()
             .required("fromStep", JsonSchema.string().minLength(1).maxLength(64).format("step").title("Pages from")
                 .description("The earlier step whose page images are read: Split pages, usually."))
@@ -206,7 +208,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
                 throw new IllegalStateException(String.format("The input has no column %s naming the page images (Image column).", imageColumn));
             }
             Set<String> columns = new LinkedHashSet<>(input.columns());
-            columns.addAll(Arrays.asList(TEXT, SURENESS, SOURCE, WORDS, STATUS, NOTE));
+            columns.addAll(Arrays.asList(TEXT, SURENESS, SOURCE, WORDS, STATUS, NOTE, ROTATION));
             RowSink out = context.output();
             out.declare(new ArrayList<>(columns));
             int index = 0;
@@ -228,6 +230,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
                         made.put(WORDS, layer.split("\\s+").length);
                         made.put(STATUS, OK);
                         made.put(NOTE, "The page has its own text layer: kept, not read.");
+                        made.put(ROTATION, 0);
                         layered++;
                         out.add(made);
                         context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
@@ -248,8 +251,10 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
                         made.put(SURENESS, round(page.sureness));
                         made.put(SOURCE, SOURCE_OCR);
                         made.put(WORDS, page.wordCount);
+                        made.put(ROTATION, page.rotation);
+                        String turned = page.rotation == 0 ? "" : String.format(Locale.ROOT, " Turned %d° to be read upright.", page.rotation);
                         if (page.sureness < threshold) {
-                            String note = String.format(Locale.ROOT, "Check by hand: %.0f %% sure (below %d %%).", page.sureness, threshold);
+                            String note = String.format(Locale.ROOT, "Check by hand: %.0f %% sure (below %d %%).", page.sureness, threshold) + turned;
                             made.put(STATUS, CHECK);
                             made.put(NOTE, note);
                             context.itemFlagged(row, ItemRow.CHECK, note);
@@ -257,7 +262,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
                         } else {
                             made.put(STATUS, OK);
                             made.put(NOTE, String.format(Locale.ROOT, "Read: %d word%s, %.0f %% sure.", page.wordCount, page.wordCount == 1 ? "" : "s",
-                                page.sureness));
+                                page.sureness) + turned);
                         }
                         out.add(made);
                     } catch (InterruptedException stopped) {
@@ -277,6 +282,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
                             made.put(WORDS, null);
                             made.put(STATUS, FAILED);
                             made.put(NOTE, why);
+                            made.put(ROTATION, null);
                             out.add(made);
                         }
                     } finally {

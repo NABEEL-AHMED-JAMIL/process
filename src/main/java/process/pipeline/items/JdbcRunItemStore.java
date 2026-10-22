@@ -356,15 +356,18 @@ public class JdbcRunItemStore implements RunItemStore {
         Map<String, Object[]> files = new LinkedHashMap<>();
         this.jdbc.query(con -> {
             PreparedStatement ps = con.prepareStatement("SELECT DISTINCT ON (f.job_queue_id, f.item_key) f.job_queue_id, f.item_key, f.file_name, "
-                + "f.run_item_file_id, f.attempt, f.step_key FROM run_item_file f JOIN run_item i ON i.job_queue_id = f.job_queue_id "
-                + "AND i.item_key = f.item_key AND i.attempt = f.attempt AND i.current WHERE f.job_queue_id = ANY (?) AND f.item_key = ANY (?) "
+                + "f.run_item_file_id, f.attempt, f.step_key, o.sha256 FROM run_item_file f JOIN run_item i ON i.job_queue_id = f.job_queue_id "
+                + "AND i.item_key = f.item_key AND i.attempt = f.attempt AND i.current "
+                + "LEFT JOIN run_output o ON o.step_execution_id = f.step_execution_id AND o.name = f.file_name "
+                + "WHERE f.job_queue_id = ANY (?) AND f.item_key = ANY (?) "
                 + "AND f.role = 'output' AND lower(f.file_name) LIKE '%.pdf' "
                 + "ORDER BY f.job_queue_id, f.item_key, f.step_index DESC, f.run_item_file_id DESC");
             ps.setArray(1, con.createArrayOf("bigint", runs));
             ps.setArray(2, con.createArrayOf("varchar", keys));
             return ps;
         }, (ResultSet rs) -> {
-            files.put(rs.getLong(1) + "\u0000" + rs.getString(2), new Object[] {rs.getString(3), rs.getLong(4), rs.getInt(5), rs.getString(6)});
+            files.put(rs.getLong(1) + "\u0000" + rs.getString(2), new Object[] {rs.getString(3), rs.getLong(4), rs.getInt(5), rs.getString(6),
+                rs.getString(7)});
         });
         for (KeptReport r : out) {
             Object[] f = files.remove(r.jobQueueId + "\u0000" + r.itemKey);
@@ -382,6 +385,7 @@ public class JdbcRunItemStore implements RunItemStore {
             r.fileRef = (Long) e.getValue()[1];
             r.madeAttempt = (Integer) e.getValue()[2];
             r.stepKey = (String) e.getValue()[3];
+            r.sha256 = e.getValue()[4] == null ? null : ((String) e.getValue()[4]).trim();
             out.add(r);
         }
         return out;

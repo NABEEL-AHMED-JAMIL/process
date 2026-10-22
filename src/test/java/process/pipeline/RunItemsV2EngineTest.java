@@ -410,6 +410,7 @@ class RunItemsV2EngineTest {
             RunItemsEngineTest.pdf("REFERRAL FOR SPECIALIST OPINION, Riverside Family Practice", null, null));
         this.media.sureness.put("referral-0412-page-02.png", 64.0);
         this.media.sureness.put("referral-0412-page-03.png", 93.0);
+        this.media.rotation.put("referral-0412-page-03.png", 180);
         this.saves(Definitions.of(sample("read", row("key", "referrals/referral-0412.pdf", "bucket", "riverside-health-s3")),
             step("pages", "split_pages", config("minChars", 0)),
             step("ocr", "ocr_pages", config("fromStep", "pages", "threshold", 80, "reviewers", config("kind", "team", "value", "1063")))));
@@ -439,6 +440,11 @@ class RunItemsV2EngineTest {
         assertThat(this.item("referrals/referral-0412.pdf#1").fields).as("the page's values: its own text layer, kept")
             .containsEntry("ocr_source", "text-layer").containsEntry("ocr_status", "ok");
         assertThat(this.item("referrals/referral-0412.pdf#2").fields).containsEntry("ocr_status", "check").containsEntry("ocr_sureness", 64.0);
+        // ZT-I25: the page sub-item says how far its page was turned to be read upright.
+        assertThat(this.item("referrals/referral-0412.pdf#3").fields).as("a page scanned upside down").containsEntry("ocr_rotation", 180)
+            .containsEntry("ocr_note", "Read: 3 words, 93 % sure. Turned 180° to be read upright.");
+        assertThat(this.item("referrals/referral-0412.pdf#2").fields).containsEntry("ocr_rotation", 0);
+        assertThat(this.item("referrals/referral-0412.pdf#1").fields).as("a text layer is not turned").containsEntry("ocr_rotation", 0);
     }
 
     /** A page the reader cannot read is that page's failure (kept, text empty); "Retry page" reads it alone, billed once more. */

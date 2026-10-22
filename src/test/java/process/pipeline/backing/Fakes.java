@@ -251,6 +251,8 @@ public final class Fakes {
 
         /** MIG-421: page file name -> how sure the fake reader is of it (default 91.5). */
         public final Map<String, Double> sureness = new LinkedHashMap<>();
+        /** ZT-I25: how far media turned a page before reading it, by file name (0 when not named). */
+        public final Map<String, Integer> rotation = new LinkedHashMap<>();
 
         @Override
         public PageText ocr(long tenantId, String usageKey, Path image, String fileName, String language) throws IOException {
@@ -258,6 +260,7 @@ public final class Fakes {
             PageText p = new PageText();
             p.text = "read from " + fileName;
             p.sureness = this.sureness.getOrDefault(fileName, 91.5);
+            p.rotation = this.rotation.getOrDefault(fileName, 0);
             p.wordCount = 3;
             p.language = language;
             return p;

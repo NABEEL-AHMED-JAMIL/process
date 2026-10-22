@@ -91,6 +91,20 @@ public class HttpReportStudio implements ReportStudio {
     }
 
     @Override
+    public JsonNode runReports(long tenantId, long jobQueueId) throws IOException {
+        HttpUrl url = HttpUrl.get(this.base + "/runReports").newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId))
+            .addQueryParameter("pipelineRunId", String.valueOf(jobQueueId)).build();
+        OkHttpClient quick = this.http.newBuilder().readTimeout(5, TimeUnit.SECONDS).build();
+        Request call = new Request.Builder().url(url).header("X-Internal-Token", this.serviceToken).get().build();
+        try (Response response = quick.newCall(call).execute()) {
+            if (response.code() != 200 || response.body() == null) {
+                throw new IOException(this.refusal(response, "name the run's reports"));
+            }
+            return this.json.readTree(response.body().string()).path("data");
+        }
+    }
+
+    @Override
     public JsonNode check(long tenantId, Collection<String> ids, String version, Collection<String> columns) throws IOException {
         HttpUrl.Builder url = HttpUrl.get(this.base + "/templates").newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId))
             .addQueryParameter("ids", String.join(",", ids));

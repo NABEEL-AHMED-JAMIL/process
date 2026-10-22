@@ -122,6 +122,8 @@ public interface RunItemStore {
         public int madeAttempt;
         /** The item's file the report is (run_item_file), when known: the console opens it. */
         public Long fileRef;
+        /** ZT-I24: the PDF's sha256 as the run kept it (run_output), for an older run's report to be named by its number. */
+        public String sha256;
     }
 
     /** A run with failed items, for Home's Needs attention. */

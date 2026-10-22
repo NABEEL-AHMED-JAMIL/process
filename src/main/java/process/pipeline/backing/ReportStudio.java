@@ -1,6 +1,7 @@
 package process.pipeline.backing;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -46,4 +47,12 @@ public interface ReportStudio {
      * version, and -- given columns -- the row fields the version reads that they lack (missingFields).
      */
     JsonNode check(long tenantId, Collection<String> ids, String version, Collection<String> columns) throws IOException;
+
+    /**
+     * ZT-I24: the reports a run made, as media keeps them: reportId, reportLabel ("RPT-0013"), version, pages, fileName and
+     * the PDF's sha256. An empty array where media is not asked.
+     */
+    default JsonNode runReports(long tenantId, long jobQueueId) throws IOException {
+        return JsonNodeFactory.instance.arrayNode();
+    }
 }
