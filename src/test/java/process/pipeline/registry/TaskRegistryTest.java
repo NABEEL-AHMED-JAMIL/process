@@ -50,7 +50,9 @@ class TaskRegistryTest {
             // A file a row: a recording to text, a document to another format (media-service's transcriber and converter).
             entry("transcribe_audio", "Process"), entry("convert_file", "Process"),
             // MIG-420: a PDF into its pages, each a sub-item of its document.
-            entry("split_pages", "Process"));
+            entry("split_pages", "Process"),
+            // MIG-421: page images read by the platform's own OCR, each page a sub-item.
+            entry("ocr_pages", "Process"));
     }
 
     /**

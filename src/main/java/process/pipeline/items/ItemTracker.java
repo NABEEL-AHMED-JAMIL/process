@@ -27,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -207,6 +208,8 @@ public final class ItemTracker {
     private boolean carryBroken;
     /** ZT-I11/ZT-I12: the step the engine ran with some items' earlier output in its own: where each row of the output came from. */
     private Pending pending;
+    /** MIG-421: the pipeline version this attempt runs (each item row says it). */
+    private Integer ranVersion;
 
     private ItemTracker(long jobQueueId, int attempt, RunItemStore store, Engine engine, List<StepInfo> steps) {
         this.jobQueueId = jobQueueId;
@@ -381,6 +384,11 @@ public final class ItemTracker {
             }
         }
         return false;
+    }
+
+    /** MIG-421: the pipeline version this attempt runs, written on each of its item rows. */
+    public void ranVersion(Integer version) {
+        this.ranVersion = version;
     }
 
     /** Whether this attempt keeps no items. */
@@ -839,6 +847,11 @@ public final class ItemTracker {
             long ms = 0;
             int made = 0;
             String failure = null;
+            // MIG-421: what the step reused for the item (a report made by an earlier attempt), and a flag it raised.
+            String reusedNote = null;
+            int reusedFrom = 0;
+            String flag = null;
+            String flagNote = null;
             for (ItemReport r : said) {
                 switch (r.kind) {
                     case TOOK:
@@ -850,6 +863,14 @@ public final class ItemTracker {
                         break;
                     case FAILED:
                         failure = failure == null ? r.reason : failure;
+                        break;
+                    case REUSED:
+                        reusedNote = r.reason;
+                        reusedFrom = r.fromAttempt;
+                        break;
+                    case FLAGGED:
+                        flag = r.flag;
+                        flagNote = r.reason;
                         break;
                     default:
                         break;
@@ -870,6 +891,19 @@ public final class ItemTracker {
                     entry.status = ItemRow.StepEntry.FAILED;
                     entry.note = failure;
                     row.fail(o.index, step.key, failure, now);
+                } else if ((made > 0 || reusedFrom > 0) && step.role == ItemRole.EACH && !row.finished()) {
+                    // MIG-421: what the step made for this item (a report) is kept and marked done as soon as it is made, though
+                    // the step stopped at another item's failure: a retry reuses it, it is not made or billed again.
+                    entry.status = ItemRow.StepEntry.DONE;
+                    entry.note = String.format("%s; kept, though the step stopped at %s's failure.", reusedFrom > 0 && reusedNote != null
+                        ? reusedNote : made == 1 ? "1 file made" : String.format("%d files made", made), firstFailed == null ? "another item" : firstFailed);
+                    if (reusedFrom > 0) {
+                        entry.reusedFrom = reusedFrom;
+                    }
+                    if (o.index == this.steps.size() - 1) {
+                        row.status = ItemRow.DONE;
+                        row.endedAt = now;
+                    }
                 } else if (!row.finished()) {
                     entry.status = ItemRow.StepEntry.FAILED;
                     String why = anyReportedFailure && firstFailed != null
@@ -920,6 +954,15 @@ public final class ItemTracker {
                     int index = o.index;
                     this.copyFiles(row, was, i -> i == index);
                 }
+            }
+            if (reusedFrom > 0 && ItemRow.StepEntry.DONE.equals(entry.status) && o.completed) {
+                // MIG-421: the step reused what an earlier attempt made for this item (same data and design): not made, not billed.
+                entry.reusedFrom = reusedFrom;
+                entry.note = reusedNote;
+            }
+            if (flag != null && ItemRow.StepEntry.DONE.equals(entry.status)) {
+                row.flag = flag;
+                entry.note = flagNote;
             }
             if (entry.note == null) {
                 entry.note = this.note(step, row, entry, said);
@@ -1322,6 +1365,11 @@ public final class ItemTracker {
                         row.endedAt = now;
                     } else {
                         int at = row.steps.isEmpty() ? Math.max(0, this.sourceIndex) : row.steps.get(row.steps.size() - 1).i;
+                        if (!row.steps.isEmpty() && ItemRow.StepEntry.DONE.equals(row.steps.get(row.steps.size() - 1).status)
+                            && at + 1 < this.steps.size()) {
+                            // MIG-421: it passed its last step (a report kept though the step stopped): it stopped at the next one.
+                            at++;
+                        }
                         row.fail(at, this.steps.get(Math.min(at, this.steps.size() - 1)).key, interrupted
                             ? "The run was stopped before this item finished." : "Not finished: " + (why == null ? "the run failed." : why), now);
                     }
@@ -1340,6 +1388,9 @@ public final class ItemTracker {
             }
         }
         this.countChildren();
+        if (!paused) {
+            this.readFields();
+        }
         this.flush();
         if (paused) {
             return;
@@ -1356,6 +1407,39 @@ public final class ItemTracker {
         }
     }
 
+    /**
+     * MIG-421: each item this attempt finished keeps its own values (run_item.fields), read once from its last step's rows,
+     * so a schedule's Items tab finds it by a value across runs without opening the outputs. Never fails the run.
+     */
+    private void readFields() {
+        List<ItemRow> finished = new ArrayList<>();
+        for (ItemRow row : this.items.values()) {
+            if (row.attempt == this.attempt && row.finished()) {
+                finished.add(row);
+            }
+        }
+        if (finished.isEmpty()) {
+            return;
+        }
+        try {
+            for (ItemRow row : ItemFields.read(finished, new ItemFields.Opener() {
+                @Override
+                public String storageKeyOf(long runDatasetId) {
+                    return ItemTracker.this.engine.storageKeyOf(runDatasetId);
+                }
+
+                @Override
+                public RowSource open(String storageKey) throws Exception {
+                    return ItemTracker.this.engine.open(storageKey);
+                }
+            })) {
+                this.dirty.add(row.itemKey);
+            }
+        } catch (RuntimeException unread) {
+            logger.info("Run {} attempt {}: its items' values could not be read: {}", this.jobQueueId, this.attempt, unread.getMessage());
+        }
+    }
+
     /** Each parent's sub-item counts, from this attempt's sub-items and the earlier ones it did not rerun. */
     private void countChildren() {
         Map<String, ItemRow> latest = new LinkedHashMap<>(this.before);
@@ -1363,9 +1447,11 @@ public final class ItemTracker {
         Map<String, int[]> counts = new HashMap<>();
         for (ItemRow row : latest.values()) {
             if (row.parentKey != null) {
-                int[] c = counts.computeIfAbsent(row.parentKey, k -> new int[2]);
+                int[] c = counts.computeIfAbsent(row.parentKey, k -> new int[3]);
                 c[0]++;
                 c[1] += ItemRow.FAILED.equals(row.status) ? 1 : 0;
+                // MIG-421: a page to check by hand makes its document one to check.
+                c[2] += ItemRow.CHECK.equals(row.flag) ? 1 : 0;
             }
         }
         for (Map.Entry<String, int[]> e : counts.entrySet()) {
@@ -1376,9 +1462,11 @@ public final class ItemTracker {
                     continue;
                 }
                 // A document only some of whose pages were retried: its own row, recounted in place.
-                if (parent.childCount != e.getValue()[0] || parent.childFailed != e.getValue()[1]) {
+                String flag = e.getValue()[2] > 0 ? ItemRow.CHECK : null;
+                if (parent.childCount != e.getValue()[0] || parent.childFailed != e.getValue()[1] || !Objects.equals(parent.flag, flag)) {
                     parent.childCount = e.getValue()[0];
                     parent.childFailed = e.getValue()[1];
+                    parent.flag = flag;
                     this.items.put(parent.itemKey, parent);
                     this.dirty.add(parent.itemKey);
                 }
@@ -1386,6 +1474,7 @@ public final class ItemTracker {
             }
             parent.childCount = e.getValue()[0];
             parent.childFailed = e.getValue()[1];
+            parent.flag = e.getValue()[2] > 0 ? ItemRow.CHECK : null;
             this.dirty.add(parent.itemKey);
         }
     }
@@ -1444,6 +1533,9 @@ public final class ItemTracker {
         for (String key : this.dirty) {
             ItemRow row = this.items.get(key);
             if (row != null) {
+                if (row.attempt == this.attempt && this.ranVersion != null) {
+                    row.pipelineVersion = this.ranVersion;
+                }
                 rows.add(row);
             }
         }

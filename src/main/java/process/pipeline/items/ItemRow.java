@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One run_item row (MIG-420, V233): an item of a run as one attempt left it. Never handed to a caller as is: its steps
@@ -15,6 +16,8 @@ public final class ItemRow {
     public static final String RUNNING = "running";
     public static final String DONE = "done";
     public static final String FAILED = "failed";
+    /** MIG-421: an OCR step was less sure of the page than its threshold -- Check by hand (sent to Review). */
+    public static final String CHECK = "check";
 
     public Long runItemId;
     public long jobQueueId;
@@ -36,6 +39,17 @@ public final class ItemRow {
     public Instant startedAt;
     public Instant endedAt;
     public Long durationMs;
+    /**
+     * MIG-421: the item's own values (scalars, at most {@link ItemTracker#MAX_FIELDS}) as its last step with rows left them,
+     * read once when its attempt ends -- the across-runs search reads these, never the outputs; null until then, and once the
+     * dataset they came from ({@link #fieldsDs}) is removed. Masked on read.
+     */
+    public Map<String, Object> fields;
+    public Long fieldsDs;
+    /** MIG-421: {@link #CHECK}, or null. */
+    public String flag;
+    /** MIG-421: the pipeline version the attempt ran. */
+    public Integer pipelineVersion;
 
     public boolean isSub() {
         return this.parentKey != null;

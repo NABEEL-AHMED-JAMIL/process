@@ -63,6 +63,11 @@ public class InMemoryRunItemStore implements RunItemStore {
         to.startedAt = from.startedAt;
         to.endedAt = from.endedAt;
         to.durationMs = from.durationMs;
+        // MIG-421: the values, flag and version, copied as JSON would.
+        to.fields = from.fields == null ? null : JdbcRunItemStore.fields(JdbcRunItemStore.fieldsJson(from.fields));
+        to.fieldsDs = from.fields == null ? to.fieldsDs : from.fieldsDs;
+        to.flag = from.flag;
+        to.pipelineVersion = from.pipelineVersion != null ? from.pipelineVersion : to.pipelineVersion;
     }
 
     private static ItemRow out(ItemRow r) {
@@ -190,6 +195,101 @@ public class InMemoryRunItemStore implements RunItemStore {
     @Override
     public synchronized void journalCompleted(long runItemId) {
         this.journaled.add(runItemId);
+    }
+
+    // ------------------------------------------------------------------------------------------------ MIG-421 (v2)
+
+    /** The runs the across-runs list knows: their schedule, status, start, trigger (a test fills them). */
+    public final Map<Long, AcrossRow> runs = new LinkedHashMap<>();
+    public final List<KeptReport> reports = new ArrayList<>();
+
+    /** A run of schedule {@code jobId}, started at {@code started}, by {@code trigger}. */
+    public void run(long jobQueueId, long jobId, String status, Instant started, String trigger) {
+        AcrossRow r = new AcrossRow();
+        r.jobId = jobId;
+        r.runStatus = status;
+        r.runAttempt = 1;
+        r.runStarted = started;
+        r.trigger = trigger;
+        this.runs.put(jobQueueId, r);
+    }
+
+    @Override
+    public synchronized List<AcrossRow> acrossRuns(long jobId, AcrossQuery q, int limit) {
+        List<AcrossRow> out = new ArrayList<>();
+        for (ItemRow r : this.rows) {
+            AcrossRow run = this.runs.get(r.jobQueueId);
+            if (run == null || run.jobId != jobId || !r.current || r.parentKey != null) {
+                continue;
+            }
+            if (q.key != null && !q.key.equals(r.itemKey)) {
+                continue;
+            }
+            if (q.text != null && !q.text.isEmpty()) {
+                String t = q.text.toLowerCase();
+                boolean hit = r.itemKey.toLowerCase().contains(t) || r.label.toLowerCase().contains(t)
+                    || (r.fields != null && r.fields.values().stream().anyMatch(v -> String.valueOf(v).toLowerCase().contains(t)));
+                if (!hit) {
+                    continue;
+                }
+            }
+            if (q.field != null && q.value != null) {
+                boolean hit = r.fields != null && r.fields.entrySet().stream().anyMatch(e -> ItemFields.names(e.getKey(), q.field)
+                    && String.valueOf(e.getValue()).trim().equalsIgnoreCase(q.value.trim()));
+                if (!hit) {
+                    continue;
+                }
+            }
+            if ("failed".equals(q.status) && !(ItemRow.FAILED.equals(r.status) || r.childFailed > 0)) {
+                continue;
+            }
+            if ("done".equals(q.status) && !(ItemRow.DONE.equals(r.status) && r.childFailed == 0)) {
+                continue;
+            }
+            AcrossRow a = new AcrossRow();
+            a.item = out(r);
+            a.jobId = run.jobId;
+            a.runStatus = run.runStatus;
+            a.runAttempt = run.runAttempt;
+            a.runStarted = run.runStarted;
+            a.runEnded = run.runEnded;
+            a.trigger = run.trigger;
+            a.withValues = run.withValues;
+            out.add(a);
+        }
+        out.sort(Comparator.comparing((AcrossRow a) -> a.runStarted == null ? Instant.EPOCH : a.runStarted).reversed()
+            .thenComparing(a -> -a.item.jobQueueId));
+        return out.subList(0, Math.min(limit, out.size()));
+    }
+
+    @Override
+    public synchronized List<KeptReport> reportsOf(Collection<Long> jobQueueIds, Collection<String> itemKeys) {
+        return this.reports.stream().filter(r -> jobQueueIds.contains(r.jobQueueId) && itemKeys.contains(r.itemKey)).collect(Collectors.toList());
+    }
+
+    @Override
+    public synchronized Optional<KeptReport> keptReport(long jobQueueId, String stepKey, String itemTag, String dataHash) {
+        return this.reports.stream().filter(r -> r.jobQueueId == jobQueueId && r.stepKey.equals(stepKey) && r.itemTag.equals(itemTag)
+            && r.dataHash.equals(dataHash)).findFirst();
+    }
+
+    @Override
+    public synchronized void keepReport(KeptReport report) {
+        if (!this.keptReport(report.jobQueueId, report.stepKey, report.itemTag, report.dataHash).isPresent()) {
+            this.reports.add(report);
+        }
+    }
+
+    @Override
+    public synchronized void saveFields(List<ItemRow> saved) {
+        for (ItemRow row : saved) {
+            for (ItemRow r : this.rows) {
+                if (row.runItemId != null && row.runItemId.equals(r.runItemId)) {
+                    r.fields = row.fields;
+                    r.fieldsDs = row.fieldsDs;
+                }
+            }
+        }
     }
 
     /** The current row of an item, by key. */

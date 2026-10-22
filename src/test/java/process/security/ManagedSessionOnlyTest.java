@@ -138,6 +138,8 @@ class ManagedSessionOnlyTest {
         AUDITED.put("RunItemRestApi.file", "run item file");
         AUDITED.put("RunItemRestApi.zip", "run item files (zip)");
         AUDITED.put("RunItemRestApi.csv", "run items (CSV)");
+        // MIG-421: one item in two runs compared, step by step (its data both times).
+        AUDITED.put("RunItemRestApi.compare", "run item compare");
     }
 
     @AfterEach

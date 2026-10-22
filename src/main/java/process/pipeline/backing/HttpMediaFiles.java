@@ -113,6 +113,31 @@ public class HttpMediaFiles implements MediaFiles {
         }
     }
 
+    /** MIG-421: one page image read by media's OCR (/ocr), billed there as one ocr.pages. */
+    @Override
+    public PageText ocr(long tenantId, String usageKey, Path image, String fileName, String language) throws IOException {
+        HttpUrl.Builder url = this.url("/ocr", tenantId, usageKey, fileName);
+        if (language != null && !language.isEmpty()) {
+            url.addQueryParameter("language", language);
+        }
+        Request call = new Request.Builder().url(url.build()).header("X-Internal-Token", this.serviceToken)
+            .post(RequestBody.create(image.toFile(), OCTETS)).build();
+        OkHttpClient shorter = this.http.newBuilder().readTimeout(3, TimeUnit.MINUTES).build();
+        try (Response response = shorter.newCall(call).execute()) {
+            if (response.code() != 200 || response.body() == null) {
+                throw this.refusal(response, "read the page");
+            }
+            JsonNode data = this.json.readTree(response.body().string()).path("data");
+            PageText out = new PageText();
+            out.text = data.path("text").asText("");
+            out.sureness = data.path("sureness").asDouble(0);
+            out.wordCount = data.path("wordCount").asInt(0);
+            out.rotation = data.path("rotation").asInt(0);
+            out.language = data.path("language").isTextual() ? data.path("language").asText() : language;
+            return out;
+        }
+    }
+
     /** media's own sentence and status; never a body of data. */
     private Refused refusal(Response response, String what) {
         String message = "";

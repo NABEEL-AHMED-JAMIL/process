@@ -53,8 +53,10 @@ class ReadOnlyListGuardTest {
         "MessageQRestApi.runFacets",
         "RetentionRestApi.preview",
         "RunItemRestApi.countRunItems",
+        "RunItemRestApi.listItemRuns",
         "RunItemRestApi.listRunItemFiles",
         "RunItemRestApi.listRunItems",
+        "RunItemRestApi.selectRunItems",
         "SourceTaskRestApi.fetchAllLinkJobsWithSourceTaskId",
         "SourceTaskRestApi.listSourceTask"));
 

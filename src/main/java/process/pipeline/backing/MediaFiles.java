@@ -23,6 +23,23 @@ public interface MediaFiles {
     /** The file at {@code file} converted to {@code outputFormat}, written to {@code out}; a refusal is a {@link Refused}. */
     Converted convert(long tenantId, String usageKey, Path file, String fileName, String outputFormat, Path out) throws IOException;
 
+    /**
+     * MIG-421: the page image at {@code image} (named {@code fileName}: png, jpg, tif, bmp) read by the platform's own OCR in
+     * {@code language}; billed by media as one ocr.pages under {@code usageKey}. A refusal is a {@link Refused}.
+     */
+    default PageText ocr(long tenantId, String usageKey, Path image, String fileName, String language) throws IOException {
+        throw new Refused(501, "This media-service reads no page images.", 0);
+    }
+
+    /** MIG-421: a page read by OCR: its text, how sure the engine is (0-100, the words' mean), its words, how it was turned. */
+    final class PageText {
+        public String text;
+        public double sureness;
+        public int wordCount;
+        public int rotation;
+        public String language;
+    }
+
     /** media's answer: transcript, durationSeconds, language, model, and the segments when asked. */
     final class Transcript {
         public String text;

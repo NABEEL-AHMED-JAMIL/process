@@ -59,6 +59,35 @@ public class ItemRetries {
         public List<String> refs;
         public Boolean failed;
         public String from;
+        /**
+         * MIG-421 (bulk select): retry only the failed ones among the items named -- the refs ticked, or with {@code all} every
+         * item the status and search find, less {@code except} -- instead of refusing the ones that did not fail.
+         */
+        public Boolean onlyFailed;
+        public Boolean all;
+        public String status;
+        public String search;
+        public List<String> except;
+
+        public Boolean getOnlyFailed() { return onlyFailed; }
+
+        public void setOnlyFailed(Boolean onlyFailed) { this.onlyFailed = onlyFailed; }
+
+        public Boolean getAll() { return all; }
+
+        public void setAll(Boolean all) { this.all = all; }
+
+        public String getStatus() { return status; }
+
+        public void setStatus(String status) { this.status = status; }
+
+        public String getSearch() { return search; }
+
+        public void setSearch(String search) { this.search = search; }
+
+        public List<String> getExcept() { return except; }
+
+        public void setExcept(List<String> except) { this.except = except; }
 
         public Long getJobQueueId() { return jobQueueId; }
 
@@ -99,8 +128,35 @@ public class ItemRetries {
             return RunItems.Answer.refused(409, "This run's items have no key column (they are its rows by number), so they cannot be "
                 + "retried one by one; retry the run instead.");
         }
-        if (request.refs != null && !request.refs.isEmpty()) {
-            for (String ref : new LinkedHashSet<>(request.refs)) {
+        List<String> named = request.refs;
+        if (Boolean.TRUE.equals(request.all) || Boolean.TRUE.equals(request.onlyFailed)) {
+            // MIG-421: a bulk selection -- what the Items table's filter and search find (all pages), or the refs ticked -- and of
+            // it only the failed items ("Retry N failed").
+            RunItems.ListRequest selection = new RunItems.ListRequest();
+            selection.jobQueueId = request.jobQueueId;
+            selection.refs = Boolean.TRUE.equals(request.all) ? null : request.refs;
+            selection.except = request.except;
+            selection.status = request.status;
+            selection.search = request.search;
+            RunItems.Selected selected = this.items.selected(selection);
+            if (selected == null) {
+                return RunItems.Answer.refused(404, RunItems.RUN_NOT_FOUND);
+            }
+            if (selection.refs != null && selected.items.size() < new LinkedHashSet<>(selection.refs).size()) {
+                return RunItems.Answer.refused(404, RunItems.ITEM_NOT_FOUND);
+            }
+            named = new ArrayList<>();
+            for (ItemRow row : selected.items) {
+                if (ItemRow.FAILED.equals(row.status) || row.childFailed > 0) {
+                    named.add(row.itemRef);
+                }
+            }
+            if (named.isEmpty()) {
+                return RunItems.Answer.refused(409, "None of the selected items failed: there is nothing to retry.");
+            }
+        }
+        if (named != null && !named.isEmpty()) {
+            for (String ref : new LinkedHashSet<>(named)) {
                 ItemRow row = RunItems.byRef(all, ref == null ? "" : ref.trim());
                 if (row == null) {
                     return RunItems.Answer.refused(404, RunItems.ITEM_NOT_FOUND);

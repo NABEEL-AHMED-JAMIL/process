@@ -56,6 +56,74 @@ public interface RunItemStore {
     /** run.item.completed for this item (api_event_out kind 'item'), in the caller's transaction. */
     void journalCompleted(long runItemId);
 
+    // ------------------------------------------------------------------------------------------------ MIG-421 (v2)
+
+    /**
+     * A schedule's items across its runs -- each run's current top-level row of every item the query names -- newest run
+     * first, at most {@code limit}: candidates, which the read side checks again against what the person may see (their
+     * masks, their runs). From the item records alone (key, label, fields), never the outputs.
+     */
+    List<AcrossRow> acrossRuns(long jobId, AcrossQuery query, int limit);
+
+    /** The PDF reports of these items in these runs: the kept report (made or reused), else the item's latest PDF file. */
+    List<KeptReport> reportsOf(Collection<Long> jobQueueIds, Collection<String> itemKeys);
+
+    /** A report a Generate report step made for one item of the run, with this hash; empty when none. */
+    Optional<KeptReport> keptReport(long jobQueueId, String stepKey, String itemTag, String dataHash);
+
+    /** Keeps a report a step made for an item (once per run, step, item and hash). */
+    void keepReport(KeptReport report);
+
+    /** Writes the values read for these items (run_item.fields, fields_ds) -- an older item's, read on first view. */
+    void saveFields(List<ItemRow> rows);
+
+    /** What the across-runs list asks: an exact item key, or a text, or a field and a value; a status; a time window. */
+    final class AcrossQuery {
+        /** An exact item key ("All runs of this item"). */
+        public String key;
+        /** Text in the item's key, name or values. */
+        public String text;
+        /** A field ("risk", or "status.risk") and the value it must equal (ignoring case). */
+        public String field;
+        public String value;
+        /** done, failed, running, check; null: any. */
+        public String status;
+        /** The runs started in this window; null: no bound. */
+        public Instant from;
+        public Instant to;
+    }
+
+    /** An item's row in one run, with the run's facts. */
+    final class AcrossRow {
+        public ItemRow item;
+        public long jobId;
+        public String runStatus;
+        public int runAttempt;
+        public Instant runStarted;
+        public Instant runEnded;
+        /** How the run started (RunFacets' trigger key, its first attempt's): schedule, manual, file, form, api... */
+        public String trigger;
+        /** A manual run with values (Run with...). */
+        public boolean withValues;
+    }
+
+    /** A report made for an item (run_item_report), or -- for an older run -- the item's PDF file. */
+    final class KeptReport {
+        public long jobQueueId;
+        public String stepKey;
+        public String itemTag;
+        public String itemKey;
+        public String dataHash;
+        public String reportId;
+        public int reportVersion;
+        public String reportLabel;
+        public String fileName;
+        public Integer pages;
+        public int madeAttempt;
+        /** The item's file the report is (run_item_file), when known: the console opens it. */
+        public Long fileRef;
+    }
+
     /** A run with failed items, for Home's Needs attention. */
     final class Attention {
         public long jobQueueId;

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 234.0-run-items-v2
+      author: nabeel.amd93
+      description: "MIG-421 Run Items view v2: run_item.fields (+ fields_ds, cleared with that dataset), flag ('check': OCR Check by hand), pipeline_version; run_item_report (a report a Generate report step made for an item, by item tag and data hash, reused on retry) under row security as V233; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V234.0-run-items-v2/V234__run_items_v2.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V234.0-run-items-v2/V234__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

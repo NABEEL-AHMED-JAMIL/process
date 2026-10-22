@@ -114,6 +114,12 @@ class ManagementModeMatrixTest {
         CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.countRunItems", read + " (item counts of runs, MIG-420)");
         CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.retryRunItems", "retrying a run's failed items as its next attempt: the run "
             + "retry's rule, Run now's (MIG-420)");
+        // MIG-421: a bulk selection's count and a schedule's items across runs are reads (POST for their filters, @ReadOnlyList);
+        // sending items to review asks people to look at them (a Task inbox task), as a run's review is the customer's own.
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.selectRunItems", read + " (a selection of a run's items, MIG-421)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.listItemRuns", read + " (a schedule's items across its runs, MIG-421)");
+        CUSTOMERS_IN_EITHER_MODE.put("RunItemRestApi.reviewRunItems", "asking people of the workspace to review some items of a run "
+            + "(a Task inbox task): reviewing, the customer's own in either mode (MIG-421)");
         // MIG-355: many failed runs retried at once, each by the single retry's rules; and Runs › Failed is a read (POST for its filters).
         CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.bulkRetry", "retrying failed runs, each as the single retry: Run now's rule (MIG-355)");
         CUSTOMERS_IN_EITHER_MODE.put("FailedRunsRestApi.failedRuns", "a read: the failed runs, their facets and error patterns (POST for its "

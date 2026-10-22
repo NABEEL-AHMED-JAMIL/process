@@ -7,6 +7,7 @@ import process.pipeline.backing.ReportStudio;
 import process.pipeline.backing.Fakes;
 import process.pipeline.tasks.AggregateStepTask;
 import process.pipeline.tasks.AiPromptStepTask;
+import process.pipeline.tasks.OcrPagesStepTask;
 import process.pipeline.tasks.ComputeStepTask;
 import process.pipeline.tasks.RenderPdfStepTask;
 import process.pipeline.tasks.CallApiStepTask;
@@ -80,7 +81,7 @@ public final class AllTasks {
             new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
             new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio),
             new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets),
-            new SplitPagesStepTask(this.buckets)));
+            new SplitPagesStepTask(this.buckets), new OcrPagesStepTask(this.media)));
     }
 
     public StepTasks tasks() {

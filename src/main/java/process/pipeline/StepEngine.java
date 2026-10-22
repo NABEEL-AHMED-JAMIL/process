@@ -815,6 +815,9 @@ public class StepEngine {
             // report measures execution from it, and without it every step-engine run read -1 (RunStartMarkerMonitor: 100%).
             this.audit(JobAuditMarker.JOB_STARTED.logDetail());
             this.items = this.openItems();
+            if (this.items != null) {
+                this.items.ranVersion(this.plan.stored.version);
+            }
             Outcome outcome;
             try {
                 outcome = this.steps(rows, resumed);
@@ -842,6 +845,11 @@ public class StepEngine {
             return ItemTracker.open(this.run.getJobQueueId(), this.attempt, itemStore, this.itemEngine(), plan,
                 resume ? (asked.fromStepIndex == null ? 0 : asked.fromStepIndex) : -1, resume ? asked.previousAttempt : 0,
                 resume ? asked.itemKeys : null, resume && ItemRetries.FAILED_STEP.equals(asked.itemMode));
+        }
+
+        /** MIG-421: the runs' items store (kept reports), or null. */
+        RunItemStore itemStore() {
+            return itemStore;
         }
 
         /** MIG-420: the attempt's items as it left them, when it continues after an Approval step. */
@@ -1389,6 +1397,9 @@ public class StepEngine {
                 return;
             }
             this.items = this.continuedItems();
+            if (this.items != null) {
+                this.items.ranVersion(this.plan.stored.version);
+            }
             String line = sentence(String.format("Approved by %s%s", approval.decider(), approval.comment == null ? "" : ": " + approval.comment));
             if (!steps.settleWaiting(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line)) {
                 logger.info("Run {}: approval request {} was already settled by another hand-off; nothing to do.", this.run.getJobQueueId(),
@@ -1437,6 +1448,9 @@ public class StepEngine {
             }
             new StepLog(waited.row).line("ERROR", why);
             this.items = this.continuedItems();
+            if (this.items != null) {
+                this.items.ranVersion(this.plan.stored.version);
+            }
             if (this.items != null) {
                 this.itemsAfter(approval.stepIndex, waited.row, null, null, false, why, null, 0);
                 this.items.finish(false, false, false, why);
@@ -2383,6 +2397,61 @@ public class StepEngine {
         public String rowTag(Map<String, Object> forRow, int index) {
             ItemTracker tracker = this.execution.items;
             return tracker == null ? String.valueOf(index + 1) : tracker.tagOf(forRow, index);
+        }
+
+        /** MIG-421: the step reused what an earlier attempt made for the row's item. */
+        @Override
+        public void itemReused(Map<String, Object> forRow, String note, int fromAttempt) {
+            if (forRow != null && this.execution.items != null) {
+                this.reports.add(ItemReport.reused(forRow, note, fromAttempt));
+            }
+        }
+
+        /** MIG-421: the row's item flagged (an OCR page to check by hand). */
+        @Override
+        public void itemFlagged(Map<String, Object> forRow, String flag, String note) {
+            if (forRow != null && this.execution.items != null) {
+                this.reports.add(ItemReport.flagged(forRow, flag, note));
+            }
+        }
+
+        /** MIG-421: the report this run's step made for the row's item from the same data and design, if any. */
+        @Override
+        public Optional<StepContext.KeptReport> keptReport(Map<String, Object> forRow, int index, String dataHash) {
+            ItemTracker tracker = this.execution.items;
+            if (tracker == null || tracker.off() || this.execution.itemStore() == null || forRow == null || dataHash == null) {
+                return Optional.empty();
+            }
+            String tag = tracker.tagOf(forRow, index);
+            return this.execution.itemStore().keptReport(this.execution.run.getJobQueueId(), this.step.getKey(), tag, dataHash)
+                .map(r -> new StepContext.KeptReport(r.reportId, r.reportVersion, r.reportLabel, r.fileName, r.pages, r.madeAttempt));
+        }
+
+        /** MIG-421: keeps the report just made for the row's item (its tag, the same in every attempt). */
+        @Override
+        public void reportKept(Map<String, Object> forRow, int index, String dataHash, StepContext.KeptReport report) {
+            ItemTracker tracker = this.execution.items;
+            if (tracker == null || tracker.off() || this.execution.itemStore() == null || forRow == null || dataHash == null || report == null) {
+                return;
+            }
+            RunItemStore.KeptReport kept = new RunItemStore.KeptReport();
+            kept.jobQueueId = this.execution.run.getJobQueueId();
+            kept.stepKey = this.step.getKey();
+            kept.itemTag = tracker.tagOf(forRow, index);
+            kept.itemKey = tracker.itemAt(null, index, forRow);
+            kept.dataHash = dataHash;
+            kept.reportId = report.reportId;
+            kept.reportVersion = report.version;
+            kept.reportLabel = report.label;
+            kept.fileName = report.fileName;
+            kept.pages = report.pages;
+            kept.madeAttempt = report.madeAttempt;
+            try {
+                this.execution.itemStore().keepReport(kept);
+            } catch (RuntimeException unkept) {
+                // Not kept: a retry makes this item's report again, as before MIG-421; the run goes on.
+                logger.warn("Run {} step {}: a report kept for its item could not be recorded: {}", kept.jobQueueId, kept.stepKey, unkept.getMessage());
+            }
         }
 
         @Override

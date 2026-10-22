@@ -248,6 +248,20 @@ public final class Fakes {
             String stem = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
             return new Converted(stem + "." + outputFormat, "pdf".equals(outputFormat) ? 3 : null, bytes.length);
         }
+
+        /** MIG-421: page file name -> how sure the fake reader is of it (default 91.5). */
+        public final Map<String, Double> sureness = new LinkedHashMap<>();
+
+        @Override
+        public PageText ocr(long tenantId, String usageKey, Path image, String fileName, String language) throws IOException {
+            this.asked("ocr", tenantId, usageKey, image, fileName);
+            PageText p = new PageText();
+            p.text = "read from " + fileName;
+            p.sureness = this.sureness.getOrDefault(fileName, 91.5);
+            p.wordCount = 3;
+            p.language = language;
+            return p;
+        }
     }
 
     public static final class Notifier implements PipelineNotifier {

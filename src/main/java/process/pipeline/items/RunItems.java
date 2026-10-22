@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import process.pipeline.registry.ItemRole;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import process.security.TenantContext;
@@ -81,6 +82,7 @@ import static process.util.ProcessUtil.SUCCESS;
 public class RunItems {
 
     private static final Logger logger = LoggerFactory.getLogger(RunItems.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     public static final String RUN_NOT_FOUND = "Run not found with jobQueueId.";
     public static final String ITEM_NOT_FOUND = "Item not found in this run.";
@@ -89,6 +91,10 @@ public class RunItems {
     static final int MAX_FIELDS = 60;
     static final long MAX_ZIP_BYTES = 500L * 1024 * 1024;
     static final long MAX_FILE_BYTES = 200L * 1024 * 1024;
+    /** MIG-421: the most items one bulk action names (a selection's refs, a zip, a review task). */
+    public static final int MAX_SELECTION = 1_000;
+    /** MIG-421: the most items one zip holds (its link names them). */
+    public static final int MAX_ZIP_ITEMS = 200;
 
     /** An answer: its HTTP status and its envelope, or a file to stream. */
     public static final class Answer {
@@ -110,7 +116,7 @@ public class RunItems {
             return new Answer(200, new ResponseDto(SUCCESS, message, data), null, null, null);
         }
 
-        static Answer refused(int status, String message) {
+        public static Answer refused(int status, String message) {
             return new Answer(status, new ResponseDto(ERROR, message), null, null, null);
         }
 
@@ -132,6 +138,17 @@ public class RunItems {
         public Integer page;
         public Integer size;
         public List<String> fields;
+        /** MIG-421: only these items (a selection, a Task inbox link), and not these ("Select all N matching" but some). */
+        public List<String> refs;
+        public List<String> except;
+
+        public List<String> getRefs() { return refs; }
+
+        public void setRefs(List<String> refs) { this.refs = refs; }
+
+        public List<String> getExcept() { return except; }
+
+        public void setExcept(List<String> except) { this.except = except; }
 
         public Long getJobQueueId() { return jobQueueId; }
 
@@ -284,6 +301,11 @@ public class RunItems {
         return new Steps(definition, plan);
     }
 
+    /** MIG-421: a run's steps as items see them (for the across-runs list and the compare). */
+    Steps stepsOfRun(long jobQueueId) {
+        return this.stepsOf(jobQueueId);
+    }
+
     static final class Steps {
         final PipelineDefinition definition;
         final List<ItemTracker.StepInfo> list;
@@ -376,17 +398,7 @@ public class RunItems {
         data.put("fields", available);
         data.put("masked", new ArrayList<>(masks.maskedNames(available)));
         String status = request.status == null ? "all" : request.status.trim().toLowerCase(Locale.ROOT);
-        List<ItemRow> filtered = new ArrayList<>();
-        Search search = Search.of(request.search);
-        for (ItemRow row : level) {
-            if (!matchesStatus(row, status)) {
-                continue;
-            }
-            if (search != null && !search.matches(row, () -> this.fieldsOf(rows, row, masks, null))) {
-                continue;
-            }
-            filtered.add(row);
-        }
+        List<ItemRow> filtered = this.filter(level, status, request.search, request.refs, request.except, rows, masks);
         int size = Math.max(1, Math.min(MAX_PAGE, request.size == null ? 50 : request.size));
         int page = Math.max(0, request.page == null ? 0 : request.page);
         int from = Math.min(filtered.size(), page * size);
@@ -411,8 +423,121 @@ public class RunItems {
         return Answer.ok(String.format("%d item(s).", filtered.size()), data);
     }
 
+    /**
+     * The items of one level that the status, the search and a selection (only these refs, not those) let through, in order. The
+     * search matches what the person sees: their masks applied first, so a masked value is never found by its real text.
+     */
+    List<ItemRow> filter(List<ItemRow> level, String status, String searchText, List<String> refs, List<String> except, Rows rows, ItemMasks masks) {
+        Set<String> only = refs == null || refs.isEmpty() ? null : refs.stream().filter(Objects::nonNull).map(String::trim).collect(Collectors.toSet());
+        Set<String> not = except == null ? Collections.<String>emptySet()
+            : except.stream().filter(Objects::nonNull).map(String::trim).collect(Collectors.toSet());
+        List<ItemRow> filtered = new ArrayList<>();
+        Search search = Search.of(searchText);
+        for (ItemRow row : level) {
+            if (only != null && !only.contains(row.itemRef)) {
+                continue;
+            }
+            if (not.contains(row.itemRef)) {
+                continue;
+            }
+            if (!matchesStatus(row, status)) {
+                continue;
+            }
+            if (search != null && !search.matches(row, () -> this.fieldsOf(rows, row, masks, null))) {
+                continue;
+            }
+            filtered.add(row);
+        }
+        return filtered;
+    }
+
+    /** MIG-421: what a bulk action on the Items tab acts on: the run, and the items its selection names (all pages), in order. */
+    public static final class Selected {
+        public final RunOwnership.Owned owned;
+        public final List<ItemRow> items;
+        public final ItemMasks masks;
+        final Steps steps;
+
+        Selected(RunOwnership.Owned owned, List<ItemRow> items, ItemMasks masks, Steps steps) {
+            this.owned = owned;
+            this.items = items;
+            this.masks = masks;
+            this.steps = steps;
+        }
+    }
+
+    /**
+     * MIG-421: the items a selection names -- the refs ticked, or every item the filter and search find ("Select all N
+     * matching", across pages) less the ones unticked -- for a run the caller reads; null when the run is not theirs (404).
+     */
+    Selected selected(ListRequest request) {
+        Optional<RunOwnership.Owned> owned = this.readable(request == null ? null : request.jobQueueId);
+        if (!owned.isPresent()) {
+            return null;
+        }
+        List<ItemRow> all = this.store.current(request.jobQueueId);
+        Steps steps = this.stepsOf(request.jobQueueId);
+        ItemMasks masks = this.masksFor(owned.get().job, steps.definition);
+        String parentKey = null;
+        if (request.parent != null && !request.parent.trim().isEmpty()) {
+            ItemRow parent = byRef(all, request.parent.trim());
+            parentKey = parent == null ? "\u0000none" : parent.itemKey;
+        }
+        final String level = parentKey;
+        List<ItemRow> rows = all.stream().filter(row -> level == null ? row.parentKey == null : level.equals(row.parentKey))
+            .sorted((a, b) -> Integer.compare(a.position, b.position)).collect(Collectors.toList());
+        boolean ticked = request.refs != null && !request.refs.isEmpty();
+        String status = ticked || request.status == null ? "all" : request.status.trim().toLowerCase(Locale.ROOT);
+        List<ItemRow> chosen = this.filter(rows, status, ticked ? null : request.search, request.refs, request.except, new Rows(this.datasets, this.steps),
+            masks);
+        return new Selected(owned.get(), chosen, masks, steps);
+    }
+
+    /**
+     * MIG-421: a selection's size, before a bulk action: how many items, how many of them failed (what "Retry N failed" retries),
+     * their refs (at most {@value #MAX_SELECTION}) and the first names.
+     */
+    public Answer selection(ListRequest request) {
+        Answer refused = platformRefusal();
+        if (refused != null) {
+            return refused;
+        }
+        Selected selected = this.selected(request);
+        if (selected == null) {
+            return Answer.refused(404, RUN_NOT_FOUND);
+        }
+        int failed = 0;
+        List<String> refs = new ArrayList<>();
+        List<String> failedRefs = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (ItemRow row : selected.items) {
+            boolean f = ItemRow.FAILED.equals(row.status) || row.childFailed > 0;
+            failed += f ? 1 : 0;
+            if (refs.size() < MAX_SELECTION) {
+                refs.add(row.itemRef);
+                if (f) {
+                    failedRefs.add(row.itemRef);
+                }
+            }
+            if (labels.size() < 5) {
+                labels.add(row.label);
+            }
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("jobQueueId", request.jobQueueId);
+        data.put("items", selected.items.size());
+        data.put("failed", failed);
+        data.put("refs", refs);
+        data.put("failedRefs", failedRefs);
+        data.put("labels", labels);
+        data.put("capped", selected.items.size() > MAX_SELECTION);
+        return Answer.ok(String.format("%d item(s) selected, %d failed.", selected.items.size(), failed), data);
+    }
+
     static boolean matchesStatus(ItemRow row, String status) {
         switch (status) {
+            case "check":
+                return ItemRow.CHECK.equals(row.flag);
             case "done":
                 return ItemRow.DONE.equals(row.status) && row.childFailed == 0;
             case "failed":
@@ -534,6 +659,8 @@ public class RunItems {
         }
         view.put("reason", row.reason);
         view.put("attempt", row.attempt);
+        // MIG-421: an OCR page to check by hand (a document: one of its pages is).
+        view.put("flag", row.flag);
         if (row.childCount > 0) {
             Map<String, Object> children = new LinkedHashMap<>();
             children.put("total", row.childCount);
@@ -584,12 +711,14 @@ public class RunItems {
         int running = 0;
         int subItems = 0;
         int failedLeaves = 0;
+        int check = 0;
         int files = 0;
         long ms = 0;
         int timed = 0;
         Map<String, Integer> failedAt = new LinkedHashMap<>();
         for (ItemRow row : all) {
             files += row.fileCount;
+            check += row.parentKey != null && ItemRow.CHECK.equals(row.flag) ? 1 : 0;
             if (row.parentKey != null) {
                 subItems++;
                 if (ItemRow.FAILED.equals(row.status)) {
@@ -622,6 +751,8 @@ public class RunItems {
         summary.put("running", running);
         summary.put("subItems", subItems);
         summary.put("failedItems", failedLeaves);
+        // MIG-421: pages (or items) an OCR step marked Check by hand.
+        summary.put("check", check + (int) all.stream().filter(r -> r.parentKey == null && ItemRow.CHECK.equals(r.flag) && r.childCount == 0).count());
         summary.put("files", files);
         summary.put("averageMs", timed == 0 ? null : ms / timed);
         List<Map<String, Object>> at = new ArrayList<>();
@@ -1091,6 +1222,9 @@ public class RunItems {
             return Answer.refused(404, RUN_NOT_FOUND);
         }
         JobQueue run = owned.get().run;
+        if (link.itemRef.startsWith(MANY)) {
+            return this.zipOfMany(run, owned.get(), link);
+        }
         ItemRow row = byRef(this.store.current(jobQueueId), link.itemRef);
         if (row == null) {
             return Answer.refused(404, ITEM_NOT_FOUND);
@@ -1130,6 +1264,127 @@ public class RunItems {
         });
     }
 
+    /** MIG-421: a link's item names several items: "items:" and their refs. */
+    static final String MANY = "items:";
+
+    /**
+     * MIG-421: a signed link to the selected items' files as one zip -- each item a folder of its own, by its ref and name --
+     * after the access check; logged. The link names the items it opens (at most {@value #MAX_ZIP_ITEMS}) and nothing else.
+     */
+    public Answer zipLinkOfMany(ListRequest selection, String stepKey) {
+        Answer refused = platformRefusal();
+        if (refused != null) {
+            return refused;
+        }
+        Selected selected = this.selected(selection);
+        if (selected == null) {
+            this.accessLog.refusedRun(selection == null ? null : selection.jobQueueId, ItemAccessLog.ITEM_ZIP, ItemAccessLog.LINK, 404, RUN_NOT_FOUND);
+            return Answer.refused(404, RUN_NOT_FOUND);
+        }
+        if (selected.items.isEmpty()) {
+            return Answer.refused(404, "No item is selected.");
+        }
+        if (selected.items.size() > MAX_ZIP_ITEMS) {
+            return Answer.refused(413, String.format("A zip holds at most %d items; %d are selected. Narrow the selection.", MAX_ZIP_ITEMS,
+                selected.items.size()));
+        }
+        if (this.links == null || !this.links.available()) {
+            return Answer.refused(503, "Download links cannot be made right now.");
+        }
+        int files = 0;
+        for (ItemRow row : selected.items) {
+            files += this.countFilesOf(row, stepKey, null);
+        }
+        if (files == 0) {
+            return Answer.refused(404, "The selected items have no files to download.");
+        }
+        Long userId = TenantContext.getAppUserId();
+        String refs = selected.items.stream().map(r -> r.itemRef).collect(Collectors.joining(","));
+        String[] issued = this.links.issue(selected.owned.run.getTenantId(), userId == null ? 0 : userId, selected.owned.run.getJobQueueId(),
+            MANY + refs, stepKey);
+        this.accessLog.log(selected.owned.run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.LINK, String.format("%d items", selected.items.size()), true, 200,
+            null);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("token", issued[0]);
+        data.put("expiresAt", issued[1]);
+        data.put("items", selected.items.size());
+        data.put("files", files);
+        return Answer.ok("A download link, valid two minutes.", data);
+    }
+
+    /** The zip a link to several items opens: a folder per item -- its files, and item.json with its status and values (masked). */
+    private Answer zipOfMany(JobQueue run, RunOwnership.Owned owned, ItemLinks.Link link) {
+        List<ItemRow> all = this.store.current(run.getJobQueueId());
+        List<ItemRow> chosen = new ArrayList<>();
+        for (String ref : link.itemRef.substring(MANY.length()).split(",")) {
+            ItemRow row = byRef(all, ref.trim());
+            if (row == null) {
+                return Answer.refused(404, ITEM_NOT_FOUND);
+            }
+            chosen.add(row);
+        }
+        Steps steps = this.stepsOf(run.getJobQueueId());
+        ItemMasks masks = this.masksFor(owned.job, steps.definition);
+        Rows rows = new Rows(this.datasets, this.steps);
+        List<Object[]> entries = new ArrayList<>();
+        long total = 0;
+        Set<String> folders = new HashSet<>();
+        for (ItemRow row : chosen) {
+            String folder = unique(safe(row.itemRef + "-" + row.label), folders);
+            Map<String, Object> about = new LinkedHashMap<>();
+            about.put("ref", row.itemRef);
+            about.put("item", row.label);
+            about.put("key", row.itemKey);
+            about.put("status", row.status);
+            about.put("failedStep", row.failedStepIndex == null ? null : steps.name(row.failedStepIndex, row.failedStepKey));
+            about.put("reason", row.reason);
+            about.put("flag", row.flag);
+            about.put("attempt", row.attempt);
+            Map<String, Object> steps2 = new LinkedHashMap<>();
+            for (ItemRow.StepEntry entry : row.steps) {
+                steps2.put(steps.name(entry.i, entry.key), entry.status);
+            }
+            about.put("steps", steps2);
+            about.put("values", this.fieldsOf(rows, row, masks, null));
+            entries.add(new Object[] {folder + "/item.json", about});
+            for (ItemRow.FileRow f : this.filesOf(row, link.stepKey, null, 0, 5_000)) {
+                total += f.byteCount == null ? 0 : f.byteCount;
+                if (total > MAX_ZIP_BYTES) {
+                    return Answer.refused(413, "These files are more than 500 MB together; download fewer items at a time.");
+                }
+                try {
+                    entries.add(new Object[] {folder + "/" + safe(f.stepKey), f, this.open(run, f)});
+                } catch (Gone gone) {
+                    logger.info("Run {} item {}: {} left out of the zip: {}", run.getJobQueueId(), row.itemRef, f.fileName, gone.getMessage());
+                }
+            }
+        }
+        this.accessLog.log(run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.DOWNLOAD, String.format("%d items", chosen.size()), true, 200, null);
+        String name = String.format("run-%d-%d-items%s.zip", run.getJobQueueId(), chosen.size(), link.stepKey == null ? "" : "-" + safe(link.stepKey));
+        return Answer.file(name, "application/zip", out -> {
+            try (ZipOutputStream zip = new ZipOutputStream(out)) {
+                Set<String> taken = new HashSet<>();
+                for (Object[] e : entries) {
+                    if (e.length == 2) {
+                        zip.putNextEntry(new ZipEntry((String) e[0]));
+                        zip.write(JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(e[1]));
+                        zip.closeEntry();
+                        continue;
+                    }
+                    ItemRow.FileRow f = (ItemRow.FileRow) e[1];
+                    zip.putNextEntry(new ZipEntry(unique(e[0] + "/" + safe(f.fileName), taken)));
+                    ((StreamingResponseBody) e[2]).writeTo(new FilterOutputStream(zip) {
+                        @Override
+                        public void close() {
+                            // the zip stays open for the next entry
+                        }
+                    });
+                    zip.closeEntry();
+                }
+            }
+        });
+    }
+
     static String safe(String name) {
         String s = name == null ? "file" : name.replaceAll("[^A-Za-z0-9._ -]+", "_").replaceAll("^[. ]+", "");
         return s.isEmpty() ? "file" : s;
@@ -1156,8 +1411,24 @@ public class RunItems {
         request.jobQueueId = jobQueueId;
         request.status = status;
         request.search = search;
-        request.size = MAX_PAGE;
         request.fields = fields;
+        return this.csv(request);
+    }
+
+    /** MIG-421: the CSV of a selection (the refs ticked, or all matching less the unticked), masked as the table is. */
+    public Answer csv(ListRequest selection) {
+        ListRequest request = new ListRequest();
+        request.jobQueueId = selection == null ? null : selection.jobQueueId;
+        boolean ticked = selection != null && selection.refs != null && !selection.refs.isEmpty();
+        request.status = selection == null || ticked ? null : selection.status;
+        request.search = selection == null || ticked ? null : selection.search;
+        request.parent = selection == null ? null : selection.parent;
+        request.refs = selection == null ? null : selection.refs;
+        request.except = selection == null ? null : selection.except;
+        request.size = MAX_PAGE;
+        request.fields = selection == null ? null : selection.fields;
+        Long jobQueueId = request.jobQueueId;
+        List<String> fields = request.fields;
         Answer refused = platformRefusal();
         if (refused != null) {
             return refused;

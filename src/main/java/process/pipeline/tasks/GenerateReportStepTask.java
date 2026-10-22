@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.RunOutput;
 import process.pipeline.StepReferences;
+import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.StreamContext;
 import process.pipeline.StreamingStepTask;
@@ -20,6 +21,8 @@ import process.pipeline.registry.TaskSpec;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -29,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.HashSet;
 import process.pipeline.data.Values;
@@ -53,6 +57,11 @@ import process.pipeline.data.Values;
  *       (pipeline#run#step#a<n>#r<row>), name from the row's columns and lineage (pipeline.row) -- with the row as the
  *       design's single record (rootPath $[0]; a column a.b as a: {b}); at most maxReports rows. The default stays one
  *       report of all the rows (a design's repeat-for-each section makes a digest of them).</li>
+ *   <li>MIG-421 (one report per row, in an item run): each report is kept for its item as soon as it is made (run_item_report,
+ *       by the item and a hash of its data, the design, its published version and the step's settings), even when a later
+ *       row fails. A retry that reaches the step reuses it -- the PDF is read again from the report's own version, Report
+ *       Studio is not asked to make one, nothing is billed, the report's version and signature are untouched -- and makes
+ *       only the reports whose item has none, or whose data or design changed.</li>
  * </ul>
  */
 @Component
@@ -204,9 +213,9 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         }
         Map<String, Object> runValues = Templates.ofRun(context, (int) Math.min(Integer.MAX_VALUE, inputRows));
         Set<String> taken = new HashSet<>();
-        boolean checked = false;
         int number = 0;
         int made = 0;
+        int reused = 0;
         int atOnce = AtOnce.of(config);
         if (atOnce > 1) {
             // MIG-418: the rows are at most maxReports, so they are held to be sent a few at a time.
@@ -218,18 +227,26 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     all.addAll(batch);
                 }
             }
-            if (!all.isEmpty()) {
-                this.checkDesign(context, templateId, version, columns);
-            }
+            String resolved = all.isEmpty() ? version : this.checkDesign(context, templateId, version, columns);
             context.log(String.format("Calls at once: %d (the workspace's calls together at most %d).", atOnce, AtOnce.workspaceCap()));
             // MIG-420: each row's item key, on the step's thread, and the time each report took.
             String[] tags = new String[all.size()];
+            String[] hashes = new String[all.size()];
+            // MIG-421: the rows whose item has its report already (same data and design) are not sent: reused in row order below.
+            boolean[] keptBefore = new boolean[all.size()];
+            List<Integer> toMake = new ArrayList<>();
             for (int i = 0; i < tags.length; i++) {
                 tags[i] = context.rowTag(all.get(i), i);
+                hashes[i] = dataHash(templateId, resolved, config, nested(structured(all.get(i), json)));
+                keptBefore[i] = context.keptReport(all.get(i), i, hashes[i]).isPresent();
+                if (!keptBefore[i]) {
+                    toMake.add(i);
+                }
             }
             long[] took = new long[all.size()];
             // Each report queued and followed at once with others; kept with the run afterwards, in row order.
-            List<AtOnce.Outcome<JsonNode>> jobs = AtOnce.run(context.tenantId(), all.size(), atOnce, i -> {
+            List<AtOnce.Outcome<JsonNode>> jobs = AtOnce.run(context.tenantId(), toMake.size(), atOnce, k -> {
+                int i = toMake.get(k);
                 long began = System.nanoTime();
                 try {
                     return this.queued(context, config, templateId, version, runValues, all.get(i), i + 1, tags[i], json);
@@ -239,9 +256,28 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     took[i] = (System.nanoTime() - began) / 1_000_000L;
                 }
             });
+            Map<Integer, AtOnce.Outcome<JsonNode>> byRow = new LinkedHashMap<>();
+            for (int k = 0; k < toMake.size(); k++) {
+                byRow.put(toMake.get(k), jobs.get(k));
+            }
             for (int i = 0; i < all.size(); i++) {
-                AtOnce.Outcome<JsonNode> job = jobs.get(i);
-                if (!job.made) {
+                if (keptBefore[i]) {
+                    long began = System.nanoTime();
+                    if (this.reuse(context, all.get(i), i, hashes[i], taken) != null) {
+                        number++;
+                        reused++;
+                        context.itemTook(all.get(i), (System.nanoTime() - began) / 1_000_000L);
+                        continue;
+                    }
+                    // Its PDF could not be read again: made now, on the step's thread.
+                    number++;
+                    Made now = this.makeRow(context, config, templateId, version, runValues, all.get(i), i + 1, tags[i], json, warnOnly, taken);
+                    kept(context, all.get(i), i, hashes[i], now);
+                    made += now == null ? 0 : 1;
+                    continue;
+                }
+                AtOnce.Outcome<JsonNode> job = byRow.get(i);
+                if (job == null || !job.made) {
                     break;
                 }
                 number++;
@@ -252,8 +288,10 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     throw job.error;
                 }
                 try {
-                    if (this.keep(context, job.value, warnOnly, 1, taken, all.get(i))) {
+                    Made one = this.keep(context, job.value, warnOnly, 1, taken, all.get(i));
+                    if (one != null) {
                         made++;
+                        kept(context, all.get(i), i, hashes[i], one);
                     }
                 } catch (InterruptedException stopped) {
                     throw stopped;
@@ -262,9 +300,10 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     throw notKept;
                 }
             }
-            context.log(String.format("%d report(s) made from %d row(s), one a row.", made, number));
+            context.log(madeLine(made, reused, number));
             return StepResult.nothing(inputRows);
         }
+        String resolved = null;
         try (RowSource rows = context.openInput()) {
             List<String> columns = new ArrayList<>(rows.columns());
             for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
@@ -273,30 +312,24 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                     if (Thread.currentThread().isInterrupted()) {
                         throw new InterruptedException("Generate report was stopped.");
                     }
-                    if (!checked) {
-                        this.checkDesign(context, templateId, version, columns);
-                        checked = true;
-                    }
-                    Map<String, Object> values = new LinkedHashMap<>(runValues);
-                    values.putAll(row);
-                    values.put("row", number);
-                    Map<String, Object> head = this.head(context, config, templateId, version, values, number);
-                    // The report's data is the row itself, one record: the list's first element.
-                    head.put("rootPath", "$[0]");
-                    Path lines = context.scratch().resolve("report-row-" + number + ".ndjson");
-                    try (BufferedWriter w = Files.newBufferedWriter(lines, StandardCharsets.UTF_8)) {
-                        w.write(JSON.writeValueAsString(Map.of("head", head)));
-                        w.write('\n');
-                        w.write(JSON.writeValueAsString(nested(structured(row, json))));
-                        w.write('\n');
+                    if (resolved == null) {
+                        resolved = this.checkDesign(context, templateId, version, columns);
                     }
                     long began = System.nanoTime();
+                    // MIG-421: the row's item has its report already (same data and design): reused, not made or billed again.
+                    String hash = dataHash(templateId, resolved, config, nested(structured(row, json)));
+                    if (this.reuse(context, row, number - 1, hash, taken) != null) {
+                        reused++;
+                        context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
+                        continue;
+                    }
                     try {
-                        // MIG-420: in an item run the report is keyed by the row's item (rowTag), the same in every attempt.
-                        String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(),
-                            context.rowTag(row, number - 1));
-                        if (this.make(context, lines, usageKey, warnOnly, 1, taken, row)) {
+                        Made one = this.makeRow(context, config, templateId, version, runValues, row, number, context.rowTag(row, number - 1), json,
+                            warnOnly, taken);
+                        if (one != null) {
                             made++;
+                            // Kept for its item as soon as it is made: a later row's failure does not throw it away.
+                            kept(context, row, number - 1, hash, one);
                         }
                         context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
                     } catch (InterruptedException stopped) {
@@ -305,14 +338,44 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                         context.itemFailed(row, reportFailed.getMessage());
                         context.itemTook(row, (System.nanoTime() - began) / 1_000_000L);
                         throw reportFailed;
-                    } finally {
-                        Files.deleteIfExists(lines);
                     }
                 }
             }
         }
-        context.log(String.format("%d report(s) made from %d row(s), one a row.", made, number));
+        context.log(madeLine(made, reused, number));
         return StepResult.nothing(inputRows);
+    }
+
+    /** The step's line: reports made and reused, one a row. */
+    static String madeLine(int made, int reused, int rows) {
+        return reused == 0 ? String.format("%d report(s) made from %d row(s), one a row.", made, rows)
+            : String.format("%d report(s) made and %d reused (same data and design, not made or billed again) from %d row(s), one a row.",
+                made, reused, rows);
+    }
+
+    /** One row's report, made on the step's thread: its lines written, queued under the row's key, followed and kept. */
+    private Made makeRow(StreamContext context, Map<String, Object> config, String templateId, String version, Map<String, Object> runValues,
+        Map<String, Object> row, int number, String tag, List<String> json, boolean warnOnly, Set<String> taken) throws Exception {
+        Map<String, Object> values = new LinkedHashMap<>(runValues);
+        values.putAll(row);
+        values.put("row", number);
+        Map<String, Object> head = this.head(context, config, templateId, version, values, number);
+        // The report's data is the row itself, one record: the list's first element.
+        head.put("rootPath", "$[0]");
+        Path lines = context.scratch().resolve("report-row-" + number + ".ndjson");
+        try {
+            try (BufferedWriter w = Files.newBufferedWriter(lines, StandardCharsets.UTF_8)) {
+                w.write(JSON.writeValueAsString(Map.of("head", head)));
+                w.write('\n');
+                w.write(JSON.writeValueAsString(nested(structured(row, json))));
+                w.write('\n');
+            }
+            // MIG-420: in an item run the report is keyed by the row's item (rowTag); the attempt keeps a retry's own job.
+            String usageKey = String.format("pipeline#%d#%s#a%d#r%s", context.jobQueueId(), context.stepKey(), context.attempt(), tag);
+            return this.make(context, lines, usageKey, warnOnly, 1, taken, row);
+        } finally {
+            Files.deleteIfExists(lines);
+        }
     }
 
     /** MIG-418: one row's report written to its own lines file, queued and followed until done (on a worker thread). */
@@ -378,10 +441,19 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         return head;
     }
 
-    /** The design's fields the rows no longer have: said before the report is made (media's checks then refuse it). */
-    private void checkDesign(StreamContext context, String templateId, String version, List<String> columns) throws Exception {
+    /**
+     * The design's fields the rows no longer have: said before the report is made (media's checks then refuse it). Returns the
+     * version the reports are made from -- the pinned one, or "latest" resolved to its published number (MIG-421: part of
+     * what a kept report was made from); {@code version} itself when media could not say.
+     */
+    private String checkDesign(StreamContext context, String templateId, String version, List<String> columns) throws Exception {
+        String resolved = version;
         try {
             for (JsonNode t : this.studio.check(context.tenantId(), List.of(templateId), version, columns)) {
+                if ("latest".equals(version) && t.path("currentPublishedVersion").canConvertToInt()
+                    && t.path("currentPublishedVersion").asInt() > 0) {
+                    resolved = String.valueOf(t.path("currentPublishedVersion").asInt());
+                }
                 if (!t.path("found").asBoolean(false)) {
                     throw new IllegalStateException("The step's report design is not there any more (" + templateId + "): design it again, "
                         + "or pick a template.");
@@ -396,15 +468,33 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         } catch (IOException unanswered) {
             context.log("The design's fields were not checked first: " + unanswered.getMessage());
         }
+        return resolved;
     }
 
     /**
      * One report from {@code lines}: queued, followed until done, its PDF kept with the run (a name taken already gets
      * -2, -3). False when the checks refused it and the step only warns; an exception otherwise.
      */
-    private boolean make(StreamContext context, Path lines, String usageKey, boolean warnOnly, long rows, Set<String> taken,
+    private Made make(StreamContext context, Path lines, String usageKey, boolean warnOnly, long rows, Set<String> taken,
         Map<String, Object> forRow) throws Exception {
         return this.keep(context, this.follow(context, lines, usageKey), warnOnly, rows, taken, forRow);
+    }
+
+    /** MIG-421: a report made: its id and version, label, its PDF's name (as kept with the run) and pages. */
+    static final class Made {
+        final String reportId;
+        final int version;
+        final String label;
+        final String fileName;
+        final Integer pages;
+
+        Made(String reportId, int version, String label, String fileName, Integer pages) {
+            this.reportId = reportId;
+            this.version = version;
+            this.label = label;
+            this.fileName = fileName;
+            this.pages = pages;
+        }
     }
 
     /** A report queued from {@code lines} and followed until its job is done: the finished job. */
@@ -420,8 +510,8 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         return job;
     }
 
-    /** A finished job's report: its PDF kept with the run (on the step's own thread, in row order). */
-    private boolean keep(StreamContext context, JsonNode job, boolean warnOnly, long rows, Set<String> taken, Map<String, Object> forRow)
+    /** A finished job's report: its PDF kept with the run (on the step's own thread, in row order); null when warned past. */
+    private Made keep(StreamContext context, JsonNode job, boolean warnOnly, long rows, Set<String> taken, Map<String, Object> forRow)
         throws Exception {
         String status = job.path("status").asText();
         if (!"SUCCEEDED".equals(status)) {
@@ -433,7 +523,7 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                 if (forRow != null) {
                     context.itemFailed(forRow, why);
                 }
-                return false;
+                return null;
             }
             throw new IllegalStateException(why);
         }
@@ -445,8 +535,9 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
                 pdf = a;
             }
         }
+        String fileName = null;
         if (pdf != null) {
-            String fileName = FileRows.unique(safeName(pdf.path("name").asText("report.pdf")), taken);
+            fileName = FileRows.unique(safeName(pdf.path("name").asText("report.pdf")), taken);
             StreamContext.KeptFile kept = context.keepFile(fileName, new ArrayList<>(), rows,
                 out -> this.studio.file(context.tenantId(), reportId, made, "PDF", out));
             RunOutput output = RunOutput.file(fileName, "pdf", rows, kept.bytes).withSha256(kept.sha256).withPages(pdf.path("pages").asInt(0));
@@ -462,7 +553,71 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
             job.path("reportLabel").asText(reportId), made, job.path("templateVersion").asInt(), pdf == null ? "no PDF"
                 : String.format("PDF %,d page(s)", pdf.path("pages").asInt()), checks.path("errors").asInt(), checks.path("warnings").asInt(),
             checks.path("firstCodes").size() == 0 ? "" : " (" + join(checks.path("firstCodes")) + ")"));
-        return true;
+        return new Made(reportId, made, job.path("reportLabel").asText(reportId), fileName, pdf == null ? null : pdf.path("pages").asInt(0));
+    }
+
+    /**
+     * MIG-421: the report an earlier attempt (or this one) made for this row's item from the same data and design, kept with
+     * the run again -- its PDF read from its own version, nothing made, nothing billed; null when there is none, or its PDF
+     * cannot be read any more (the report is then made).
+     */
+    private Made reuse(StreamContext context, Map<String, Object> row, int index, String hash, Set<String> taken) throws InterruptedException {
+        Optional<StepContext.KeptReport> found = context.keptReport(row, index, hash);
+        if (!found.isPresent()) {
+            return null;
+        }
+        StepContext.KeptReport kept = found.get();
+        String fileName = FileRows.unique(safeName(kept.fileName == null ? "report.pdf" : kept.fileName), taken);
+        try {
+            StreamContext.KeptFile file = context.keepFile(fileName, new ArrayList<>(), 1,
+                out -> this.studio.file(context.tenantId(), kept.reportId, kept.version, "PDF", out));
+            RunOutput output = RunOutput.file(fileName, "pdf", 1, file.bytes).withSha256(file.sha256)
+                .withPages(kept.pages == null ? 0 : kept.pages);
+            context.recordOutput(output, row);
+        } catch (InterruptedException stopped) {
+            throw stopped;
+        } catch (Exception unread) {
+            taken.remove(fileName);
+            context.log(String.format("Report %s version %d could not be read again (%s); it is made again.", kept.label, kept.version,
+                unread.getMessage()));
+            return null;
+        }
+        context.itemReused(row, String.format("Report %s v%d reused: same data and design (made in attempt %d), not made or billed again.",
+            kept.label, kept.version, kept.madeAttempt), kept.madeAttempt);
+        context.log(String.format("Report %s version %d reused for row %d: its data and design are unchanged.", kept.label, kept.version, index + 1));
+        return new Made(kept.reportId, kept.version, kept.label, fileName, kept.pages);
+    }
+
+    /**
+     * MIG-421: what one row's report is made from, as a hash: the design and the version it is made from, the step's settings
+     * that shape it (not its name's run values: a retry's date is not a change), and the row as the design reads it.
+     */
+    static String dataHash(String templateId, String resolvedVersion, Map<String, Object> config, Map<String, Object> record) {
+        Map<String, Object> what = new TreeMap<>();
+        what.put("templateId", templateId);
+        what.put("version", resolvedVersion);
+        for (String setting : new String[] {"design", "reportName", "formats", "period", "brandProfileId", "jsonColumns"}) {
+            what.put(setting, config == null ? null : config.get(setting));
+        }
+        what.put("record", record);
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(JSON.writeValueAsBytes(what));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException | IOException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    /** MIG-421: the report just made, kept for its row's item. */
+    private static void kept(StreamContext context, Map<String, Object> row, int index, String hash, Made made) {
+        if (made != null && made.reportId != null && !made.reportId.isEmpty() && made.version > 0) {
+            context.reportKept(row, index, hash, new StepContext.KeptReport(made.reportId, made.version, made.label, made.fileName, made.pages,
+                context.attempt()));
+        }
     }
 
     /** The row with its JSON columns' text as the lists and objects it holds. */

@@ -279,3 +279,6 @@ databaseChangeLog:
   # V233: MIG-420 -- run_item and run_item_file: the items an item pipeline processes, their steps' pointers and files (row security); item retries; run.item.completed.
   - include:
       file: db/changelog/yaml/V233.0-run-items.yaml
+  # V234: MIG-421 -- run_item.fields/flag/pipeline_version (items across runs, OCR's Check by hand) and run_item_report (reports kept on retry; row security).
+  - include:
+      file: db/changelog/yaml/V234.0-run-items-v2.yaml

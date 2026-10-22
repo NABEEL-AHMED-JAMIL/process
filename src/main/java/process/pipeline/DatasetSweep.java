@@ -80,6 +80,8 @@ public class DatasetSweep {
                 this.datasets.delete(key);
                 if (this.jdbc.update("DELETE FROM run_dataset WHERE run_dataset_id = ?", dataset.get("run_dataset_id")) == 1) {
                     this.record(dataset, now);
+                    // MIG-421: the values items kept from this dataset (their across-runs search) go with it.
+                    this.jdbc.update("UPDATE run_item SET fields = NULL, fields_ds = NULL WHERE fields_ds = ?", dataset.get("run_dataset_id"));
                     removed++;
                 }
             } catch (Exception ex) {

@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 import java.io.FilterOutputStream;
 
@@ -237,6 +238,19 @@ public final class Streams {
         @Override public void itemTook(Map<String, Object> row, long millis) { this.context.itemTook(row, millis); }
 
         @Override public String rowTag(Map<String, Object> row, int index) { return this.context.rowTag(row, index); }
+
+        // MIG-421: a report reused or kept for its item, a page flagged.
+        @Override public void itemReused(Map<String, Object> row, String note, int fromAttempt) { this.context.itemReused(row, note, fromAttempt); }
+
+        @Override public void itemFlagged(Map<String, Object> row, String flag, String note) { this.context.itemFlagged(row, flag, note); }
+
+        @Override public Optional<KeptReport> keptReport(Map<String, Object> row, int index, String dataHash) {
+            return this.context.keptReport(row, index, dataHash);
+        }
+
+        @Override public void reportKept(Map<String, Object> row, int index, String dataHash, KeptReport report) {
+            this.context.reportKept(row, index, dataHash, report);
+        }
 
         @Override public void log(String message) { this.context.log(message); }
 

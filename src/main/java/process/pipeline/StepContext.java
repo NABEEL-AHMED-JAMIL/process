@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 /** What a step task is handed for one try: its run, its config, its input, and its log. */
@@ -222,6 +223,48 @@ public interface StepContext {
      */
     default String rowTag(Map<String, Object> row, int index) {
         return String.valueOf(index + 1);
+    }
+
+    /**
+     * MIG-421: this step reused, for this row's item, what attempt {@code fromAttempt} of the run made for it (a report with the
+     * same data and design): nothing was made or billed again; {@code note} says what ("Report RPT-0018 v1 reused").
+     */
+    default void itemReused(Map<String, Object> row, String note, int fromAttempt) {
+    }
+
+    /** MIG-421: this row's item is flagged ({@code flag}: "check" -- an OCR page to check by hand), {@code note} saying why. */
+    default void itemFlagged(Map<String, Object> row, String flag, String note) {
+    }
+
+    /**
+     * MIG-421: the report a Generate report step of this run made for this row's item from the same data and design
+     * ({@code dataHash}), in an earlier attempt or earlier in this one; empty when none (or outside an item run).
+     */
+    default Optional<KeptReport> keptReport(Map<String, Object> row, int index, String dataHash) {
+        return Optional.empty();
+    }
+
+    /** MIG-421: keeps the report this step just made for this row's item, so a retry reuses it. Nothing outside an item run. */
+    default void reportKept(Map<String, Object> row, int index, String dataHash, KeptReport report) {
+    }
+
+    /** MIG-421: a report made for an item: Report Studio's id and version, its label, its PDF's name and pages, the attempt that made it. */
+    final class KeptReport {
+        public final String reportId;
+        public final int version;
+        public final String label;
+        public final String fileName;
+        public final Integer pages;
+        public final int madeAttempt;
+
+        public KeptReport(String reportId, int version, String label, String fileName, Integer pages, int madeAttempt) {
+            this.reportId = reportId;
+            this.version = version;
+            this.label = label;
+            this.fileName = fileName;
+            this.pages = pages;
+            this.madeAttempt = madeAttempt;
+        }
     }
 
     /** A line in the step's log (step_log), shown on the step in the console's timeline. */

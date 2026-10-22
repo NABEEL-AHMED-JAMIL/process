@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * read the interface's methods by reflection, so an accessor added later cannot be forgotten.
  */
 class StepContextDelegationTest {
+
+    /** MIG-421: the one report the run's context answers keptReport with (the same object, so the wrapper's answer is it). */
+    private static final Optional<StepContext.KeptReport> KEPT = Optional.of(new StepContext.KeptReport("R-1", 3, "RPT-0018", "r.pdf", 2, 1));
 
     /** Every method of StepContext a task may call (none of Object's, no static helper). */
     private static List<Method> accessors() {
@@ -63,6 +67,10 @@ class StepContextDelegationTest {
         if (type == List.class) {
             return Collections.singletonList("from-the-run:" + name);
         }
+        if (type == Optional.class) {
+            // MIG-421: a report kept for an item.
+            return KEPT;
+        }
         if (type == Dataset.class) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("asked", name);
@@ -90,6 +98,9 @@ class StepContextDelegationTest {
         }
         if (type == RunOutput.class) {
             return RunOutput.file("kept.csv", "csv", 1, 3);
+        }
+        if (type == StepContext.KeptReport.class) {
+            return new StepContext.KeptReport("R" + index, 1, "RPT-" + index, "r.pdf", 1, 1);
         }
         if (type == Map.class) {
             // MIG-420: a row, whose item the run's tracker names.
