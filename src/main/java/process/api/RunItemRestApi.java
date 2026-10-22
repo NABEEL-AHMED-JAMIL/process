@@ -191,10 +191,11 @@ public class RunItemRestApi {
     }
 
     /** MIG-421: one item of a schedule in two runs, step by step (masked), and what changed in the pipeline between them. */
-    @AuditedRead(value = "run item compare", id = {"jobId", "key", "a", "b"})
+    @AuditedRead(value = "run item compare", id = {"jobId", "key", "a", "b", "bKey"})
     @RequestMapping(value = "/sourceJob.json/itemRuns/compare", method = RequestMethod.GET)
-    public ResponseEntity<?> compare(@RequestParam Long jobId, @RequestParam String key, @RequestParam Long a, @RequestParam Long b) {
-        return answer(this.across.compare(jobId, key, a, b));
+    public ResponseEntity<?> compare(@RequestParam Long jobId, @RequestParam String key, @RequestParam Long a, @RequestParam Long b,
+        @RequestParam(required = false) String bKey) {
+        return answer(this.across.compare(jobId, key, a, b, bKey));
     }
 
     /** Body {jobQueueIds}: the Runs list's page. */

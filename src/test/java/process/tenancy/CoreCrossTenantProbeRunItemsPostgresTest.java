@@ -266,9 +266,9 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
             assertThat(fx.probe("POST sourceJob.json/itemRuns(B's schedule)", caller, () -> items.listItemRuns(across(B_JOB, "bravo"))))
                 .contains(REFUSED).contains("Schedule not found.");
             assertThat(fx.probe("GET sourceJob.json/itemRuns/compare(B's schedule)", caller,
-                () -> items.compare(B_JOB, "in/bravo payload marker.m4a", B_RUN, A_RUN))).contains(REFUSED);
+                () -> items.compare(B_JOB, "in/bravo payload marker.m4a", B_RUN, A_RUN, null))).contains(REFUSED);
             assertThat(fx.probe("GET sourceJob.json/itemRuns/compare(B's run under A's schedule)", caller,
-                () -> items.compare(A_JOB, "in/bravo payload marker.m4a", B_RUN, A_RUN))).contains(REFUSED).doesNotContain("bravo payload");
+                () -> items.compare(A_JOB, "in/bravo payload marker.m4a", B_RUN, A_RUN, null))).contains(REFUSED).doesNotContain("bravo payload");
             assertThat(fx.probe("POST sourceJob.json/itemRuns(A's schedule, B's marker)", caller, () -> items.listItemRuns(across(A_JOB, "bravo"))))
                 .contains("\"total\":0").doesNotContain("bravo payload marker");
         }
@@ -428,7 +428,7 @@ class CoreCrossTenantProbeRunItemsPostgresTest {
         for (long job : new long[] {A_JOB, B_JOB}) {
             assertThat(fx.probe("POST sourceJob.json/itemRuns", PLATFORM, () -> items.listItemRuns(across(job, "risk = High"))))
                 .contains(REFUSED).contains("Work in this workspace");
-            assertThat(fx.probe("GET sourceJob.json/itemRuns/compare", PLATFORM, () -> items.compare(job, "in/x.m4a", A_RUN, B_RUN))).contains(REFUSED);
+            assertThat(fx.probe("GET sourceJob.json/itemRuns/compare", PLATFORM, () -> items.compare(job, "in/x.m4a", A_RUN, B_RUN, null))).contains(REFUSED);
         }
         assertThat(SENT).isEmpty();
         assertThat(fx.leaks).isEmpty();

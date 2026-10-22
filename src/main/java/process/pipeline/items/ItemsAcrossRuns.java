@@ -430,6 +430,14 @@ public class ItemsAcrossRuns {
      * (what was, what is), and what changed in the pipeline between the versions they ran. {@code a} is shown as the newer.
      */
     public RunItems.Answer compare(Long jobId, String key, Long a, Long b) {
+        return this.compare(jobId, key, a, b, null);
+    }
+
+    /**
+     * As {@link #compare(Long, String, Long, Long)}; {@code bKey}: the item's key in run {@code b} when it differs (ZT-I22: the
+     * same file in another folder -- an inbox's dated folders -- is the same item by name, not by key); its name must match.
+     */
+    public RunItems.Answer compare(Long jobId, String key, Long a, Long b, String bKey) {
         RunItems.Answer refused = platformRefusal();
         if (refused != null) {
             return refused;
@@ -445,9 +453,12 @@ public class ItemsAcrossRuns {
             return RunItems.Answer.refused(400, "Pick two different runs to compare.");
         }
         Side newer = this.side(found.get(), a, key.trim());
-        Side older = this.side(found.get(), b, key.trim());
+        Side older = this.side(found.get(), b, bKey == null || bKey.trim().isEmpty() ? key.trim() : bKey.trim());
         if (newer == null || older == null) {
             return RunItems.Answer.refused(404, "That item is not in both runs.");
+        }
+        if (!newer.row.label.equals(older.row.label)) {
+            return RunItems.Answer.refused(400, "Compare one item: the two runs' items have different names.");
         }
         if (newer.started != null && older.started != null && newer.started.isBefore(older.started)) {
             Side swap = newer;
@@ -678,10 +689,10 @@ public class ItemsAcrossRuns {
         boolean sameVersion = Objects.equals(older.version, newer.version) && older.version != null;
         p.put("same", sameVersion || (lines.isEmpty() && older.definition != null && newer.definition != null));
         String note;
-        if (older.definition == null || newer.definition == null) {
-            note = "The pipeline version one of the runs ran cannot be read any more.";
-        } else if (sameVersion) {
+        if (sameVersion) {
             note = String.format("Both runs ran pipeline version %d: any change is the data's, not the pipeline's.", newer.version);
+        } else if (older.definition == null || newer.definition == null) {
+            note = "The pipeline version one of the runs ran cannot be read any more.";
         } else if (lines.isEmpty()) {
             note = String.format("Pipeline versions %s and %s have the same steps and settings.", older.version, newer.version);
         } else {
