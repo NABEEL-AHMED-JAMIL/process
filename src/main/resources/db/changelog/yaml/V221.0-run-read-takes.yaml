@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 221.0-run-read-takes
+      author: nabeel.amd93
+      description: "owner 2026-10-21: 'since the last run' reads with runs side by side -- run_read_take (the item a run in flight or a failed run took, per job, step and source; read_s3 objects, read_documents rows); a tenant table under row security as V216; expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V221.0-run-read-takes/V221__run_read_takes.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V221.0-run-read-takes/V221__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

@@ -113,6 +113,37 @@ class ReadDocumentsStepTaskTest {
         assertThat(this.documents.watermark(77L, "step", TYPE)).isEqualTo(fourth + 1);
     }
 
+    /**
+     * Owner 2026-10-21: runs a workflow's requests start side by side read different documents; a failed run's documents
+     * come again after a later run's completed watermark passed them.
+     */
+    @Test
+    void runsSideBySideReadDifferentDocumentsAndAFailedRunsComeAgain() throws Exception {
+        Fakes.Takes takes = new Fakes.Takes();
+        this.task.useTakes(takes);
+        for (int i = 1; i <= 2; i++) {
+            this.documents.approve(A, TYPE, "INV-" + i, "V-1", 10 * i, 1);
+        }
+        Map<String, Object> since = config("documentTypeId", TYPE, "since", "last_run");
+        StreamTry first = this.run(since, 701);
+        this.task.stream(first);
+        assertThat(first.rows).extracting(r -> r.get("invoice_number")).containsExactly("INV-1", "INV-2");
+
+        this.documents.approve(A, TYPE, "INV-3", "V-1", 30, 1);
+        StreamTry beside = this.run(since, 702);
+        this.task.stream(beside);
+        assertThat(beside.rows).as("run 702, beside 701, reads only what 701 left").extracting(r -> r.get("invoice_number"))
+            .containsExactly("INV-3");
+
+        // 702 completes (the watermark passes INV-1 and INV-2); 701 fails: its documents come again.
+        this.documents.completed.add(702L);
+        takes.completed.add(702L);
+        takes.ended.add(701L);
+        StreamTry next = this.run(since, 703);
+        this.task.stream(next);
+        assertThat(next.rows).extracting(r -> r.get("invoice_number")).containsExactly("INV-1", "INV-2");
+    }
+
     @Test
     void aTablesRowsBecomeRowsWithTheDocumentBesideThem() throws Exception {
         this.documents.approve(A, TYPE, "INV-1", "V-1", 30, 2);

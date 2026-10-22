@@ -266,3 +266,6 @@ databaseChangeLog:
   # V220: owner 2026-10-21 -- job_queue.workflow_instance_id/workflow_step_key: a workflow's runs of a job run side by side (one per request); Run now and schedules keep one in flight.
   - include:
       file: db/changelog/yaml/V220.0-workflow-runs.yaml
+  # V221: owner 2026-10-21 -- run_read_take: "since the last run" reads with runs side by side; an item a run in flight took is not another's, a failed run's is free again (row security).
+  - include:
+      file: db/changelog/yaml/V221.0-run-read-takes.yaml

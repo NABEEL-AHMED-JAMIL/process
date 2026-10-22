@@ -471,4 +471,53 @@ public final class Fakes {
             return out;
         }
     }
+
+    /** run_read_take as JdbcReadTakes keeps it: a run is in flight until it is named completed or ended (failed, interrupted). */
+    public static final class Takes implements ReadTakes {
+        /** job#step#source -> item -> the run that took it. */
+        public final Map<String, Map<String, Long>> taken = new LinkedHashMap<>();
+        public final Set<Long> completed = new HashSet<>();
+        public final Set<Long> ended = new HashSet<>();
+
+        private boolean inFlight(long run) {
+            return !this.completed.contains(run) && !this.ended.contains(run);
+        }
+
+        @Override
+        public synchronized Taken take(long jobQueueId, long jobId, String stepKey, String source, List<String> items, Set<String> fresh,
+                                       int limit) {
+            Map<String, Long> before = this.taken.computeIfAbsent(jobId + "#" + stepKey + "#" + source, k -> new LinkedHashMap<>());
+            before.values().removeIf(this.completed::contains);
+            List<String> mine = new ArrayList<>();
+            int held = 0;
+            boolean more = false;
+            for (String item : items) {
+                Long by = before.get(item);
+                if (by != null && by != jobQueueId && this.inFlight(by)) {
+                    held++;
+                } else if (by != null || fresh.contains(item)) {
+                    if (mine.size() >= limit) {
+                        more = true;
+                        break;
+                    }
+                    mine.add(item);
+                }
+            }
+            for (String item : mine) {
+                before.put(item, jobQueueId);
+            }
+            return new Taken(mine, held, more);
+        }
+
+        @Override
+        public synchronized List<String> released(long jobId, String stepKey, String source) {
+            List<String> out = new ArrayList<>();
+            this.taken.getOrDefault(jobId + "#" + stepKey + "#" + source, Collections.emptyMap()).forEach((item, run) -> {
+                if (this.ended.contains(run)) {
+                    out.add(item);
+                }
+            });
+            return out;
+        }
+    }
 }

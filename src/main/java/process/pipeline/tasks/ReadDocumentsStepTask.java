@@ -9,6 +9,8 @@ import process.pipeline.StreamContext;
 import process.pipeline.StreamingStepTask;
 import process.pipeline.backing.DocumentDatasets;
 import process.pipeline.backing.DocumentReadMarks;
+import process.pipeline.backing.ReadTakes;
+import org.springframework.beans.factory.annotation.Autowired;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
@@ -96,11 +98,18 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
 
     private final DocumentDatasets documents;
     private final DocumentReadMarks marks;
+    private ReadTakes takes;
 
     public ReadDocumentsStepTask(DocumentDatasets documents, DocumentReadMarks marks) {
         super(SPEC);
         this.documents = documents;
         this.marks = marks;
+    }
+
+    /** Owner 2026-10-21: which run took which document, so runs side by side (a workflow's requests) never read the same one. */
+    @Autowired(required = false)
+    public void useTakes(ReadTakes takes) {
+        this.takes = takes;
     }
 
     @Override
@@ -183,6 +192,21 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
             context.log(watermark == 0 ? "No earlier completed run read this type: reading every approved document."
                 : String.format("Reading the documents approved since the last completed run (after dataset row %d).", watermark));
         }
+        // Runs side by side (a workflow's requests) start from the same watermark: each takes the documents no run in flight
+        // took, and a failed run's documents -- behind the watermark or not -- come again. A run started for its own
+        // documents reads them, taken or not.
+        String takeSource = "documents|" + type;
+        boolean taking = lastRun && named == null && this.takes != null;
+        long readFrom = watermark;
+        if (taking) {
+            for (String again : this.takes.released(jobId, context.stepKey(), takeSource)) {
+                readFrom = Math.min(readFrom, Long.parseLong(again) - 1);
+            }
+            if (readFrom < watermark) {
+                context.log(String.format("Documents a run that did not complete had taken are read again (from dataset row %d).", readFrom + 1));
+            }
+        }
+        int heldByOthers = 0;
 
         boolean decided = statuses.contains(DocumentDatasets.REVIEW) || statuses.contains(DocumentDatasets.REJECTED);
         Shape shape = null;
@@ -196,7 +220,7 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
             request.tenantId = context.tenantId();
             request.documentTypeId = type;
             request.status = status;
-            request.after = DocumentDatasets.APPROVED.equals(status) ? watermark : 0;
+            request.after = DocumentDatasets.APPROVED.equals(status) ? readFrom : 0;
             request.from = from;
             request.to = to;
             request.extractionIds = named;
@@ -218,7 +242,27 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
                     }
                     context.output().declare(shape.output);
                 }
+                Set<String> mine = null;
+                if (taking && DocumentDatasets.APPROVED.equals(status)) {
+                    List<String> onPage = new ArrayList<>();
+                    Set<String> fresh = new HashSet<>();
+                    for (JsonNode row : page.rows) {
+                        if (row.hasNonNull("datasetRowId")) {
+                            onPage.add(row.get("datasetRowId").asText());
+                            if (row.get("datasetRowId").asLong() > watermark) {
+                                fresh.add(row.get("datasetRowId").asText());
+                            }
+                        }
+                    }
+                    ReadTakes.Taken took = this.takes.take(context.jobQueueId(), jobId, context.stepKey(), takeSource, onPage, fresh,
+                        Integer.MAX_VALUE);
+                    mine = new HashSet<>(took.items);
+                    heldByOthers += took.heldByOthers;
+                }
                 for (JsonNode row : page.rows) {
+                    if (mine != null && !(row.hasNonNull("datasetRowId") && mine.contains(row.get("datasetRowId").asText()))) {
+                        continue;  // another run in flight took it, or it is behind the watermark and was read
+                    }
                     documents++;
                     if (DocumentDatasets.APPROVED.equals(status) && row.hasNonNull("datasetRowId")) {
                         upTo = Math.max(upTo, row.get("datasetRowId").asLong());
@@ -239,6 +283,9 @@ public class ReadDocumentsStepTask extends RegisteredTask implements StreamingSt
                 }
                 request.after = page.next;
             }
+        }
+        if (heldByOthers > 0) {
+            context.log(String.format("%d approved document(s) are being read by another run of this job; they are left to it.", heldByOthers));
         }
         if (lastRun) {
             this.marks.record(context.jobQueueId(), context.stepKey(), jobId, type, upTo, documents, context.attempt());

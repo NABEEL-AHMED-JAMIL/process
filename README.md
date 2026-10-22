@@ -184,6 +184,7 @@ Added on 2026-10-12:
 - **Send webhook** (`send_webhook`, MIG-346): the rows (`send: rows`, `maxRows` 500 by default, at most 5,000; more fails the step, nothing is cut) or a summary to one of the workspace's registered webhooks that takes `run.step.sent`, through integration-service's `/internal/pipelines/webhooks/send` (signed, retried, SSRF-guarded, logged and metered there). One delivery per run, attempt and step; waits up to 60 seconds for the first try. Off unless `process.pipeline.integration.webhooks` (etl-platform sets it on).
 - **Sort** (`sort`, MIG-365): a stable external merge sort inside the run's memory budget; sorted runs spill to the try's scratch and merge 64 at a time. Numbers as numbers (CSV text too) before text.
 - **Limit / top N** (`limit`, MIG-365): `rows`, `offset`; without `by` it stops reading its input once it has the rows; with `by` it holds only offset + rows in a bounded heap, or sorts on disk past the budget.
+- **"Since the last run" with runs side by side** (owner 2026-10-21, V221): read_s3 and read_documents record which run took which object or approved document (`run_read_take`, `ReadTakes`). Runs a workflow's requests start side by side begin from the same watermark, so each takes only what no run in flight took; what a failed or interrupted run took is read again by the next run, even after a later run's watermark passed it. A completed run's takes are forgotten (they are behind the watermark). A run started for its own file or documents reads them, taken or not.
 - **read_file / read_s3 `columns`** (MIG-365): only the named columns become values (CSV by index, Parquet projected by DuckDB, JSON rows cut).
 - **Compute formulas** (MIG-365, MIG-346): `floor`, `ceil`, `mod`, `date_add`, `date_diff`, `date_trunc`, and `json_get`, `json_array_length`, `json_keys`.
 - **Read documents** (`read_documents`, MIG-364): a Document Intelligence type's approved dataset through ai-service's trusted read (`/internal/ai/documents/dataset`), 500 rows a page, streamed. All, since the last completed run (`run_document_read`, V207), and/or an approval date range; by status also the review queue's and the rejected ones. `columns` and `tableRows`. With no type it reads the documents whose approval started the run. Billed by ai-service as a trusted read.
@@ -306,6 +307,8 @@ Service to service, with the shared `X-Internal-Token` (401 without it); the gat
 | V207 document trigger | `job_document_trigger`, `document_approval`, `run_document_read` (MIG-364) |
 | V208 run output per file | `run_output` one row per step execution and file, with `page_count` (ADR-027) |
 | V209 bulk review | `run_review_decision.bulk_id`, `run_approval.bulk_id`, `review_policy` (row-level security) |
+| V220 workflow runs | `job_queue.workflow_instance_id`, `workflow_step_key`: a workflow's runs of a job run side by side, one per request |
+| V221 run read takes | `run_read_take` (row-level security): "since the last run" with runs side by side |
 
 ## The customer API in Core (MIG-332/333/334/335, ADR-025)
 

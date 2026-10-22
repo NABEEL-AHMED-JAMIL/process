@@ -20,6 +20,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import process.pipeline.backing.ObjectReadMarks;
 import process.pipeline.DefinitionProblem;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import process.pipeline.backing.ReadTakes;
 
 /**
  * Read S3 (MIG-231): the objects under a prefix of one of the workspace's buckets, through storage-service. As
@@ -56,9 +59,16 @@ public class ReadS3StepTask extends RegisteredTask {
 
     private final BucketStore buckets;
     private final ObjectReadMarks marks;
+    private ReadTakes takes;
 
     public ReadS3StepTask(BucketStore buckets) {
         this(buckets, null);
+    }
+
+    /** Owner 2026-10-21: which run took which object, so runs side by side (a workflow's requests) never read the same one. */
+    @Autowired(required = false)
+    public void useTakes(ReadTakes takes) {
+        this.takes = takes;
     }
 
     @Autowired
@@ -113,6 +123,11 @@ public class ReadS3StepTask extends RegisteredTask {
     static String asWritten(StepContext context) {
         Map<String, Object> written = context.configAsWritten();
         return Configs.text(written == null ? context.config() : written, "prefix", "");
+    }
+
+    /** An object as run_read_take keeps it: a rewritten object (a later time) is a new one. */
+    static String item(BucketStore.Listed object) {
+        return object.lastModified.toEpochMilli() + ":" + object.key;
     }
 
     /** The files the run was started for, in its own bucket (the inbox), instead of the prefix; no watermark moves. */
@@ -180,10 +195,49 @@ public class ReadS3StepTask extends RegisteredTask {
             }
         }
         fresh.sort(Comparator.comparing((BucketStore.Listed o) -> o.lastModified).thenComparing(o -> o.key));
-        boolean more = fresh.size() > limit;
-        List<BucketStore.Listed> taken = more ? new ArrayList<>(fresh.subList(0, limit)) : fresh;
+        boolean more;
+        List<BucketStore.Listed> taken;
+        if (context.jobId() != null && this.takes != null) {
+            // Runs side by side (a workflow's requests) start from the same mark: each takes the objects no run in flight
+            // took, and a failed run's objects -- behind the mark or not -- come again.
+            List<BucketStore.Listed> dated = new ArrayList<>();
+            for (BucketStore.Listed object : all.objects) {
+                if (object.lastModified != null && !(named && object.key.equals(prefix))) {
+                    dated.add(object);
+                }
+            }
+            dated.sort(Comparator.comparing((BucketStore.Listed o) -> o.lastModified).thenComparing(o -> o.key));
+            Map<String, BucketStore.Listed> byItem = new LinkedHashMap<>();
+            for (BucketStore.Listed object : dated) {
+                byItem.put(item(object), object);
+            }
+            Set<String> freshItems = new HashSet<>();
+            for (BucketStore.Listed object : fresh) {
+                freshItems.add(item(object));
+            }
+            ReadTakes.Taken took = this.takes.take(context.jobQueueId(), context.jobId(), context.stepKey(), "s3|" + bucket + "|" + asWritten,
+                new ArrayList<>(byItem.keySet()), freshItems, limit);
+            taken = new ArrayList<>();
+            for (String item : took.items) {
+                taken.add(byItem.get(item));
+            }
+            more = took.more;
+            int again = taken.size() - (int) taken.stream().filter(o -> freshItems.contains(item(o))).count();
+            if (took.heldByOthers > 0) {
+                context.log(String.format("%d new object(s) are being read by another run of this job; they are left to it.", took.heldByOthers));
+            }
+            if (again > 0) {
+                context.log(String.format("%d object(s) a run that did not complete had taken are read again.", again));
+            }
+        } else {
+            more = fresh.size() > limit;
+            taken = more ? new ArrayList<>(fresh.subList(0, limit)) : fresh;
+        }
         BucketStore.Listed newest = taken.isEmpty() ? null : taken.get(taken.size() - 1);
         ObjectReadMarks.Mark upTo = newest == null ? mark.orElse(null) : new ObjectReadMarks.Mark(newest.lastModified, newest.key);
+        if (upTo != null && mark.isPresent() && mark.get().compareTo(upTo) > 0) {
+            upTo = mark.get();  // an object read again is behind the mark; the mark never moves back
+        }
         if (asked != null) {
             taken = new ArrayList<>(taken);
             taken.add(0, asked);

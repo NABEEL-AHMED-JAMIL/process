@@ -3,6 +3,7 @@ package process.pipeline.tasks;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.backing.BucketStore;
+import process.pipeline.backing.Fakes;
 import process.pipeline.backing.ObjectReadMarks;
 
 import java.time.Instant;
@@ -93,6 +94,35 @@ class ReadS3SinceLastRunTest {
         this.marks.completed.add(3L);
         assertThat(keys(4, config)).isEmpty();
         assertThat(this.marks.byRun.get(4L).key).as("a run that read nothing keeps the mark").isEqualTo("in/d.m4a");
+    }
+
+    /**
+     * Owner 2026-10-21: runs a workflow's requests start side by side all start from the same mark. Each reads the objects
+     * no run in flight took; a failed run's objects come again, even after a later run's completed mark passed them.
+     */
+    @Test
+    void runsSideBySideReadDifferentObjectsAndAFailedRunsObjectsComeAgain() throws Exception {
+        Fakes.Takes takes = new Fakes.Takes();
+        this.task.useTakes(takes);
+        Map<String, Object> config = config("bucket", "lake", "prefix", "in/", "since", "last_run", "limit", 2);
+        object("in/a", 1);
+        object("in/b", 2);
+        object("in/c", 3);
+        assertThat(keys(1, config)).as("run 1 takes the oldest two").containsExactly("in/a", "in/b");
+        assertThat(keys(2, config)).as("run 2, beside it, takes what run 1 left").containsExactly("in/c");
+        assertThat(keys(3, config)).as("run 3 finds nothing free").isEmpty();
+        assertThat(keys(1, config)).as("run 1's later try reads its own again").containsExactly("in/a", "in/b");
+
+        // Run 2 completes (the mark passes in/a and in/b); run 1 fails: its objects come again, behind the mark or not.
+        this.marks.completed.add(2L);
+        takes.completed.add(2L);
+        takes.ended.add(1L);
+        object("in/d", 4);
+        assertThat(keys(4, config)).containsExactly("in/a", "in/b");
+        this.marks.completed.add(4L);
+        takes.completed.add(4L);
+        assertThat(this.marks.byRun.get(4L).key).as("an object read again never moves the mark back").isEqualTo("in/c");
+        assertThat(keys(5, config)).containsExactly("in/d");
     }
 
     @Test
