@@ -50,6 +50,10 @@ import java.util.Optional;
 @Component
 public class RunIntake {
 
+    /** ZT-X3: where the console sets the inbox now (Documents › Intake › File drop; "Documents > Inbox" is gone). */
+    static final String NO_INBOX = "This workspace has no inbox for the API's intake files yet. An administrator chooses one "
+        + "under Documents › Intake › File drop (File drop settings).";
+
     private static final Logger logger = LoggerFactory.getLogger(RunIntake.class);
     private static final DateTimeFormatter FOLDER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -121,8 +125,7 @@ public class RunIntake {
             return refused(Problem.of(503, "Runs cannot be started right now. Try again in a moment."));
         }
         if (inbox.alias == null) {
-            return refused(Problem.of(409, "This workspace has no inbox for the API's intake files yet. An administrator chooses one "
-                + "under Documents > Inbox.").kind("workspace-not-ready"));
+            return refused(Problem.of(409, NO_INBOX).kind("workspace-not-ready"));
         }
         OffsetDateTime received = OffsetDateTime.now(BusinessTime.ZONE);
         String key = String.format("intake/api/runs/%s/job-%d-%s.json", received.format(FOLDER), pipeline.jobId, CorrelationId.generate());

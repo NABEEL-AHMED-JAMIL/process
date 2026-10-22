@@ -382,4 +382,10 @@ class FormSubmissionServiceTest {
         String csv = new String(this.service.export(formId).content, StandardCharsets.UTF_8);
         assertThat(csv).contains(",Dr. Nora Clinic,");
     }
+
+    /** ZT-X3: the reason names the console's menu as it is (the Inbox tab became Documents › Intake › File drop). */
+    @Test
+    void theNoInboxReasonSaysWhereTheConsoleSetsTheInbox() {
+        assertThat(StorageFormInbox.NO_INBOX).contains("Documents › Intake › File drop").doesNotContain("Documents > Inbox");
+    }
 }

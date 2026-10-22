@@ -16,7 +16,7 @@ import process.storage.remote.StorageServiceClient;
 public class StorageFormInbox implements FormInbox {
 
     static final String NO_INBOX = "This workspace has no inbox, so the submission could not be handed to its job. "
-        + "A workspace admin chooses the inbox's storage connection under Documents > Inbox.";
+        + "A workspace admin chooses the inbox's storage connection under Documents › Intake › File drop (File drop settings).";
     static final String INACTIVE = "The workspace inbox's storage connection is not active, so the submission could not be "
         + "handed to its job.";
 

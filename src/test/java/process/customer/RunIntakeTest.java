@@ -69,4 +69,10 @@ class RunIntakeTest {
         assertThat(InputContracts.pathOf("$[0]", "data")).isEqualTo("data[0]");
         assertThat(InputContracts.pathOf("amount", "record")).isEqualTo("record.amount");
     }
+
+    /** ZT-X3: the refusals name the console's menu as it is (the Inbox tab became Documents › Intake › File drop). */
+    @Test
+    void aWorkspaceWithoutAnInboxIsToldWhereTheConsoleSetsIt() {
+        assertThat(RunIntake.NO_INBOX).contains("Documents › Intake › File drop").doesNotContain("Documents > Inbox");
+    }
 }
