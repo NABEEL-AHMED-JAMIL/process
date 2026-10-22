@@ -11,7 +11,8 @@ import java.time.Instant;
 
 /**
  * MIG-346: every minute, one replica at a time (ShedLock), {@link RunApprovals#sweep}: approval requests past their time
- * expire (their runs fail), and those whose run was closed are cancelled (their inbox tasks closed). Off with the other
+ * expire (their runs fail), those whose run was closed are cancelled (their inbox tasks closed), and decisions a restart lost
+ * on their way to the step engine are handed on (the run continues, or fails). Off with the other
  * schedulers where process.scheduling.enabled is false.
  */
 @ConditionalOnProperty(name = "process.scheduling.enabled", havingValue = "true", matchIfMissing = true)
@@ -31,8 +32,9 @@ public class RunApprovalSweep {
     public void sweepQuietly() {
         try {
             int[] swept = this.approvals.sweep(Instant.now());
-            if (swept[0] + swept[1] > 0) {
-                logger.info("Approvals: {} request(s) expired, {} cancelled (their runs were closed).", swept[0], swept[1]);
+            if (swept[0] + swept[1] + swept[2] > 0) {
+                logger.info("Approvals: {} request(s) expired, {} cancelled (their runs were closed), {} decision(s) a restart lost handed on.",
+                    swept[0], swept[1], swept[2]);
             }
         } catch (RuntimeException failed) {
             logger.warn("The approval sweep failed; it tries again: {}", failed.getMessage());

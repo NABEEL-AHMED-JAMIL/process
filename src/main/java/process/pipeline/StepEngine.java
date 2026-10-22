@@ -1038,7 +1038,11 @@ public class StepEngine {
                 return;
             }
             String line = sentence(String.format("Approved by %s%s", approval.decider(), approval.comment == null ? "" : ": " + approval.comment));
-            steps.ended(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line);
+            if (!steps.settleWaiting(waited.row, JobStatus.Completed.name(), approval.recordsIn, null, line)) {
+                logger.info("Run {}: approval request {} was already settled by another hand-off; nothing to do.", this.run.getJobQueueId(),
+                    approval.runApprovalId);
+                return;
+            }
             new StepLog(waited.row).line("INFO", line);
             this.audit(String.format("Step %d/%d <%s> (approval) completed: %s", approval.stepIndex + 1, this.stepList.size(),
                 approval.stepKey, line));
@@ -1074,7 +1078,11 @@ public class StepEngine {
             if (waited == null) {
                 return;
             }
-            steps.ended(waited.row, JobStatus.Failed.name(), null, errorJson(why, 1, false), "Failed: " + why);
+            if (!steps.settleWaiting(waited.row, JobStatus.Failed.name(), null, errorJson(why, 1, false), "Failed: " + why)) {
+                logger.info("Run {}: approval request {} was already settled by another hand-off; nothing to do.", this.run.getJobQueueId(),
+                    approval.runApprovalId);
+                return;
+            }
             new StepLog(waited.row).line("ERROR", why);
             this.stopAll(waited.rows, approval.stepIndex + 1, JobStatus.Skip.name(),
                 String.format("Skipped: step <%s> was not approved.", approval.stepKey));

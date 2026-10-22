@@ -68,6 +68,16 @@ public class JdbcRunApprovalStore implements RunApprovalStore {
     }
 
     @Override
+    public List<Approval> parked(int afterSeconds, int limit) {
+        return this.jdbc.query("SELECT " + COLUMNS.replaceAll("(^|, )", "$1a.") + " FROM run_approval a "
+            + "JOIN job_queue q ON q.job_queue_id = a.job_queue_id JOIN step_execution s ON s.step_execution_id = a.step_execution_id "
+            + "WHERE a.status IN ('APPROVED', 'REJECTED', 'EXPIRED') AND a.decided_at < now() - (? * interval '1 second') "
+            + "AND a.decided_at >= now() - interval '360 minutes' AND UPPER(q.job_status) = 'RUNNING' AND q.attempt = a.attempt "
+            + "AND s.status = 'Running' AND (q.prepare_lease_until IS NULL OR q.prepare_lease_until < now() - interval '60 seconds') "
+            + "ORDER BY a.decided_at, a.run_approval_id LIMIT ?", JdbcRunApprovalStore::row, afterSeconds, limit);
+    }
+
+    @Override
     public List<Approval> ofRun(long jobQueueId) {
         return this.jdbc.query("SELECT " + COLUMNS + " FROM run_approval WHERE job_queue_id = ? ORDER BY run_approval_id",
             JdbcRunApprovalStore::row, jobQueueId);

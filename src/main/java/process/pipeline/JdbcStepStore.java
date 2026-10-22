@@ -143,6 +143,13 @@ public class JdbcStepStore implements StepStore {
     }
 
     @Override
+    public boolean settleWaiting(long stepExecutionId, String status, Long recordsOut, String errorJson, String message) {
+        return this.jdbc.update("UPDATE step_execution SET status = ?, ended_at = GREATEST(now(), COALESCE(started_at, now())), "
+            + "records_out = ?, error = ?::jsonb, status_message = ?, date_updated = now() WHERE step_execution_id = ? AND status = 'Running'",
+            status, recordsOut, errorJson, cut(message, MAX_STATUS_MESSAGE), stepExecutionId) == 1;
+    }
+
+    @Override
     public void notRun(long stepExecutionId, String status, String message) {
         this.jdbc.update("UPDATE step_execution SET status = ?, status_message = ?, date_updated = now() WHERE step_execution_id = ?",
             status, cut(message, MAX_STATUS_MESSAGE), stepExecutionId);

@@ -461,7 +461,7 @@ class RunApprovalPostgresTest {
 
         int[] swept = this.approvals.sweep(Instant.now());
         this.settle();
-        assertThat(swept).containsExactly(1, 1);
+        assertThat(swept).containsExactly(1, 1, 0);
         assertThat(this.request(late, 1)).containsEntry("status", "EXPIRED");
         Map<String, Object> expired = this.run(late);
         assertThat(expired.get("job_status")).isEqualTo("Failed");
@@ -474,7 +474,36 @@ class RunApprovalPostgresTest {
         // Decided after it was cancelled: nothing moves.
         long id = ((Number) this.request(closed, 1).get("run_approval_id")).longValue();
         assertThat(this.approvals.decideFromInbox(TENANT, id, true, REVIEWER, "Ana Ruiz", null, 1L, 1L).moved).isFalse();
-        assertThat(this.approvals.sweep(Instant.now())).containsExactly(0, 0);
+        assertThat(this.approvals.sweep(Instant.now())).containsExactly(0, 0, 0);
+    }
+
+    @Test
+    void aDecisionARestartLostOnItsWayToTheEngineIsHandedOnByTheSweepOnce() throws Exception {
+        // 2026-10-21, the patient-episode resilience test: the Task inbox's decision was recorded, and Core restarted before its
+        // step engine ran it -- the run waited at an approval already given, and nothing ever moved it.
+        int afterBefore = ran("after");
+        long run = this.waiting(true);
+        long id = ((Number) this.request(run, 1).get("run_approval_id")).longValue();
+        RowSecurity.forTenant(TENANT, () -> new JdbcRunApprovalStore(db.appJdbc()).decide(id, "APPROVED", REVIEWER, "Ana Ruiz", null, 1L, 1L,
+            Instant.now(), null));
+        assertThat(this.approvals.sweep(Instant.now())).as("decided just now: on its way, not lost").containsExactly(0, 0, 0);
+
+        login.update("UPDATE run_approval SET decided_at = now() - interval '2 minutes' WHERE run_approval_id = ?", id);
+        assertThat(this.approvals.sweep(Instant.now())).containsExactly(0, 0, 1);
+        this.settle();
+        assertThat(this.run(run).get("job_status")).isEqualTo("Completed");
+        assertThat(ran("after")).isEqualTo(afterBefore + 1);
+        assertThat(this.approvals.sweep(Instant.now())).as("handed on once").containsExactly(0, 0, 0);
+    }
+
+    @Test
+    void anApprovalStepIsSettledOnceHoweverOftenItsDecisionIsHandedOn() throws Exception {
+        long run = this.waiting(true);
+        long step = login.queryForObject("SELECT step_execution_id FROM step_execution WHERE job_queue_id = ? AND step_key = 'approve'",
+            Long.class, run);
+        JdbcStepStore steps = new JdbcStepStore(db.appJdbc());
+        assertThat(RowSecurity.forTenant(TENANT, () -> steps.settleWaiting(step, "Completed", 3L, null, "Approved"))).isTrue();
+        assertThat(RowSecurity.forTenant(TENANT, () -> steps.settleWaiting(step, "Completed", 3L, null, "Approved again"))).isFalse();
     }
 
     @Test

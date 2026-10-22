@@ -63,6 +63,13 @@ public interface StepStore {
     /** Completed or Failed, with its end time, records out, the error (a JSON object) and a status line. */
     void ended(long stepExecutionId, String status, Long recordsOut, String errorJson, String message);
 
+    /**
+     * An Approval step's decision, once (2026-10-21): ends the step as ended() does, only while it still waits (Running) --
+     * true for the one caller that settled it. A decision handed to the engine twice (the approval sweep hands on one a
+     * restart lost) continues the run once.
+     */
+    boolean settleWaiting(long stepExecutionId, String status, Long recordsOut, String errorJson, String message);
+
     /** Skip or Interrupt: a step that did not run, and why. */
     void notRun(long stepExecutionId, String status, String message);
 

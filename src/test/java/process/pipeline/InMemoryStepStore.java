@@ -140,6 +140,16 @@ public class InMemoryStepStore implements StepStore {
     }
 
     @Override
+    public synchronized boolean settleWaiting(long id, String status, Long recordsOut, String errorJson, String message) {
+        StepRow row = this.rows.get(id);
+        if (row == null || !"Running".equals(row.status)) {
+            return false;
+        }
+        this.ended(id, status, recordsOut, errorJson, message);
+        return true;
+    }
+
+    @Override
     public synchronized void ended(long id, String status, Long recordsOut, String errorJson, String message) {
         StepRow row = this.rows.get(id);
         row.status = status;

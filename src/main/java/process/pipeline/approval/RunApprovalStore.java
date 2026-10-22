@@ -72,6 +72,14 @@ public interface RunApprovalStore {
     /** PENDING requests whose run is no longer waiting on them: closed, or on another attempt (the caller reads across workspaces). */
     List<Approval> orphaned(int limit);
 
+    /**
+     * Decided requests (approved, rejected, expired) whose decision never reached the engine (2026-10-21: Core restarted
+     * between recording it and running it): decided more than {@code afterSeconds} ago, within six hours (older ones are the
+     * stall sweep's), the run still in flight on that attempt with the Approval step still waiting, and no engine holding it.
+     * Oldest first; the caller reads across workspaces.
+     */
+    List<Approval> parked(int afterSeconds, int limit);
+
     /** A run's requests, by step execution, for its timeline. */
     Map<Long, Approval> ofSteps(Collection<Long> stepExecutionIds);
 

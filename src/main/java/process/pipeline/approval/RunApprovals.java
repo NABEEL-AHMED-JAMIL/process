@@ -104,7 +104,14 @@ public class RunApprovals {
         });
     }
 
-    /** Expires what is past its time and cancels what no run waits on; answers {expired, cancelled}. */
+    /** A decision recorded this long ago whose run still waits was lost on its way to the engine, not slow in getting there. */
+    static final int PARKED_AFTER_SECONDS = 60;
+
+    /**
+     * Expires what is past its time, cancels what no run waits on, and hands on the decisions a restart lost (decided, the
+     * run still waiting: 2026-10-21, Core restarted between recording a decision and running it); answers
+     * {expired, cancelled, handedOn}.
+     */
     public int[] sweep(Instant now) {
         int expired = 0;
         int cancelled = 0;
@@ -138,7 +145,29 @@ public class RunApprovals {
                     failed.getMessage());
             }
         }
-        return new int[] {expired, cancelled};
+        int handedOn = 0;
+        List<RunApprovalStore.Approval> parked = RowSecurity.acrossTenants("the approval sweep reads every workspace's decided approval "
+            + "requests whose run still waits; each is handed to the engine as its own workspace", () -> this.store.parked(PARKED_AFTER_SECONDS,
+            BATCH));
+        for (RunApprovalStore.Approval lost : parked) {
+            try {
+                boolean approved = RunApprovalStore.APPROVED.equals(lost.status);
+                String why = approved ? null : RunApprovalStore.EXPIRED.equals(lost.status)
+                    ? String.format("No decision by %s: the approval request expired.", lost.expiresAt)
+                    : String.format("Rejected by %s: %s", lost.decider(), lost.comment == null ? "no reason given" : lost.comment);
+                Outcome outcome = RowSecurity.forTenant(lost.tenantId, () -> this.moveRun(lost, approved, why));
+                if (outcome.moved) {
+                    handedOn++;
+                    this.audit.saveJobAuditLogs(lost.jobQueueId, String.format("Approval request %d at step <%s>: its decision (%s) had not "
+                        + "reached the step engine (Core restarted); handed on again.", lost.runApprovalId, lost.stepKey,
+                        lost.status.toLowerCase()));
+                }
+            } catch (RuntimeException failed) {
+                logger.warn("Approval request {} of workspace {}: its decision could not be handed on: {}", lost.runApprovalId, lost.tenantId,
+                    failed.getMessage());
+            }
+        }
+        return new int[] {expired, cancelled, handedOn};
     }
 
     /** Settles a request the platform's way (expired, cancelled) and closes its inbox task, in one transaction. */
