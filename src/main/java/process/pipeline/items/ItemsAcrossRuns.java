@@ -485,6 +485,12 @@ public class ItemsAcrossRuns {
             JsonNode before = this.dataOf(rows, was, older.masks, masked);
             List<Map<String, Object>> changes = new ArrayList<>();
             boolean truncated = diff("", before, after, changes);
+            String olderKey = older.row.itemKey;
+            String newerKey = newer.row.itemKey;
+            if (!olderKey.equals(newerKey)) {
+                // ZT-I22: the same file from another folder -- its key is said once, not as a change at every step.
+                changes.removeIf(ch -> isKeyChange(ch, olderKey, newerKey));
+            }
             s.put("same", changes.isEmpty() && before != null && after != null);
             s.put("changes", changes);
             s.put("truncated", truncated);
@@ -505,6 +511,10 @@ public class ItemsAcrossRuns {
         data.put("steps", stepViews);
         data.put("changed", changed);
         data.put("masked", new ArrayList<>(masked));
+        if (!older.row.itemKey.equals(newer.row.itemKey)) {
+            data.put("keyNote", String.format("The same file from another folder: %s in #%d, %s in #%d.", older.row.itemKey, older.jobQueueId,
+                newer.row.itemKey, newer.jobQueueId));
+        }
         return RunItems.Answer.ok(String.format("%d field(s) changed.", changed), data);
     }
 
@@ -657,6 +667,13 @@ public class ItemsAcrossRuns {
             add(out, path, "changed", before, after);
         }
         return out.size() >= MAX_CHANGES;
+    }
+
+    /** A change that is only the two items' own keys (a top-level value, before the older key, after the newer one). */
+    static boolean isKeyChange(Map<String, Object> change, String olderKey, String newerKey) {
+        String path = String.valueOf(change.get("path"));
+        return !path.contains(".") && !path.contains("[") && JSON.valueToTree(olderKey).toString().equals(change.get("before"))
+            && JSON.valueToTree(newerKey).toString().equals(change.get("after"));
     }
 
     private static void add(List<Map<String, Object>> out, String path, String kind, JsonNode before, JsonNode after) {

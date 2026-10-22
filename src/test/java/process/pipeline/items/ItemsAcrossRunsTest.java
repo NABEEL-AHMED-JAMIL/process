@@ -155,7 +155,9 @@ class ItemsAcrossRunsTest {
         TenantContext.set(TENANT, "TENANT_ADMIN", 1025L, "manager@zanium.test");
         JsonNode c = this.data(this.across.compare(JOB, "voice-intake/mig420-0231/call-a.m4a", NEW, OLD, "voice-intake/mig420-0038/call-a.m4a"));
         assertThat(c.path("a").path("jobQueueId").asLong()).isEqualTo(NEW);
-        assertThat(c.path("changed").asInt()).isEqualTo(2);
+        assertThat(c.path("changed").asInt()).as("the folder is said once, not as a change at every step").isEqualTo(1);
+        assertThat(c.path("keyNote").asText()).contains("voice-intake/mig420-0038/call-a.m4a in #1850")
+            .contains("voice-intake/mig420-0231/call-a.m4a in #1857");
         JsonNode step = c.path("steps").get(0);
         JsonNode risk = null;
         for (JsonNode ch : step.path("changes")) {

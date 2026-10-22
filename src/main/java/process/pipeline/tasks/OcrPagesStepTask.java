@@ -90,7 +90,7 @@ public class OcrPagesStepTask extends RegisteredTask implements StreamingStepTas
             .property("imageColumn", JsonSchema.string().minLength(1).maxLength(255).format("column").title("Image column")
                 .defaultValue("page_image").description("The column naming each row's page image (a file that step kept with the run)."))
             .property("language", JsonSchema.string().enumOf(LANGUAGES.toArray(new String[0])).title("Language").defaultValue("eng")
-                .description("eng: English -- the language this platform's OCR has installed."))
+                .description("eng: English, the language this platform's OCR has installed."))
             .property("pages", JsonSchema.string().enumOf("no_text_layer", "every_page").title("Which pages").defaultValue("no_text_layer")
                 .description("no_text_layer: only pages with no text layer (scans, photos); the others keep their own text, not read "
                     + "or billed. every_page: read every page."))
