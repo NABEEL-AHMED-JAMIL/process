@@ -93,7 +93,7 @@ class RunRetriesTest {
     @BeforeEach
     void setUp() {
         List<StepTask> registered = new ArrayList<>(Arrays.asList(new SampleStepTask(), new SelectStepTask(), new Counted(), new Gate(),
-            new Metered(), new ReadFileStepTask(this.buckets)));
+            new Metered(), new ReadFileStepTask(this.buckets), new process.pipeline.tasks.ReadS3StepTask(this.buckets)));
         StepTasks tasks = new StepTasks(registered);
         DefinitionValidator validator = new DefinitionValidator(new TaskRegistry(tasks, new InMemoryTaskOverrideStore()));
         this.engine = new StepEngine(this.definitions, this.steps, tasks, validator, this.datasets, this.worker, this.transactions,
@@ -557,6 +557,27 @@ class RunRetriesTest {
         RunRetries.Outcome many = this.resume();
         assertThat(many.refusalKind).isEqualTo(RunRetries.NOT_RESUMABLE);
         assertThat(many.refusal).isEqualTo("This run has had 20 attempts, the most a run has; start a new run instead.");
+    }
+
+    /**
+     * ZT-I7 (MIG-420): a Read S3 that lists the objects reads no file's bytes, so it has no fingerprint to keep -- a resume
+     * after it was refused as "read its files before their fingerprints were kept", and so was every Retry failed items of an
+     * item pipeline that starts with a listing.
+     */
+    @Test
+    void aStepThatListsTheObjectsHasNoFilesToVouchForAndTheResumeIsAllowed() {
+        this.saves(Definitions.of(step("list", "read_s3", config("bucket", "intake", "prefix", "calls/", "format", "list")),
+            step("check", "gate", config("pass", false)), step("after", "counted")));
+        this.runs();
+        assertThat(this.run.getJobStatus()).isEqualTo(JobStatus.Failed);
+        this.saves(Definitions.of(step("list", "read_s3", config("bucket", "intake", "prefix", "calls/", "format", "list")),
+            step("check", "gate", config("pass", true)), step("after", "counted")));
+
+        RunRetries.Plan plan = this.retries.plan(this.run, this.job, true);
+
+        assertThat(plan.refusal).isNull();
+        assertThat(plan.resumable()).isTrue();
+        assertThat(plan.fromKey).isEqualTo("check");
     }
 
     @Test

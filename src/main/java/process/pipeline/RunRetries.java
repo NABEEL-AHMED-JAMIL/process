@@ -512,7 +512,7 @@ public class RunRetries {
         }
         for (StepStore.StepRow row : reused) {
             List<InputDigests.Read> read = reads.getOrDefault(row.stepExecutionId, Collections.emptyList());
-            String unvouched = this.unvouched(row, read);
+            String unvouched = this.unvouched(row, read, now.getSteps().get(row.stepIndex).effectiveConfig());
             if (unvouched != null) {
                 return plan.refuse(NOT_RESUMABLE, unvouched);
             }
@@ -542,14 +542,14 @@ public class RunRetries {
     }
 
     /** Why a reused step's inputs cannot be vouched for, or null. */
-    private String unvouched(StepStore.StepRow row, List<InputDigests.Read> read) {
+    private String unvouched(StepStore.StepRow row, List<InputDigests.Read> read, Map<String, Object> config) {
         for (InputDigests.Read one : read) {
             if (one.overflow()) {
                 return String.format("Step <%s> read more than %,d files, too many to check that none changed; run it again from the start.",
                     row.stepKey, InputDigests.MAX_FILES);
             }
         }
-        if (read.isEmpty() && readsFiles(row.taskCode)) {
+        if (read.isEmpty() && readsFiles(row.taskCode, config)) {
             return String.format("Step <%s> read its files before their fingerprints were kept, so a change cannot be ruled out; run it "
                 + "again from the start.", row.stepKey);
         }
@@ -559,14 +559,34 @@ public class RunRetries {
         return null;
     }
 
-    /** A task that reads bucket objects as its rows: a run of it reads at least one, so none recorded means none was kept. */
-    private boolean readsFiles(String taskCode) {
+    /**
+     * A task that reads bucket objects as its rows: a run of it reads at least one, so none recorded means none was kept. ZT-I7
+     * (MIG-420): not a step that lists the objects (Read S3 as a list, its format "list", the default): it reads no file's
+     * bytes, so it has none to fingerprint -- every resume after such a step was refused as "read its files before their
+     * fingerprints were kept".
+     */
+    private boolean readsFiles(String taskCode, Map<String, Object> config) {
         Optional<StepTask> task = this.tasks.find(taskCode);
         if (!task.isPresent()) {
             return false;
         }
         TaskSpec spec = task.get().spec();
-        return spec != null && spec.kind() == TaskKind.READ && TaskSpec.STORAGE.equals(spec.backingService());
+        if (spec == null || spec.kind() != TaskKind.READ || !TaskSpec.STORAGE.equals(spec.backingService())) {
+            return false;
+        }
+        return !"list".equals(String.valueOf(formatOf(spec, config)));
+    }
+
+    /** The step's format setting, else its schema's default. */
+    @SuppressWarnings("unchecked")
+    private static Object formatOf(TaskSpec spec, Map<String, Object> config) {
+        Object format = config == null ? null : config.get("format");
+        if (format != null) {
+            return format;
+        }
+        Object properties = spec.configSchema() == null ? null : spec.configSchema().get("properties");
+        Object property = properties instanceof Map ? ((Map<String, Object>) properties).get("format") : null;
+        return property instanceof Map ? ((Map<String, Object>) property).get("default") : null;
     }
 
     /** How the object changed since the step read it, or null when the same bytes are there. Streams it; never holds it. */
