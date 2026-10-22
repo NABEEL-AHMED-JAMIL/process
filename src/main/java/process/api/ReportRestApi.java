@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.WorkspaceData;
+import org.barco.platform.security.AuditedRead;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -57,6 +58,7 @@ public class ReportRestApi {
         }
     }
 
+    @AuditedRead(value = "report export", bodyId = {"title", "format"})
     @RequestMapping(value = "/export", method = RequestMethod.POST)
     public ResponseEntity<?> export(@RequestBody ReportExportRequestDto requestDto) {
         try {

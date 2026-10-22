@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.NoAudit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -154,6 +155,7 @@ public class SettingRestApi {
         }
     }
 
+    @NoAudit(reason = "turns the tag description the request sent into XML; reads and saves nothing")
     @RequestMapping(path = "xmlCreateChecker",  method = RequestMethod.POST)
     public ResponseEntity<?> xmlCreateChecker(
         @RequestBody ConfigurationMakerRequest xlmMakerRequest) {

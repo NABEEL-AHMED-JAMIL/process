@@ -140,6 +140,10 @@ class ManagedSessionOnlyTest {
         AUDITED.put("RunItemRestApi.csv", "run items (CSV)");
         // MIG-421: one item in two runs compared, step by step (its data both times).
         AUDITED.put("RunItemRestApi.compare", "run item compare");
+        // ZT-M19: a step run on rows outside any run, a report's rows exported, a file chat's answer exported.
+        AUDITED.put("PipelineDefinitionRestApi.preview", "step preview");
+        AUDITED.put("ReportRestApi.export", "report export");
+        AUDITED.put("FileChatRestApi.exportFile", "file chat export");
     }
 
     @AfterEach

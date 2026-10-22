@@ -1,6 +1,8 @@
 package process.config;
 
 import org.barco.platform.security.HttpManagedActionAudit;
+import org.springframework.context.annotation.Bean;
+import org.barco.platform.security.ReplayableBodyFilter;
 import org.barco.platform.security.ManagementModeInterceptor;
 import org.barco.platform.security.WorkspaceDataGuard;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,5 +33,14 @@ public class ManagementModeConfig implements WebMvcConfigurer {
         // a managed-service session passes, its writes and its @AuditedRead data reads audited below.
         registry.addInterceptor(new WorkspaceDataGuard()).addPathPatterns("/**");
         registry.addInterceptor(this.interceptor).addPathPatterns("/**");
+    }
+
+    /**
+     * ZT-M19: a managed session's read that names its body's fields (@AuditedRead(bodyId)) has those values in its row;
+     * the filter keeps a JSON body readable twice -- by the audit, then by the handler (platform-commons 2.0.9).
+     */
+    @Bean
+    public ReplayableBodyFilter replayableBodyFilter() {
+        return new ReplayableBodyFilter();
     }
 }

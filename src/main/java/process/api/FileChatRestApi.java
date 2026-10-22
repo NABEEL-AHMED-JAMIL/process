@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.security.WorkspaceData;
+import org.barco.platform.security.AuditedRead;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -69,6 +70,7 @@ public class FileChatRestApi {
         }
     }
 
+    @AuditedRead(value = "file chat export", bodyId = {"targetFormat"})
     @RequestMapping(value = "/exportFile", method = RequestMethod.POST)
     public ResponseEntity<?> exportFile(@RequestBody FileChatExportRequestDto requestDto) {
         try {

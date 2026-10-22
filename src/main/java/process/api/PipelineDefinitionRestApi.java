@@ -1,6 +1,8 @@
 package process.api;
 
 import org.barco.platform.security.BuilderAction;
+import org.barco.platform.security.NoAudit;
+import org.barco.platform.security.AuditedRead;
 import org.barco.platform.security.PlatformLevel;
 import org.barco.platform.security.WorkspaceData;
 import org.springframework.http.HttpStatus;
@@ -58,6 +60,7 @@ public class PipelineDefinitionRestApi {
         return new ResponseEntity<>(this.service.read(pipelineKey), HttpStatus.OK);
     }
 
+    @NoAudit(reason = "validates the definition the request sent; reads no data and saves nothing")
     @RequestMapping(value = "/pipeline.json/steps/validate", method = RequestMethod.POST)
     public ResponseEntity<?> validate(@RequestBody PipelineDefinitionService.DefinitionRequest request) {
         return new ResponseEntity<>(this.service.validate(request), HttpStatus.OK);
@@ -75,6 +78,7 @@ public class PipelineDefinitionRestApi {
      * rows-to-rows tasks only, nothing written or sent, reads only, capped; the output's columns and at most 20 masked rows.
      * Not a builder action: it changes nothing.
      */
+    @AuditedRead(value = "step preview", bodyId = {"task"})
     @RequestMapping(value = "/pipeline.json/steps/preview", method = RequestMethod.POST)
     public ResponseEntity<?> preview(@RequestBody StepPreview.PreviewRequest request) {
         return new ResponseEntity<>(this.preview.preview(request), HttpStatus.OK);

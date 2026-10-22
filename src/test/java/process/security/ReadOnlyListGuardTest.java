@@ -1,49 +1,37 @@
 package process.security;
 
-import org.barco.platform.security.AuditedRead;
-import org.barco.platform.security.CallerIdentity;
-import org.barco.platform.security.ManagedAction;
-import org.barco.platform.security.ManagementMode;
-import org.barco.platform.security.ManagementModeInterceptor;
-import org.barco.platform.security.ReadOnlyList;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
-import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.core.type.filter.AnnotationTypeFilter;
+import java.nio.charset.StandardCharsets;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.method.HandlerMethod;
+import org.barco.platform.security.ManagedAction;
+import process.api.PipelineDefinitionRestApi;
+import org.barco.platform.contract.ManagedAuditContract;
+import org.barco.platform.security.ReadOnlyList;
+import org.junit.jupiter.api.Test;
+import process.config.ManagementModeConfig;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
- * ZT-M6 (owner 2026-10-21: "In a managed session, data reads are audited; lists and counts are not"). A list or a count
- * sent as a POST (its filters in the body) wrote a managed_action_log row of kind "change" for every page of it. Every
- * POST a person reaches here (not /internal, which answers a service token) is one of:
+ * ZT-M19 (ZT-M10's marks; platform-commons 2.0.10's ManagedAuditContract). Owner, 2026-10-21: "In a managed session, data
+ * reads are audited; lists and counts are not." Every POST a person's token reaches here (not /internal, which answers a
+ * service token) is exactly one of:
  * <ul>
- *   <li>a list or a count, marked {@link ReadOnlyList} -- exactly {@link #READ_ONLY_LISTS}, and it writes no row in a
- *       managed session;</li>
- *   <li>a data read, marked {@link AuditedRead} -- never both;</li>
- *   <li>a change, which writes its row. A change whose name reads like a list ({@link ReadOnlyList.Names}) is named in
- *       {@link #NAMED_LIKE_A_LIST_BUT_NOT_ONE}, so a new POST list without the mark fails here.</li>
+ *   <li>a write, named in {@link #WRITES} -- a managed session writes its change row before it runs;</li>
+ *   <li>a data read, marked {@code @AuditedRead} -- its row says what kind of thing it read, and which;</li>
+ *   <li>a list or a count, marked {@link ReadOnlyList} -- exactly {@link #READ_ONLY_LISTS}, no row;</li>
+ *   <li>neither -- a validation, a connection test that only says whether it connects -- marked {@code @NoAudit}, no row.</li>
  * </ul>
+ * A new POST that is none of these fails here, whatever its name: it is looked at and put in one place before it ships.
  */
 class ReadOnlyListGuardTest {
+
+    static final String SERVICE = "process";
+    static final String PACKAGE = "process";
 
     /** Controller.method of every POST that only lists or counts. */
     static final Set<String> READ_ONLY_LISTS = new TreeSet<>(Arrays.asList(
@@ -60,94 +48,130 @@ class ReadOnlyListGuardTest {
         "SourceTaskRestApi.fetchAllLinkJobsWithSourceTaskId",
         "SourceTaskRestApi.listSourceTask"));
 
-    /** POSTs whose names read like a list but that change something (each looked at, 2026-10-21). */
-    static final Set<String> NAMED_LIKE_A_LIST_BUT_NOT_ONE = new TreeSet<>();
+    /** Controller.method of every POST that changes something, starts or sends something (each looked at, 2026-10-22). */
+    static final Set<String> WRITES = new TreeSet<>(Arrays.asList(
+        "AiModelChoiceRestApi.runWith",
+        "AiModelChoiceRestApi.saveSchedule",
+        "AiModelChoiceRestApi.saveStepOptions",
+        "AlertRestApi.delete",
+        "AlertRestApi.mute",
+        "AlertRestApi.resolve",
+        "AlertRestApi.save",
+        "BackfillRestApi.cancel",
+        "BackfillRestApi.pause",
+        "BackfillRestApi.resume",
+        "BackfillRestApi.retryFailed",
+        "BackfillRestApi.start",
+        "CustomerBackfillsRestApi.cancel",
+        "CustomerBackfillsRestApi.start",
+        "CustomerEventsRestApi.send",
+        "CustomerPipelinesRestApi.startRun",
+        "CustomerRunRetryRestApi.retry",
+        "CustomerRunsRestApi.decide",
+        "CustomerRunsRestApi.viewLink",
+        "DocumentTriggerRestApi.save",
+        "EngineSettingsRestApi.reset",
+        "EventRouteRestApi.delete",
+        "EventRouteRestApi.save",
+        "FailedRunsRestApi.bulkRetry",
+        "FileChatRestApi.emailExport",
+        "FileChatRestApi.endSession",
+        "FileChatRestApi.prepareContext",
+        "FileChatRestApi.sendMessage",
+        "FormRestApi.createShareLink",
+        "FormRestApi.rebuildDataset",
+        "FormRestApi.revokeShareLink",
+        "FormRestApi.save",
+        "FormRestApi.setSharePolicy",
+        "FormRestApi.status",
+        "FormRestApi.submit",
+        "FormRestApi.upload",
+        "InboxTriggerRestApi.save",
+        "KafkaConnectionProfileRestApi.addProfile",
+        "KafkaConnectionProfileRestApi.clearDefault",
+        "KafkaConnectionProfileRestApi.setAsDefault",
+        "KafkaConnectionProfileRestApi.testConnection",
+        "KafkaSecretRestApi.generateKeystore",
+        "KafkaSecretRestApi.generateTruststore",
+        "KafkaSecretRestApi.uploadSecret",
+        "MeterRestApi.verifyRun",
+        "NotifyResetApi.addLogs",
+        "NotifyResetApi.addLogsBatch",
+        "NotifyResetApi.changeState",
+        "PipelineConfigRestApi.add",
+        "PipelineDefinitionRestApi.save",
+        "PipelineDefinitionRestApi.switchTask",
+        "PipelineRestApi.saveForm",
+        "PublicFormRestApi.submit",
+        "PublicFormRestApi.upload",
+        "RetentionRestApi.confirm",
+        "RetentionRestApi.placeHold",
+        "RetentionRestApi.releaseHold",
+        "RetentionRestApi.run",
+        "RetentionRestApi.save",
+        "RetentionRestApi.savePlatform",
+        "RunConfigRestApi.resolve",
+        "RunItemRestApi.retryRunItems",
+        "RunItemRestApi.reviewRunItems",
+        "RunReviewBulkRestApi.bulkDecide",
+        "RunReviewBulkRestApi.savePolicy",
+        "RunReviewRestApi.decide",
+        "SettingRestApi.addSourceTaskType",
+        "SourceJobRestApi.addSourceJob",
+        "SourceJobRestApi.askAssistant",
+        "SourceJobRestApi.runSourceJob",
+        "SourceJobRestApi.skipNextSourceJob",
+        "SourceJobRestApi.uploadSourceJob",
+        "SourceTaskRestApi.addSourceTask",
+        "SourceTaskRestApi.uploadSourceTask",
+        "StepTimelineRestApi.retryRun",
+        "TaskReferenceRestApi.add",
+        "TaskRegistryRestApi.platformState"));
 
-    @AfterEach
-    void clear() {
-        ManagementMode.clear();
-    }
+    /** Where the service registers ReplayableBodyFilter, for the reads that name their body's fields. */
+    static final List<Class<?>> CONFIGURATIONS = Arrays.asList(ManagementModeConfig.class);
 
-    /** Every POST a person's token reaches, as Controller.method -> (path, Method, controller). */
-    static Map<String, Object[]> posts() throws Exception {
-        ClassPathScanningCandidateComponentProvider scan = new ClassPathScanningCandidateComponentProvider(false);
-        scan.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
-        Map<String, Object[]> found = new TreeMap<>();
-        for (BeanDefinition candidate : scan.findCandidateComponents("process")) {
-            if (candidate.getResourceDescription() != null && candidate.getResourceDescription().contains("test-classes")) {
-                continue;
-            }
-            Class<?> controller = Class.forName(candidate.getBeanClassName());
-            RequestMapping base = AnnotatedElementUtils.findMergedAnnotation(controller, RequestMapping.class);
-            String prefix = base == null || base.value().length == 0 ? "" : base.value()[0];
-            for (Method method : controller.getDeclaredMethods()) {
-                RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
-                if (mapping == null) {
-                    continue;
-                }
-                boolean post = mapping.method().length == 0 || Arrays.asList(mapping.method()).contains(RequestMethod.POST);
-                String path = prefix + (mapping.value().length == 0 ? "" : mapping.value()[0]);
-                if (!post || path.startsWith("/internal")) {
-                    continue;
-                }
-                found.put(controller.getSimpleName() + "." + method.getName(), new Object[] {path, method, controller});
-            }
-        }
-        return found;
+    @Test
+    void everyPostIsAListedWriteOrMarkedOnce() {
+        ManagedAuditContract.everyPostIsAWriteOrMarked(WRITES, PACKAGE);
     }
 
     @Test
-    void theMarkedPostsAreExactlyTheListsAndCounts() throws Exception {
+    void theMarkedListsAreExactlyTheListsAndCounts() {
         Set<String> marked = new TreeSet<>();
-        for (Map.Entry<String, Object[]> post : posts().entrySet()) {
-            Method method = (Method) post.getValue()[1];
-            if (method.isAnnotationPresent(ReadOnlyList.class)) {
-                marked.add(post.getKey());
-                assertThat(method.isAnnotationPresent(AuditedRead.class)).as(post.getKey() + " is a list or a data read, not both")
-                    .isFalse();
+        ManagedAuditContract.posts(PACKAGE).forEach((name, posts) -> posts.forEach(p -> {
+            if (p.method.isAnnotationPresent(ReadOnlyList.class)) {
+                marked.add(name);
             }
-        }
+        }));
         assertThat(marked).isEqualTo(READ_ONLY_LISTS);
     }
 
     @Test
-    void aPostNamedLikeAListIsMarkedOrNamedAsAChange() throws Exception {
-        Map<String, Object[]> posts = posts();
-        Set<String> unmarked = new TreeSet<>();
-        for (Map.Entry<String, Object[]> post : posts.entrySet()) {
-            Method method = (Method) post.getValue()[1];
-            if (ReadOnlyList.Names.looksLikeAList(method.getName()) && !method.isAnnotationPresent(ReadOnlyList.class)
-                && !method.isAnnotationPresent(AuditedRead.class)) {
-                unmarked.add(post.getKey());
-            }
-        }
-        assertThat(unmarked).as("a POST named like a list carries @ReadOnlyList (or @AuditedRead), or is named as a change")
-            .isEqualTo(NAMED_LIKE_A_LIST_BUT_NOT_ONE);
-        assertThat(posts.keySet()).containsAll(READ_ONLY_LISTS);
+    void inAManagedSessionAWriteWritesItsChangeAReadItsKindAndAListOrNoAuditNothing() throws Exception {
+        assertThat(ManagedAuditContract.rowsInAManagedSession(SERVICE, WRITES, PACKAGE)).as("POSTs looked at").isPositive();
     }
 
     @Test
-    void inAManagedSessionAMarkedPostWritesNoRowAndEveryOtherPostWritesItsOwn() throws Exception {
-        List<ManagedAction> rows = new ArrayList<>();
-        ManagementModeInterceptor audit = new ManagementModeInterceptor("process", rows::add);
-        int changes = 0;
-        for (Map.Entry<String, Object[]> post : posts().entrySet()) {
-            Object[] v = post.getValue();
-            CallerIdentity managed = new CallerIdentity(4639L, 2962L, "TENANT_ADMIN", "qa", false, "jti-" + post.getKey(), 1,
-                "MANAGED", true);
-            ManagementMode.set(managed);
-            MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1" + v[0]);
-            request.setContextPath("/api/v1");
-            int before = rows.size();
-            assertThat(audit.preHandle(request, new MockHttpServletResponse(),
-                new HandlerMethod(mock((Class<?>) v[2]), (Method) v[1]))).as(post.getKey()).isTrue();
-            if (READ_ONLY_LISTS.contains(post.getKey())) {
-                assertThat(rows).as(post.getKey() + " only lists: no row").hasSize(before);
-            } else {
-                assertThat(rows).as(post.getKey() + " writes its row").hasSize(before + 1);
-                changes++;
-            }
-        }
-        assertThat(changes).as("the POSTs that are not lists still write their rows").isPositive();
+    void theReadsThatNameTheirBodysFieldsHaveTheBodyRead() {
+        ManagedAuditContract.bodyFieldsAreRead(CONFIGURATIONS, PACKAGE);
+    }
+
+    /** ZT-M19: a step preview is a read named by the task its body runs; a validation of a definition writes no row. */
+    @Test
+    void aStepPreviewIsARowNamedByItsTaskAndAValidationNone() throws Exception {
+        MockHttpServletRequest preview = new MockHttpServletRequest("POST", "/api/v1/pipeline.json/steps/preview");
+        preview.setContextPath("/api/v1");
+        preview.setContentType("application/json");
+        preview.setContent("{\"task\":\"compute\",\"config\":{},\"rows\":[{\"city\":\"Leeds\"}]}".getBytes(StandardCharsets.UTF_8));
+        List<ManagedAction> rows = ManagedAuditContract.rows(SERVICE, PipelineDefinitionRestApi.class, "preview", preview);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).isRead()).isTrue();
+        assertThat(rows.get(0).getReadKind()).isEqualTo("step preview");
+        assertThat(rows.get(0).getReadId()).isEqualTo("compute");
+
+        MockHttpServletRequest validate = new MockHttpServletRequest("POST", "/api/v1/pipeline.json/steps/validate");
+        validate.setContextPath("/api/v1");
+        assertThat(ManagedAuditContract.rows(SERVICE, PipelineDefinitionRestApi.class, "validate", validate)).isEmpty();
     }
 }
