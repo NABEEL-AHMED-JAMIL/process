@@ -23,6 +23,8 @@ import org.springframework.transaction.support.TransactionOperations;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.io.IOException;
+import java.net.ConnectException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -769,7 +771,7 @@ class StepEngineTest {
     /** The 2026-10-21 restart test: storage away for 7 s failed six report steps that each tried once. */
     @Test
     void aStepWhoseAuthorSetNoRetryIsTriedAgainWhenItsErrorSaysTo() {
-        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new java.net.ConnectException("Connection refused")));
+        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new ConnectException("Connection refused")));
         this.runs(Definitions.of(step("work", "flaky")));
         assertThat(this.statuses()).containsExactly(entry("work", "Completed"));
         assertThat(this.steps.row(RUN_ID, 1, "work").tries).isEqualTo(2);
@@ -778,7 +780,7 @@ class StepEngineTest {
 
     @Test
     void anErrorThatKeepsSayingToTryAgainIsTriedThreeMoreTimesThenFails() {
-        engineWith(failing("busy", TaskKind.OUTPUT, true, 9, new java.io.IOException("media-service could not queue the report (HTTP 502, "
+        engineWith(failing("busy", TaskKind.OUTPUT, true, 9, new IOException("media-service could not queue the report (HTTP 502, "
             + "OUTPUT_STORAGE_FAILED): Storage answered 500; try again.")));
         this.runs(Definitions.of(step("report", "busy")));
         assertThat(this.statuses()).containsExactly(entry("report", "Failed"));
@@ -788,7 +790,7 @@ class StepEngineTest {
 
     @Test
     void aStepWithItsAuthorsOwnRetryKeepsIt() {
-        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new java.net.ConnectException("Connection refused")));
+        engineWith(failing("flaky", TaskKind.PROCESS, null, 1, new ConnectException("Connection refused")));
         PipelineDefinition.Step once = step("work", "flaky");
         once.setRetry(PipelineDefinition.Retry.of(1, 0));
         this.runs(Definitions.of(once));
@@ -798,7 +800,7 @@ class StepEngineTest {
 
     @Test
     void anOutputThatIsNotSafeToRepeatIsNeverTriedAgainOnItsOwn() {
-        engineWith(failing("notify", TaskKind.OUTPUT, null, 1, new java.net.ConnectException("Connection refused")));
+        engineWith(failing("notify", TaskKind.OUTPUT, null, 1, new ConnectException("Connection refused")));
         this.runs(Definitions.of(step("send", "notify")));
         assertThat(this.steps.row(RUN_ID, 1, "send").tries).isEqualTo(1);
         assertThat(this.waited).isEmpty();
@@ -806,7 +808,7 @@ class StepEngineTest {
 
     @Test
     void aRefusalIsNotAnErrorThatSaysToTryAgain() {
-        engineWith(failing("strict", TaskKind.PROCESS, null, 1, new java.io.IOException("integration-service refused the call (HTTP 400): "
+        engineWith(failing("strict", TaskKind.PROCESS, null, 1, new IOException("integration-service refused the call (HTTP 400): "
             + "bad field")));
         this.runs(Definitions.of(step("check", "strict")));
         assertThat(this.steps.row(RUN_ID, 1, "check").tries).isEqualTo(1);
