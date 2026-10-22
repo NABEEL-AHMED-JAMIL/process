@@ -272,3 +272,7 @@ databaseChangeLog:
   # V222: owner 2026-10-21 -- run_attempt.requested_via 'platform': Core resumes, once, a run its restart stopped.
   - include:
       file: db/changelog/yaml/V222.0-platform-resume.yaml
+  - include:
+      file: db/changelog/yaml/V223.0-teams.yaml
+  - include:
+      file: db/changelog/yaml/V224.0-teams-only.yaml

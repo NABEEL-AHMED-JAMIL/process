@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 223.0-teams
+      author: nabeel.amd93
+      description: "F4 (MIG-401): an approval's reviewers may be a team, alert rules gain recipient_teams; group stays until TeamMigration rewrites it (expand-only)"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V223.0-teams/V223__teams.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V223.0-teams/V223__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

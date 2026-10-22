@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 224.0-teams-only
+      author: nabeel.amd93
+      description: "F4 (MIG-401): group leaves run_approval's CHECK and recipient_groups is dropped, on the first start after nothing names a group"
+      preConditions:
+        - onFail: CONTINUE
+        - onFailMessage: an approval or alert rule still names a group; TeamMigration rewrites it, and this runs on a later start.
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT (SELECT count(*) FROM public.run_approval WHERE reviewers_kind = 'group') + (SELECT count(*) FROM public.alert_rule WHERE recipient_groups IS NOT NULL)
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V224.0-teams-only/V224__teams_only.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V224.0-teams-only/V224__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
