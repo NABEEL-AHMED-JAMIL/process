@@ -9,6 +9,7 @@ import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import process.pipeline.registry.TaskKind;
 import process.model.enums.JobAuditMarker;
@@ -58,6 +59,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -133,12 +136,22 @@ public class StepEngine {
         void sleep(Duration duration) throws InterruptedException;
     }
 
+    /** A problem in a step's own settings: steps[i].config... */
+    static final Pattern STEP_CONFIG = Pattern.compile("^steps\\[(\\d+)\\]\\.config(?:\\.|\\[|$)");
+
+    /** ZT-R40: why a run of a registry pipeline with no saved steps is declined. */
+    public static final String NO_STEPS = "This pipeline has no steps saved yet: open it, save its steps (a report step needs its design "
+        + "first), then run it again. Nothing was sent to a worker.";
+
     /** A run and the definition version it follows. */
     public static final class StepPlan {
         public final SourceJob job;
         public final JobQueue run;
         public final PipelineDefinitionStore.Stored stored;
-        /** Null when the stored version cannot be read any more: the run is declined with {@link #unreadable}. */
+        /**
+         * Null when the stored version cannot be read any more, or (ZT-R40, with {@code stored} null too) when the pipeline
+         * has no saved steps: the run is declined with {@link #unreadable}.
+         */
         public final PipelineDefinition definition;
         public final String unreadable;
         /** MIG-345: the attempt someone asked for (a resume or a restart); null for a first attempt or the policy's retry. */
@@ -242,6 +255,18 @@ public class StepEngine {
     public void useApprovals(RunApprovalStore approvals, RunApprovalEvents approvalEvents) {
         this.approvals = approvals;
         this.approvalEvents = approvalEvents;
+    }
+
+    /**
+     * ZT-R40: whether a run of a workspace registry pipeline with no saved steps still goes to a legacy worker
+     * (process.pipeline.engine.legacy-workers, off: the platform runs no legacy workers, and such a run sat at Start). Off,
+     * the engine declines it at once (NO_STEPS); on, it takes today's path, the legacy wrap.
+     */
+    private boolean legacyWorkers;
+
+    @Autowired
+    public void useLegacyWorkers(@Value("${process.pipeline.engine.legacy-workers:false}") boolean on) {
+        this.legacyWorkers = on;
     }
 
     @Autowired(required = false)
@@ -369,6 +394,11 @@ public class StepEngine {
             stored = this.definitions.latestFor(job.getTenantId(), job.getTaskDetail().getPipelineId());
         }
         if (!stored.isPresent()) {
+            // ZT-R40: a pipeline of the workspace's registry whose steps were never saved (its first save was refused) is
+            // the engine's to decline -- never today's path, where no worker takes it and it sat at Start (run 1861).
+            if (!this.legacyWorkers && this.definitions.registered(job.getTenantId(), job.getTaskDetail().getPipelineId())) {
+                return Optional.of(new StepPlan(job, run, null, null, NO_STEPS, asked));
+            }
             return Optional.empty();
         }
         PipelineDefinition definition;
@@ -727,6 +757,15 @@ public class StepEngine {
 
         void go() {
             String pipelineId = this.plan.job.getTaskDetail().getPipelineId();
+            if (this.plan.stored == null) {
+                // ZT-R40: no saved steps -- declined at once, Start -> Failed, as a worker declines a pipeline it does not have.
+                ResponseDto taken = report(this.run, JobStatus.Start, String.format("Taken by the step engine: pipeline %s has no saved steps.",
+                    pipelineId));
+                if (!refused(taken)) {
+                    report(this.run, JobStatus.Failed, "Declined by the step engine: " + this.plan.unreadable);
+                }
+                return;
+            }
             ResponseDto started = report(this.run, JobStatus.Start, String.format("Taken by the step engine: pipeline %s, definition "
                 + "version %d, %d step(s).", pipelineId, this.plan.stored.version, this.stepList.size()));
             if (refused(started)) {
@@ -753,8 +792,16 @@ public class StepEngine {
                 String declined = String.format("Declined by the step engine: definition version %d no longer validates: %s",
                     this.plan.stored.version, problems.stream().limit(3).map(DefinitionProblem::toString).collect(Collectors.joining("; ")));
                 try {
-                    this.stopAll(steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned), 0,
-                        JobStatus.Skip.name(), "Not run: " + declined);
+                    List<Long> shown = steps.plan(this.run.getJobQueueId(), this.attempt, this.plan.stored.id, planned);
+                    this.stopAll(shown, 0, JobStatus.Skip.name(), "Not run: " + declined);
+                    // ZT-R40: a step whose own settings are the problem (a report step with no design) is the step that failed,
+                    // in the problem's words, so the timeline points at it.
+                    for (DefinitionProblem problem : problems) {
+                        Matcher at = STEP_CONFIG.matcher(problem.getPath());
+                        if (at.lookingAt() && Integer.parseInt(at.group(1)) < shown.size()) {
+                            steps.notRun(shown.get(Integer.parseInt(at.group(1))), JobStatus.Failed.name(), problem.getMessage());
+                        }
+                    }
                 } catch (RuntimeException unrecorded) {
                     logger.warn("Run {}: its declined steps could not be recorded: {}", this.run.getJobQueueId(), reasonOf(unrecorded));
                 }

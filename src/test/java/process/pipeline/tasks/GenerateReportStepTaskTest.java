@@ -1,5 +1,6 @@
 package process.pipeline.tasks;
 
+import process.pipeline.DefinitionProblem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -116,6 +117,19 @@ class GenerateReportStepTaskTest {
         return Dataset.of(rows);
     }
 
+    /** ZT-R40: a step with no design says so in the words the save and the run use, before it reads a row or asks media. */
+    @Test
+    void aStepWithNoDesignSaysSoInWords() {
+        FakeStudio studio = new FakeStudio();
+        GenerateReportStepTask task = new GenerateReportStepTask(studio, d -> { });
+        assertThat(task.check(config("design", "STEP", "templateVersion", "latest")))
+            .containsExactly(new DefinitionProblem("templateId", GenerateReportStepTask.NO_DESIGN));
+        assertThat(task.check(config("design", "STEP", "templateId", DESIGN, "templateVersion", "latest"))).isEmpty();
+        StreamTry context = new StreamTry(config("design", "STEP", "templateVersion", "latest"), wounds(), 64L << 20, this.dir, 2);
+        assertThatThrownBy(() -> task.stream(context)).hasMessage(GenerateReportStepTask.NO_DESIGN);
+        assertThat(studio.sent).as("media never asked").isEmpty();
+    }
+
     @Test
     void theRowsGoAsLinesTheJobIsFollowedAndThePdfIsKeptWithTheRun() throws Exception {
         FakeStudio studio = new FakeStudio();
@@ -200,11 +214,11 @@ class GenerateReportStepTaskTest {
     @Test
     void aStepWithoutADesignSaysWhatToDoAndAVersionIsLatestOrANumber() {
         assertThatThrownBy(() -> new GenerateReportStepTask(new FakeStudio(), d -> { }).stream(new StreamTry(config(), wounds(), 64L << 20, this.dir, 2)))
-            .hasMessageContaining("design the report in the step, or pick a template");
+            .hasMessage(GenerateReportStepTask.NO_DESIGN);
         GenerateReportStepTask task = new GenerateReportStepTask(new FakeStudio(), d -> { });
-        assertThat(task.check(config("templateVersion", "latest"))).isEmpty();
-        assertThat(task.check(config("templateVersion", "3"))).isEmpty();
-        assertThat(task.check(config("templateVersion", "v3"))).hasSize(1);
+        assertThat(task.check(config("templateId", DESIGN, "templateVersion", "latest"))).isEmpty();
+        assertThat(task.check(config("templateId", DESIGN, "templateVersion", "3"))).isEmpty();
+        assertThat(task.check(config("templateId", DESIGN, "templateVersion", "v3"))).hasSize(1);
         assertThat(GenerateReportStepTask.safeName("Wound clinic weekly · run 2.pdf")).isEqualTo("Wound_clinic_weekly_run_2.pdf");
     }
 }

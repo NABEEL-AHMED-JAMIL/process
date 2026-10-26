@@ -83,6 +83,19 @@ public class PipelineDefinitionStore {
     }
 
     /**
+     * ZT-R40: whether the workspace's registry has this pipeline (live, any version or none) -- a run of one with no stored
+     * definition is the step engine's to decline, not a worker's.
+     */
+    public boolean registered(long tenantId, String pipelineId) {
+        if (pipelineId == null || pipelineId.trim().isEmpty()) {
+            return false;
+        }
+        Boolean found = this.jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM pipeline p WHERE p.tenant_id = ? AND p.pipeline_id = ? "
+            + "AND p.status <> 'Delete')", Boolean.class, tenantId, pipelineId.trim());
+        return Boolean.TRUE.equals(found);
+    }
+
+    /**
      * MIG-326: {@link #latestFor(long, String)} for a page of the workspace's pipelines in one query, by pipeline id (one
      * with no definition is left out): the same row each single read gives -- the lowest-keyed live pipeline of that id,
      * its highest version.

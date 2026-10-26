@@ -1,5 +1,6 @@
 package process.pipeline;
 
+import process.api.PipelineDefinitionRestApi;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,8 +11,10 @@ import process.model.enums.Status;
 import process.model.pojo.Pipeline;
 import process.model.repository.PipelineRepository;
 import process.pipeline.backing.Fakes;
+import process.pipeline.backing.ReportStudio;
 import process.pipeline.registry.InMemoryTaskOverrideStore;
 import process.pipeline.registry.TaskRegistry;
+import process.pipeline.tasks.GenerateReportStepTask;
 import process.pipeline.tasks.MeasureImageStepTask;
 import process.security.TenantContext;
 import process.util.UserNameResolver;
@@ -147,6 +150,49 @@ class PipelineDefinitionServiceTest {
         assertThat(String.valueOf(saved.getData())).contains("steps[0].config.templateId").contains("Drug safety weekly");
         assertThat(this.service.validate(draft(GOOD)).getStatus()).isEqualTo("ERROR");
         verify(this.store, never()).save(anyLong(), anyString(), any());
+    }
+
+    /**
+     * ZT-R40 (AI designer retest, 2026-10-26): a pipeline whose report step has no design yet answered HTTP 200 "1 problem"
+     * and saved nothing. The save says so in words a person can act on, goes out as a 422 with the problem at the step's path
+     * (the console shows it on the step), and stores nothing. Every other refusal is a 4xx too; only a save is a 200.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReportStepWithNoDesignIsNotSavedAndTheAnswerSaysWhyAsA4xx() throws Exception {
+        TaskRegistry registry = new TaskRegistry(Definitions.builtInTasks(new GenerateReportStepTask(mock(ReportStudio.class))), this.overrides);
+        PipelineDefinitionService reporting = new PipelineDefinitionService(this.pipelines, this.store, new DefinitionValidator(registry),
+            registry, this.overrides, this.names);
+        String text = "{\"version\":1,\"steps\":[{\"key\":\"visits\",\"task\":\"sample\",\"config\":{\"rows\":[{\"id\":1}]}},"
+            + "{\"key\":\"report\",\"task\":\"generate_report\",\"config\":{\"design\":\"STEP\",\"templateVersion\":\"latest\"}}]}";
+
+        ResponseDto answer = reporting.save(draft(text));
+
+        assertThat(answer.getStatus()).isEqualTo("ERROR");
+        assertThat(answer.getMessage()).isEqualTo("Not saved: step 'report' (config.templateId): " + GenerateReportStepTask.NO_DESIGN);
+        assertThat(PipelineDefinitionService.httpStatusOf(answer)).isEqualTo(422);
+        List<DefinitionProblem> problems = (List<DefinitionProblem>) ((Map<String, Object>) answer.getData()).get("problems");
+        assertThat(problems).containsExactly(new DefinitionProblem("steps[1].config.templateId", GenerateReportStepTask.NO_DESIGN));
+        assertThat(reporting.validate(draft(text)).getStatus()).isEqualTo("ERROR");
+        verify(this.store, never()).save(anyLong(), anyString(), any());
+
+        assertThat(PipelineDefinitionService.httpStatusOf(this.service.save(draft(null)))).as("no text").isEqualTo(400);
+        PipelineDefinitionService.DefinitionRequest gone = draft(GOOD);
+        gone.setPipelineKey(424242L);
+        assertThat(PipelineDefinitionService.httpStatusOf(this.service.save(gone))).as("not the caller's").isEqualTo(404);
+        when(this.store.save(eq(KEY), anyString(), any())).thenThrow(new DuplicateKeyException("ux_pipeline_definition_version"));
+        assertThat(PipelineDefinitionService.httpStatusOf(this.service.save(draft(GOOD)))).as("raced").isEqualTo(409);
+        assertThat(PipelineDefinitionService.httpStatusOf(this.service.save(draft("version: 2\nsteps: []\n")))).isEqualTo(422);
+        assertThat(PipelineDefinitionService.httpStatusOf(this.service.save(draft(DefinitionCodec.toYaml(PipelineDefinition.legacy("F768927"))))))
+            .as("unchanged is an answer, not a refusal").isEqualTo(200);
+    }
+
+    /** ZT-R40: the endpoint sends the save's status, the envelope as it is. */
+    @Test
+    void theSaveEndpointAnswersTheRefusalsStatus() {
+        PipelineDefinitionRestApi api = new PipelineDefinitionRestApi(this.service, mock(StepPreview.class));
+        assertThat(api.save(draft("version: 2\nsteps: []\n")).getStatusCode().value()).isEqualTo(422);
+        assertThat(((ResponseDto) api.save(draft("version: 2\nsteps: []\n")).getBody()).getMessage()).startsWith("Not saved: ");
     }
 
     @Test

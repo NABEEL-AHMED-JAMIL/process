@@ -12,6 +12,7 @@ import process.model.dto.ResponseDto;
 import process.model.dto.SourceJobQueueDto;
 import process.model.enums.JobStatus;
 import process.pipeline.registry.TaskKind;
+import process.pipeline.tasks.GenerateReportStepTask;
 import process.pipeline.registry.TaskSpec;
 import process.model.enums.Status;
 import process.model.pojo.JobQueue;
@@ -585,6 +586,45 @@ class StepEngineTest {
             + "steps[0].task: no task 'flaky' is registered");
         assertThat(this.statuses()).as("shown, not run, so the timeline says why").containsExactly(entry("gone", "Skip"));
         assertThat(this.steps.row(RUN_ID, 1, "gone").statusMessage).startsWith("Not run: Declined by the step engine");
+    }
+
+    /**
+     * ZT-R40 (AI designer retest, 2026-10-26): a pipeline of the workspace's registry whose steps were never saved -- its first
+     * save was refused, a report step with no design -- went to today's worker path and sat at Start (run 1861). It is the
+     * engine's to decline at once: Start then Failed, in words, nothing sent to a worker.
+     */
+    @Test
+    void aRegistryPipelineWithNoSavedStepsIsDeclinedAtOnceNotLeftForAWorker() {
+        when(this.definitions.latestFor(TENANT, "CLAIMS")).thenReturn(Optional.empty());
+        when(this.definitions.registered(TENANT, "CLAIMS")).thenReturn(true);
+        Optional<StepEngine.StepPlan> plan = this.engine.planFor(this.job, this.run);
+        assertThat(plan).as("the engine's, never the legacy queue").isPresent();
+        this.run.setJobSend(true);
+        this.engine.run(plan.get());
+
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Failed);
+        assertThat(this.worker.last()).isEqualTo("Failed: Declined by the step engine: " + StepEngine.NO_STEPS);
+
+        this.engine.useLegacyWorkers(true);
+        assertThat(this.engine.planFor(this.job, this.run)).as("legacy workers on: today's path, the legacy wrap").isEmpty();
+        this.engine.useLegacyWorkers(false);
+        when(this.definitions.registered(TENANT, "CLAIMS")).thenReturn(false);
+        assertThat(this.engine.planFor(this.job, this.run)).as("a task naming no registry pipeline keeps today's path").isEmpty();
+    }
+
+    /**
+     * ZT-R40: a stored version whose report step has no design (saved before the save refused one) fails at that step when
+     * its run starts, in the step's words -- the steps before it shown, not run.
+     */
+    @Test
+    void aReportStepWithNoDesignFailsAtTheStepInWords() {
+        this.runs(Definitions.of(sample("visits", row("patient", "P-1", "area_cm2", 3)),
+            step("report", "generate_report", config("design", "STEP", "templateVersion", "latest"))));
+
+        assertThat(this.worker.statuses()).containsExactly(JobStatus.Start, JobStatus.Failed);
+        assertThat(this.worker.last()).contains("steps[1].config.templateId: " + GenerateReportStepTask.NO_DESIGN);
+        assertThat(this.statuses()).containsExactly(entry("visits", "Skip"), entry("report", "Failed"));
+        assertThat(this.steps.row(RUN_ID, 1, "report").statusMessage).isEqualTo(GenerateReportStepTask.NO_DESIGN);
     }
 
     @Test

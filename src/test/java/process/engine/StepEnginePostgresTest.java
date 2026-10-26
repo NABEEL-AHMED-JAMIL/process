@@ -247,6 +247,8 @@ class StepEnginePostgresTest {
         PreDispatchPhase bare = new PreDispatchPhase(store, bulkAction, new AiStepService(jpa.repository(PipelineRepository.class),
             mock(AiPort.class)), new JdbcModelChoiceStore(db.appJdbc()), mock(JobMail.class),
             new TransactionTemplate(jpa.transactionManager()), new DispatchPipeline.SameThread());
+        // ZT-R40: this class's legacy pipeline (no saved steps) is a worker's: with legacy workers on, as MIG-230 had it.
+        engine.useLegacyWorkers(true);
         bare.useStepEngine(engine);
         this.phase = AcrossTenantsProxy.of(bare);
     }

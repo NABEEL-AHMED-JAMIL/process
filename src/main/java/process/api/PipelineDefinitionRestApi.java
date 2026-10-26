@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import process.model.dto.ResponseDto;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.StepPreview;
 
@@ -24,7 +25,8 @@ import process.pipeline.StepPreview;
  *   <li>GET pipeline.json/steps/definition: the pipeline's definition -- its latest version, or the legacy step every
  *       pipeline without one runs as -- as the object, JSON and YAML, with its versions;</li>
  *   <li>POST pipeline.json/steps/validate: a draft's problems, each at its path, and its JSON and YAML;</li>
- *   <li>POST pipeline.json/steps/save: the draft as the next version (tenant admins, as the pipeline's form);</li>
+ *   <li>POST pipeline.json/steps/save: the draft as the next version (tenant admins, as the pipeline's form); a save that
+ *       saves nothing answers 4xx in the envelope (422 with the problems, ZT-R40);</li>
  *   <li>GET pipeline.json/steps/tasks: the Task Registry as the caller's workspace sees it (MIG-231) -- each task's
  *       entry with its config schema and enabled, and one Legacy entry per pipeline of the workspace;</li>
  *   <li>POST pipeline.json/steps/preview (AI tools batch): one step on at most 50 rows, sandboxed, as the person (StepPreview).</li>
@@ -70,7 +72,9 @@ public class PipelineDefinitionRestApi {
     @BuilderAction
     @RequestMapping(value = "/pipeline.json/steps/save", method = RequestMethod.POST)
     public ResponseEntity<?> save(@RequestBody PipelineDefinitionService.DefinitionRequest request) {
-        return new ResponseEntity<>(this.service.save(request), HttpStatus.OK);
+        // ZT-R40: a save that saved nothing is a 4xx in the envelope (422 with the problems), never a 200.
+        ResponseDto answer = this.service.save(request);
+        return new ResponseEntity<>(answer, HttpStatus.valueOf(PipelineDefinitionService.httpStatusOf(answer)));
     }
 
     /**

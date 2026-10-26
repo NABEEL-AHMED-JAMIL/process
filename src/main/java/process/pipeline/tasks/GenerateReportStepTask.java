@@ -77,6 +77,11 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     static final int MAX_REPORTS = 200;
     /** The longest pipeline name the head carries (media keeps it in the report version's lineage). */
     static final int MAX_PIPELINE_NAME = 160;
+    /**
+     * ZT-R40 (AI designer retest, 2026-10-26): a step with neither its own design nor a template -- said at save (the save is
+     * refused, 422) and, for a version stored before, by the step itself when its run starts, never left at Start.
+     */
+    public static final String NO_DESIGN = "This report step has no design yet: open the step and design it or pick a saved template.";
 
     static final TaskSpec SPEC = TaskSpec.builder("generate_report", "Generate report", TaskKind.OUTPUT)
         .repeatSafe(true)  // a repeat writes the same thing again (owner 2026-10-21: passing errors are tried again)
@@ -88,7 +93,8 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         .config(JsonSchema.object()
             .property("design", JsonSchema.string().enumOf("STEP", "TEMPLATE").title("Report design").defaultValue("STEP")
                 .description("STEP: the design made inside this step from its data. TEMPLATE: a published template."))
-            .required("templateId", JsonSchema.string().pattern("^[0-9A-HJKMNP-TV-Z]{26}$").format(StepReferences.REPORT_STUDIO_TEMPLATE)
+            // ZT-R40: not "required" in the schema -- a step without a design is check()'s, in words a person can act on.
+            .property("templateId", JsonSchema.string().pattern("^[0-9A-HJKMNP-TV-Z]{26}$").format(StepReferences.REPORT_STUDIO_TEMPLATE)
                 .title("Design or template").description("The step's own design, or a template of this workspace."))
             .property("templateVersion", JsonSchema.string().pattern(VERSION.pattern()).title("Version").defaultValue("latest")
                 .description("latest: its newest published version; or a version number, pinned."))
@@ -148,6 +154,10 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     @Override
     public List<DefinitionProblem> check(Map<String, Object> config) {
         List<DefinitionProblem> problems = new ArrayList<>();
+        String templateId = Configs.text(config, "templateId", null);
+        if (templateId == null || templateId.trim().isEmpty()) {
+            problems.add(new DefinitionProblem("templateId", NO_DESIGN));
+        }
         String version = Configs.text(config, "templateVersion", "latest");
         if (!VERSION.matcher(version).matches()) {
             problems.add(new DefinitionProblem("templateVersion", "latest, or a published version's number"));
@@ -159,8 +169,8 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
     public StepResult stream(StreamContext context) throws Exception {
         Map<String, Object> config = context.config();
         String templateId = Configs.text(config, "templateId", null);
-        if (templateId == null) {
-            throw new IllegalStateException("The step has no report design: design the report in the step, or pick a template.");
+        if (templateId == null || templateId.trim().isEmpty()) {
+            throw new IllegalStateException(NO_DESIGN);
         }
         String version = Configs.text(config, "templateVersion", "latest");
         long inputRows = context.inputSize();

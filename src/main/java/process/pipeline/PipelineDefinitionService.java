@@ -1,5 +1,7 @@
 package process.pipeline;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -25,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import static process.util.ProcessUtil.ERROR;
@@ -141,8 +145,29 @@ public class PipelineDefinitionService {
     }
 
     /**
+     * ZT-R40 (AI designer retest, 2026-10-26): what HTTP status a save's answer goes out with -- a save that saved nothing is
+     * never a 200. 422 for a definition with problems (each at its path, the message the first in words), 404 for a pipeline
+     * that is not the caller's, 409 for a save that raced another, 400 for the rest (no text, a platform pipeline).
+     */
+    public static int httpStatusOf(ResponseDto answer) {
+        if (answer == null || SUCCESS.equals(answer.getStatus())) {
+            return 200;
+        }
+        if (answer.getData() instanceof Map && ((Map<?, ?>) answer.getData()).containsKey("problems")) {
+            return 422;
+        }
+        if (PIPELINE_NOT_FOUND.equals(answer.getMessage())) {
+            return 404;
+        }
+        return answer.getMessage() != null && answer.getMessage().startsWith(RACED) ? 409 : 400;
+    }
+
+    static final String RACED = "Someone else saved this pipeline's definition at the same moment";
+
+    /**
      * Saves a draft as the pipeline's next version, when it validates and differs from the latest; the stored text is
-     * the canonical JSON, whichever format it came in.
+     * the canonical JSON, whichever format it came in. Nothing is saved when it does not validate: the answer says so in
+     * words ("Not saved: ...") and is a 422 ({@link #httpStatusOf}).
      */
     public ResponseDto save(DefinitionRequest request) {
         if (request == null || request.getText() == null) {
@@ -161,11 +186,11 @@ public class PipelineDefinitionService {
             definition = this.validator.require(DefinitionCodec.read(request.getText(), request.getFormat()), pipeline.get().getTenantId(),
                 TenantContext.getUserRole());
         } catch (DefinitionException ex) {
-            return invalid(ex.getProblems(), null);
+            return notSaved(ex.getProblems(), null, request);
         }
         List<DefinitionProblem> missing = this.resourceProblems(definition, pipeline.get().getTenantId());
         if (!missing.isEmpty()) {
-            return invalid(missing, definition);
+            return notSaved(missing, definition, request);
         }
         Optional<PipelineDefinitionStore.Stored> latest = this.store.latest(pipeline.get().getPipelineKey());
         // A measure step's target is written into every save; one the previous version had without it keeps red_region.
@@ -185,7 +210,7 @@ public class PipelineDefinitionService {
         try {
             saved = this.store.save(pipeline.get().getPipelineKey(), json, TenantContext.getAppUserId());
         } catch (DuplicateKeyException ex) {
-            return new ResponseDto(ERROR, "Someone else saved this pipeline's definition at the same moment; open it again and retry.");
+            return new ResponseDto(ERROR, RACED + "; open it again and retry.");
         }
         this.logger.info("Pipeline {} definition version {} saved ({} step(s)).", pipeline.get().getPipelineKey(), saved.version,
             definition.getSteps().size());
@@ -365,6 +390,51 @@ public class PipelineDefinitionService {
         payload.put("json", DefinitionCodec.toPrettyJson(definition));
         payload.put("yaml", DefinitionCodec.toYaml(definition));
         return payload;
+    }
+
+    /**
+     * ZT-R40: a refused save, said plainly -- "Not saved: step 'report': This report step has no design yet: ..." -- with every
+     * problem at its path for the console to show on its step, as a validate's.
+     */
+    private static ResponseDto notSaved(List<DefinitionProblem> problems, PipelineDefinition read, DefinitionRequest request) {
+        ResponseDto answer = invalid(problems, read);
+        List<String> keys = stepKeys(read, request);
+        String first = inWords(problems.get(0), keys);
+        answer.setMessage(problems.size() == 1 ? "Not saved: " + first
+            : String.format("Not saved: %d problems, each shown on its step. The first: %s", problems.size(), first));
+        return answer;
+    }
+
+    private static final Pattern STEP_PATH = Pattern.compile("^steps\\[(\\d+)\\](?:\\.(.*))?$");
+
+    /** A problem as a sentence: its step by key when the path names one ("step 'report': ..."), else its path. */
+    static String inWords(DefinitionProblem problem, List<String> keys) {
+        Matcher at = STEP_PATH.matcher(problem.getPath());
+        if (at.matches()) {
+            int index = Integer.parseInt(at.group(1));
+            String key = index < keys.size() && keys.get(index) != null ? "'" + keys.get(index) + "'" : String.valueOf(index + 1);
+            String field = at.group(2) == null ? "" : " (" + at.group(2) + ")";
+            return String.format("step %s%s: %s", key, field, problem.getMessage());
+        }
+        return problem.toString();
+    }
+
+    /** The steps' keys as sent: from the definition read, else from the text when it parses as JSON at all. */
+    private static List<String> stepKeys(PipelineDefinition read, DefinitionRequest request) {
+        List<String> keys = new ArrayList<>();
+        if (read != null && read.getSteps() != null) {
+            read.getSteps().forEach(step -> keys.add(step.getKey()));
+            return keys;
+        }
+        try {
+            JsonNode tree = new ObjectMapper().readTree(request.getText());
+            for (JsonNode step : tree.path("steps")) {
+                keys.add(step.path("key").isTextual() ? step.path("key").asText() : null);
+            }
+        } catch (Exception notJson) {
+            // YAML, or not readable: the paths are said as they are
+        }
+        return keys;
     }
 
     private static ResponseDto invalid(List<DefinitionProblem> problems, PipelineDefinition read) {
