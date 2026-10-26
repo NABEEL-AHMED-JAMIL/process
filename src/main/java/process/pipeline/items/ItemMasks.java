@@ -35,6 +35,14 @@ public final class ItemMasks {
 
     static final ItemMasks NONE = new ItemMasks(new LinkedHashMap<>(), EnumSet.noneOf(Kind.class), false, false);
 
+    /**
+     * MIG-424: a reader who is no one person (a workflow's history, the API's run result) often reads one row -- one patient
+     * -- and a sample under {@link SensitiveValues#MIN_VALUES} values says nothing by value alone, so a sensitive pipeline's
+     * one patient_name would show. For these masks a small sample is read as a column of that many such values: masking
+     * errs towards hiding.
+     */
+    private boolean smallSamples;
+
     private final Map<String, Kind> columns;
     private final Set<Kind> kinds;
     private final boolean failClosed;
@@ -73,7 +81,9 @@ public final class ItemMasks {
      * for a member with no access to any of them; fail closed when it could not be read (null).
      */
     public static ItemMasks forWorkspace(JsonNode sensitiveAssets, boolean sensitivePipeline) {
-        return of(sensitiveAssets, sensitiveAssets != null, sensitivePipeline);
+        ItemMasks masks = of(sensitiveAssets, sensitiveAssets != null, sensitivePipeline);
+        masks.smallSamples = true;
+        return masks;
     }
 
     /** No masks: a workspace administrator's read (or a managed session's) of a pipeline that is not marked sensitive. */
@@ -111,6 +121,13 @@ public final class ItemMasks {
                     if (v != null && !(v instanceof Boolean) && !(v instanceof Number && column.toLowerCase(Locale.ROOT).endsWith("_count"))) {
                         sample.add(String.valueOf(v));
                     }
+                }
+                if (this.smallSamples && !sample.isEmpty() && sample.size() < SensitiveValues.MIN_VALUES) {
+                    List<String> padded = new ArrayList<>(sample);
+                    while (padded.size() < SensitiveValues.MIN_VALUES) {
+                        padded.add(sample.get(padded.size() % sample.size()));
+                    }
+                    sample = padded;
                 }
                 SensitiveValues.columnKind(column, sample).ifPresent(kind -> byName.putIfAbsent(column.toLowerCase(Locale.ROOT), kind));
             }

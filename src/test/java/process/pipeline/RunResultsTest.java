@@ -181,6 +181,21 @@ class RunResultsTest {
         assertThat(String.valueOf(closed.values.get("email_note"))).doesNotContain("jane@example.test");
     }
 
+    /** MIG-424: a sensitive pipeline's one patient: one value says enough for these masks, the person's name is hidden. */
+    @Test
+    void aSensitivePipelinesOnePatientIsMaskedFromOneRow() throws Exception {
+        output(51L, new Dataset(Arrays.asList("patient_name", "risk"), Arrays.asList(row("patient_name", "Pat Synthetic", "risk", "High"))));
+        wire(step(51L, 0, "decide", "Completed", 1));
+        RunResults.Result r = this.results.read(RUN, selection("{\"fields\": [\"patient_name\", \"risk\"]}"),
+            ItemMasks.forWorkspace(JSON.readTree("[]"), true));
+        assertThat(r.values.get("patient_name")).isNotEqualTo("Pat Synthetic");
+        assertThat(r.values).containsEntry("risk", "High");
+        assertThat(r.masked).containsExactly("patient_name");
+        // Not marked sensitive, and no asset tags it: shown.
+        assertThat(this.results.read(RUN, selection("{\"fields\": [\"patient_name\"]}"), ItemMasks.forWorkspace(JSON.readTree("[]"), false))
+            .values).containsEntry("patient_name", "Pat Synthetic");
+    }
+
     @Test
     void aSelectionThatDoesNotStandSaysWhereInWords() throws Exception {
         List<String> problems = new ArrayList<>();
