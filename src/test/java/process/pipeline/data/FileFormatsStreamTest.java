@@ -1,12 +1,19 @@
 package process.pipeline.data;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import process.pipeline.Dataset;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -14,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** MIG-344: reading a CSV or JSON Lines file as a stream gives the rows reading it whole gives; writing rows streamed writes the same bytes. */
-class FileFormatsStreamTest {
+public class FileFormatsStreamTest {
 
     private static Dataset whole(String content, String format, FileFormats.ReadOptions options, Integer maxRows) throws Exception {
         RowCollector rows = new RowCollector("f.csv", maxRows);
@@ -48,6 +55,71 @@ class FileFormatsStreamTest {
         String jsonl = "{\"id\":1,\"tags\":[\"a\"]}\n\n{\"id\":2.5,\"name\":null}\n";
         assertThat(streamed(jsonl, "jsonl", options, null).getRows()).isEqualTo(whole(jsonl, "jsonl", options, null).getRows());
         assertThatThrownBy(() -> streamed("{\"id\":1}\nnot json\n", "jsonl", options, null)).hasMessage("Line 2 is not JSON.");
+    }
+
+    /** Counts the rows it is given and keeps the last. */
+    static final class Counting implements RowSink {
+        long count;
+        Map<String, Object> last;
+
+        @Override
+        public void declare(Collection<String> columns) {
+        }
+
+        @Override
+        public void add(Map<String, Object> row) {
+            this.count++;
+            this.last = row;
+        }
+
+        @Override
+        public long size() {
+            return this.count;
+        }
+    }
+
+    /** A Parquet file of `rows` rows (id, ward, response_s), made by DuckDB. */
+    public static byte[] parquet(Path dir, int rows) throws Exception {
+        Path file = dir.resolve("p" + rows + ".parquet");
+        Class.forName("org.duckdb.DuckDBDriver");
+        try (Connection duck = DriverManager.getConnection("jdbc:duckdb:"); Statement sql = duck.createStatement()) {
+            sql.execute("COPY (SELECT i AS id, 'W' || (i % 8) AS ward, i % 600 AS response_s FROM range(" + rows + ") t(i)) TO '"
+                + file.toAbsolutePath().toString().replace("'", "''") + "' (FORMAT PARQUET, ROW_GROUP_SIZE 20000)");
+        }
+        return Files.readAllBytes(file);
+    }
+
+    /**
+     * ZT-S3 (showcase job 36): a Parquet file streams, a row group at a time, as a CSV does -- past the in-memory bound of
+     * {@value Limits#MAX_ROWS} rows that reading it whole stops at -- with the same rows, the named columns only, maxRows and
+     * the step's row bound.
+     */
+    @Test
+    void parquetStreamsPastTheInMemoryBound(@TempDir Path dir) throws Exception {
+        assertThat(FileFormats.streams("parquet")).isTrue();
+        byte[] big = parquet(dir, Limits.MAX_ROWS + 10_000);
+        FileFormats.ReadOptions options = new FileFormats.ReadOptions();
+        Counting sink = new Counting();   // a step's output, not a dataset in memory (a collecting sink stops at the in-memory bound)
+        FileFormats.readStream(new ByteArrayInputStream(big), "parquet", options, sink, null, Long.MAX_VALUE, "p.parquet");
+        assertThat(sink.size()).isEqualTo(Limits.MAX_ROWS + 10_000);
+        assertThat(sink.last).isEqualTo(Map.of("id", 59_999L, "ward", "W7", "response_s", 599L));
+
+        byte[] small = parquet(dir, 3);
+        RowCollector whole = new RowCollector("p.parquet", null);
+        FileFormats.read(small, "parquet", options, whole);
+        RowSink.Collecting streamed = RowSink.collecting("p.parquet");
+        FileFormats.readStream(new ByteArrayInputStream(small), "parquet", options, streamed, null, Long.MAX_VALUE, "p.parquet");
+        assertThat(streamed.toDataset().getRows()).isEqualTo(whole.toDataset().getRows());
+
+        FileFormats.ReadOptions two = new FileFormats.ReadOptions();
+        two.columns = Arrays.asList("response_s", "id");
+        RowSink.Collecting picked = RowSink.collecting("p.parquet");
+        FileFormats.readStream(new ByteArrayInputStream(big), "parquet", two, picked, 5, Long.MAX_VALUE, "p.parquet");
+        assertThat(picked.toDataset().getColumns()).containsExactly("response_s", "id");
+        assertThat(picked.toDataset().size()).isEqualTo(5);
+
+        assertThatThrownBy(() -> FileFormats.readStream(new ByteArrayInputStream(big), "parquet", options, new Counting(), null, 100,
+            "in/p.parquet")).hasMessage("in/p.parquet has more than 100 rows, the most a step holds.");
     }
 
     @Test

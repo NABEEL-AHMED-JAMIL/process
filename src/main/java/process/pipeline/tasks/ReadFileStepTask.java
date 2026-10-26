@@ -170,7 +170,8 @@ public class ReadFileStepTask extends RegisteredTask implements StreamingStepTas
     }
 
     /** Each row with the key of the file it came from, as Read S3 tags its objects' rows. */
-    private static final class SourceKeyed implements RowSink {
+    /** Each row with the key of the file it came from (Read S3's objects too). */
+    static final class SourceKeyed implements RowSink {
         private final RowSink sink;
         private final String key;
 

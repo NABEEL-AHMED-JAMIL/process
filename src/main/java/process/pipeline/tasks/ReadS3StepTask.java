@@ -1,7 +1,11 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
+import java.io.InputStream;
 import process.pipeline.StepContext;
+import process.pipeline.StreamContext;
+import process.pipeline.StreamingStepTask;
+import process.pipeline.data.RowSink;
 import process.pipeline.StepResult;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.data.FileFormats;
@@ -29,10 +33,11 @@ import process.pipeline.backing.ReadTakes;
  * Read S3 (MIG-231): the objects under a prefix of one of the workspace's buckets, through storage-service. As
  * {@code list} (the default), one row per object -- key and size; as a file format, every object's rows one after
  * another, each with its {@code _source_key}. At most {@code limit} objects ({@value Limits#MAX_OBJECTS}), and the
- * whole within the step's bounds.
+ * whole within the step's bounds. ZT-S3: it streams (StreamingStepTask): every object's rows go into the step's output as
+ * they are read, a CSV, JSON Lines or Parquet object without being held whole.
  */
 @Component
-public class ReadS3StepTask extends RegisteredTask {
+public class ReadS3StepTask extends RegisteredTask implements StreamingStepTask {
 
     static final String SINCE_ALL = "all";
     static final String SINCE_LAST_RUN = "last_run";
@@ -90,7 +95,7 @@ public class ReadS3StepTask extends RegisteredTask {
     }
 
     @Override
-    public StepResult run(StepContext context) throws Exception {
+    public StepResult stream(StreamContext context) throws Exception {
         Map<String, Object> config = context.config();
         String bucket = Configs.text(config, "bucket", null);
         String prefix = Templates.fill(Configs.text(config, "prefix", ""), Templates.ofRun(context, null));
@@ -132,7 +137,7 @@ public class ReadS3StepTask extends RegisteredTask {
     }
 
     /** The files the run was started for, in its own bucket (the inbox), instead of the prefix; no watermark moves. */
-    private StepResult runFiles(StepContext context, Map<String, Object> config, String bucket, String format) throws Exception {
+    private StepResult runFiles(StreamContext context, Map<String, Object> config, String bucket, String format) throws Exception {
         String own = context.inputBucket() == null ? bucket : context.inputBucket();
         List<BucketStore.Listed> objects = new ArrayList<>();
         for (String key : context.inputKeys()) {
@@ -264,44 +269,62 @@ public class ReadS3StepTask extends RegisteredTask {
         return new Fresh(new BucketStore.Listing(taken, more), upTo);
     }
 
-    private StepResult read(StepContext context, Map<String, Object> config, String bucket, String prefix, String format,
+    /**
+     * The objects' rows into the step's output, one object after the other (ZT-S3: streamed -- a CSV, JSON Lines or Parquet
+     * object row by row, Parquet a row group at a time -- so the prefix's rows are bounded by the step, not held in memory;
+     * a JSON object, or every object on the in-memory path, is read whole). Each row keeps its {@code _source_key}; maxRows
+     * stops the read.
+     */
+    private StepResult read(StreamContext context, Map<String, Object> config, String bucket, String prefix, String format,
         BucketStore.Listing listing) throws Exception {
-        RowCollector rows = new RowCollector(String.format("%s/%s", bucket, prefix), Configs.integer(config, "maxRows", null));
+        Integer maxRows = Configs.integer(config, "maxRows", null);
+        long wanted = maxRows == null ? Long.MAX_VALUE : maxRows;
+        RowSink out = context.output();
         if ("list".equals(format)) {
+            out.declare(List.of("key", "size"));
             for (BucketStore.Listed object : listing.objects) {
+                if (out.size() >= wanted) {
+                    break;
+                }
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("key", object.key);
                 row.put("size", object.size);
-                rows.add(row);
+                out.add(row);
             }
-            context.log(String.format("%d object(s) under %s/%s.", rows.size(), bucket, prefix));
-            return StepResult.of(rows.toDataset());
+            context.log(String.format("%d object(s) under %s/%s.", out.size(), bucket, prefix));
+            return StepResult.streamed(out.size());
         }
         long bytes = 0;
         int files = 0;
         for (BucketStore.Listed object : listing.objects) {
-            if (rows.full()) {
+            if (out.size() >= wanted) {
                 break;
             }
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException("Read S3 was stopped.");
             }
-            bytes += object.size;
-            Limits.requireBytes(bytes, String.format("The objects under %s/%s", bucket, prefix));
-            byte[] content = this.buckets.read(context.tenantId(), bucket, object.key, Limits.MAX_FILE_BYTES);
-            RowCollector one = new RowCollector(object.key, null);
-            FileFormats.read(content, FileConfigs.formatOf(format, object.key), FileConfigs.options(config), one);
-            for (Map<String, Object> row : one.toDataset().getRows()) {
-                Map<String, Object> tagged = new LinkedHashMap<>(row);
-                tagged.put("_source_key", object.key);
-                rows.add(tagged);
-                if (rows.full()) {
-                    break;
+            String objectFormat = FileConfigs.formatOf(format, object.key);
+            RowSink tagged = new ReadFileStepTask.SourceKeyed(out, object.key);
+            if (context.inMemory() || !FileFormats.streams(objectFormat)) {
+                bytes += object.size;
+                Limits.requireBytes(bytes, String.format("The objects under %s/%s", bucket, prefix));
+                byte[] content = this.buckets.read(context.tenantId(), bucket, object.key, Limits.MAX_FILE_BYTES);
+                RowCollector one = new RowCollector(object.key, null);
+                FileFormats.read(content, objectFormat, FileConfigs.options(config), one);
+                for (Map<String, Object> row : one.toDataset().getRows()) {
+                    if (out.size() >= wanted) {
+                        break;
+                    }
+                    tagged.add(new LinkedHashMap<>(row));
+                }
+            } else {
+                try (InputStream in = this.buckets.open(context.tenantId(), bucket, object.key, context.maxFileBytes())) {
+                    FileFormats.readStream(in, objectFormat, FileConfigs.options(config), tagged, maxRows, context.maxRows(), object.key);
                 }
             }
             files++;
         }
-        context.log(String.format("%d row(s) from %d object(s) under %s/%s.", rows.size(), files, bucket, prefix));
-        return StepResult.of(rows.toDataset());
+        context.log(String.format("%d row(s) from %d object(s) under %s/%s.", out.size(), files, bucket, prefix));
+        return StepResult.streamed(out.size());
     }
 }

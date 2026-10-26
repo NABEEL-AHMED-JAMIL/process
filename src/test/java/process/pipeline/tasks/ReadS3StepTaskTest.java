@@ -5,6 +5,11 @@ import process.pipeline.Dataset;
 import process.pipeline.backing.Fakes;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Map;
+import org.junit.jupiter.api.io.TempDir;
+import process.pipeline.data.Limits;
+import process.pipeline.data.FileFormatsStreamTest;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +44,26 @@ class ReadS3StepTaskTest {
             row("id", "2", "amount", "20", "_source_key", "in/a.csv"),
             row("id", 3L, "amount", 30L, "_source_key", "in/b.jsonl"));
         assertThat(context.lines).anyMatch(line -> line.contains("3 row(s) from 2 object(s)"));
+    }
+
+    /**
+     * ZT-S3 (showcase job 36): Read S3 streams its objects one after another into the step's output -- a Parquet one a row
+     * group at a time -- so a prefix's rows go past the in-memory bound; each row keeps its _source_key; maxRows stops it.
+     */
+    @Test
+    void objectsStreamPastTheInMemoryBound(@TempDir Path dir) throws Exception {
+        this.buckets.objects.put("lake/big/a.parquet", FileFormatsStreamTest.parquet(dir, Limits.MAX_ROWS + 10_000));
+        this.buckets.objects.put("lake/big/b.csv", "id,ward\n1,W1\n2,W2\n".getBytes(StandardCharsets.UTF_8));
+        StreamTry read = new StreamTry(config("bucket", "lake", "prefix", "big/", "format", "auto"), new Dataset(Collections.emptyList(),
+            Collections.emptyList()), 64L << 20, dir, 1000);
+        assertThat(this.task.stream(read).getRecordsOut()).isEqualTo(Limits.MAX_ROWS + 10_002L);
+        Map<String, Object> last = read.rows.get(read.rows.size() - 1);
+        assertThat(last).containsEntry("_source_key", "big/b.csv").containsEntry("ward", "W2");
+        assertThat(read.rows.get(0)).containsEntry("_source_key", "big/a.parquet");
+
+        StreamTry few = new StreamTry(config("bucket", "lake", "prefix", "big/", "format", "auto", "maxRows", 7), new Dataset(Collections.emptyList(),
+            Collections.emptyList()), 64L << 20, dir, 1000);
+        assertThat(this.task.stream(few).getRecordsOut()).isEqualTo(7L);
     }
 
     @Test

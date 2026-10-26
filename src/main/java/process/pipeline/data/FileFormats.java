@@ -183,14 +183,17 @@ public final class FileFormats {
         }
     }
 
-    /** Whether a format is read as a stream ({@link #readStream}); the others are read whole. */
+    /**
+     * Whether a format is read as a stream ({@link #readStream}); the others (JSON) are read whole. ZT-S3: Parquet streams too,
+     * a row group at a time through DuckDB ({@link ParquetRows#stream}), so a large file is not held to the in-memory bound.
+     */
     public static boolean streams(String format) {
-        return "csv".equals(format) || "jsonl".equals(format);
+        return "csv".equals(format) || "jsonl".equals(format) || "parquet".equals(format);
     }
 
     /**
-     * MIG-344: a CSV or JSON Lines file's rows, read from a stream into a sink as they come -- never the whole file in
-     * memory. The same rows as {@link #read} makes (CSV cells as text, the BOM off the first column, empty lines
+     * MIG-344: a CSV or JSON Lines file's rows (ZT-S3: or a Parquet file's), read from a stream into a sink as they come --
+     * never the whole file in memory. The same rows as {@link #read} makes (CSV cells as text, the BOM off the first column, empty lines
      * skipped). Stops after {@code maxRows} when the step asked for fewer (not a failure); fails past {@code limit} rows
      * or {@value Limits#MAX_COLUMNS} columns, naming {@code what}.
      */
@@ -274,7 +277,20 @@ public final class FileFormats {
             }
             return;
         }
-        throw new IllegalArgumentException("Only csv and jsonl are read as a stream, not " + format + ".");
+        if ("parquet".equals(format)) {
+            if (options.columns != null) {
+                sink.declare(options.columns);
+            }
+            ParquetRows.stream(content, options.columns, row -> {
+                if (sink.size() >= wanted) {
+                    return false;
+                }
+                addBounded(sink, row, limit, what);
+                return true;
+            });
+            return;
+        }
+        throw new IllegalArgumentException("Only csv, jsonl and parquet are read as a stream, not " + format + ".");
     }
 
     private static void addBounded(RowSink sink, Map<String, Object> row, long limit, String what) throws Exception {
