@@ -21,7 +21,9 @@ import java.util.regex.Pattern;
  *
  * <p>A field: a key (lower case letters, digits and '_', starting with a letter, at most 40 -- the answer's name and the
  * column a pipeline reads -- unique in the form and none of the names the submission file uses itself), a label, a type
- * ({@link #TYPES}), required or not, help text, and for a choice its options (1 to 50, distinct). At most 50 fields.
+ * ({@link #TYPES}), required or not, help text (at most 500), a placeholder (one line of plain text, at most 120, kept only
+ * for {@link #PLACEHOLDER_TYPES}; both are display text and never markup), and for a choice its options (1 to 50,
+ * distinct). At most 50 fields.
  *
  * <p>An answer: text at most 500 characters, long text at most 5000, a number (a JSON number or text that is one), a
  * date (yyyy-MM-dd), one of a choice's options, yes/no (true or false), an e-mail address. A required field must be
@@ -73,6 +75,12 @@ public final class FormFields {
     static final int MAX_OPTIONS = 50;
     static final int MAX_LABEL = 120;
     static final int MAX_HELP = 500;
+    static final int MAX_PLACEHOLDER = 120;
+    /** The types whose empty control shows a placeholder: a text box, a number, a date, a list to choose from. */
+    public static final List<String> PLACEHOLDER_TYPES = Collections.unmodifiableList(Arrays.asList(TEXT, LONG_TEXT, NUMBER, DATE, CHOICE,
+        EMAIL, LOOKUP));
+    /** A line break, a tab or any other control character: a placeholder is one line of plain text. */
+    private static final Pattern CONTROL = Pattern.compile("\\p{Cntrl}");
     static final int MAX_TEXT = 500;
     static final int MAX_LONG_TEXT = 5000;
     static final int MAX_EMAIL = 254;
@@ -170,7 +178,10 @@ public final class FormFields {
 
     // ---- the definition ----------------------------------------------------------------------------------------
 
-    /** The fields as they are kept: trimmed, blank help and a non-choice's options dropped. Refused when any is wrong. */
+    /**
+     * The fields as they are kept: trimmed, blank help and placeholder, a non-choice's options and a placeholder where no
+     * control shows one dropped. Refused when any is wrong.
+     */
     public static List<FormField> valid(List<FormField> fields) {
         if (fields == null) {
             return new ArrayList<>();
@@ -212,11 +223,20 @@ public final class FormFields {
             if (help != null && help.length() > MAX_HELP) {
                 throw new Refused(String.format("%s: its help text is longer than %d characters.", name, MAX_HELP));
             }
+            String placeholder = trimmed(field.getPlaceholder());
+            if (placeholder != null && placeholder.length() > MAX_PLACEHOLDER) {
+                throw new Refused(String.format("%s: its placeholder is longer than %d characters.", name, MAX_PLACEHOLDER));
+            }
+            if (placeholder != null && CONTROL.matcher(placeholder).find()) {
+                throw new Refused(name + ": its placeholder is one line of text, with no line breaks or tabs.");
+            }
             List<String> options = null;
             if (CHOICE.equals(type)) {
                 options = options(name, field.getOptions());
             }
             FormField valid = new FormField(key, label, type, field.isRequired(), help, options);
+            // Kept only where an empty control shows it, so a yes/no, table, file or signature saves exactly as before.
+            valid.setPlaceholder(PLACEHOLDER_TYPES.contains(type) ? placeholder : null);
             switch (type) {
                 case TABLE:
                     valid.setColumns(columns(name, field.getColumns()));

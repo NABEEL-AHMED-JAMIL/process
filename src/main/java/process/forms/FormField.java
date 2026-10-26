@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * One field of a form (Wave 5 Forms lite; MIG-277): its key (the answer's name, and the column a pipeline reads), its
- * label and help text, its type ({@link FormFields#TYPES}), whether it must be answered, and what its type needs -- a
+ * label, help text and placeholder, its type ({@link FormFields#TYPES}), whether it must be answered, and what its type needs -- a
  * choice's options, a table's columns and row limit, a file's accepted types, size and count, a lookup's source. Any
  * field may be shown only when an earlier answer says so (showWhen) and required only when one does (requiredWhen).
  * {@link FormFields} decides what a valid one is.
@@ -22,6 +22,8 @@ public class FormField {
     private String type;
     private boolean required;
     private String help;
+    /** Example text shown inside an empty control (text, long text, number, date, e-mail, choice, lookup); display only. */
+    private String placeholder;
     private List<String> options;
     private Rule showWhen;
     private Rule requiredWhen;
@@ -119,6 +121,10 @@ public class FormField {
     public String getHelp() { return this.help; }
 
     public void setHelp(String help) { this.help = help; }
+
+    public String getPlaceholder() { return this.placeholder; }
+
+    public void setPlaceholder(String placeholder) { this.placeholder = placeholder; }
 
     public List<String> getOptions() { return this.options; }
 

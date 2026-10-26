@@ -146,6 +146,30 @@ class FormsPostgresTest {
     }
 
     @Test
+    void aFieldsPlaceholderAndHelpSurviveTheDatabaseAndAnOlderFormHasNone() {
+        long older = woundForm(A, null);
+        TenantContext.set(A, "TENANT_ADMIN", 61L, "admin@clinic.example");
+        List<FormField> fields = new ArrayList<>(FormFieldsTest.woundIntake());
+        fields.get(0).setPlaceholder("e.g. P-00017");
+        fields.get(1).setPlaceholder("Choose a site");
+        ResponseDto saved = this.forms.save(new FormSaveRequest(older, "Wound intake", "Bedside assessment", FormStore.ACTIVE, fields, null));
+        assertThat(saved.getStatus()).as(saved.getMessage()).isEqualTo(SUCCESS);
+
+        TenantContext.set(A, "TENANT_USER", 62L, "nora@clinic.example");
+        @SuppressWarnings("unchecked")
+        List<FormField> read = (List<FormField>) ((Map<String, Object>) this.forms.fetch(older).getData()).get("fields");
+        assertThat(read.get(0).getPlaceholder()).isEqualTo("e.g. P-00017");
+        assertThat(read.get(0).getHelp()).isEqualTo("As on the wristband");
+        assertThat(read.get(1).getPlaceholder()).isEqualTo("Choose a site");
+        assertThat(read.get(2).getPlaceholder()).isNull();
+        // Version 1, saved before, is kept as it was: no placeholder appears in it.
+        assertThat(this.sql.queryForObject("SELECT fields::text FROM form_version WHERE form_id = ? AND version = 1", String.class, older))
+            .doesNotContain("placeholder");
+        assertThat(this.sql.queryForObject("SELECT fields::text FROM form_definition WHERE form_id = ?", String.class, older))
+            .contains("\"placeholder\": \"e.g. P-00017\"");
+    }
+
+    @Test
     void aSubmissionQueuesOneRunWithItsFileOnTheRun() {
         job(9601, A);
         long formId = woundForm(A, 9601L);

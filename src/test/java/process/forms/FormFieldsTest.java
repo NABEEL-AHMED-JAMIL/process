@@ -50,6 +50,50 @@ class FormFieldsTest {
     }
 
     @Test
+    void aPlaceholderIsKeptTrimmedOnlyWhereAnEmptyControlShowsIt() {
+        FormField text = new FormField("patient_id", "Patient ID", "text", true, null, null);
+        text.setPlaceholder("  e.g. P-00017  ");
+        FormField choice = new FormField("site", "Site", "choice", false, null, Arrays.asList("Heel", "Sacrum"));
+        choice.setPlaceholder("Choose a site");
+        FormField date = new FormField("seen_on", "Seen on", "date", false, null, null);
+        date.setPlaceholder("Day of the visit");
+        FormField yesNo = new FormField("infected", "Infected", "yesNo", false, null, null);
+        yesNo.setPlaceholder("Not shown anywhere");
+        FormField blank = new FormField("notes", "Notes", "longText", false, null, null);
+        blank.setPlaceholder("   ");
+        FormField markup = new FormField("email", "E-mail", "email", false, null, null);
+        markup.setPlaceholder("<b>name@example.com</b>");
+
+        List<FormField> kept = FormFields.valid(Arrays.asList(text, choice, date, yesNo, blank, markup));
+
+        assertThat(kept.get(0).getPlaceholder()).isEqualTo("e.g. P-00017");
+        assertThat(kept.get(1).getPlaceholder()).isEqualTo("Choose a site");
+        assertThat(kept.get(2).getPlaceholder()).isEqualTo("Day of the visit");
+        assertThat(kept.get(3).getPlaceholder()).as("a yes/no has no empty box to show it in").isNull();
+        assertThat(kept.get(4).getPlaceholder()).isNull();
+        // Display text, never markup: kept as typed, and the console shows it as text.
+        assertThat(kept.get(5).getPlaceholder()).isEqualTo("<b>name@example.com</b>");
+        // A form saved before placeholders reads exactly as it did.
+        assertThat(FormFields.valid(woundIntake())).allSatisfy(f -> assertThat(f.getPlaceholder()).isNull());
+    }
+
+    @Test
+    void aPlaceholderIsOneLineOfAtMost120CharactersAndHelpAtMost500() {
+        FormField longOne = new FormField("a", "A", "text", false, null, null);
+        longOne.setPlaceholder("x".repeat(121));
+        assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(longOne)))
+            .hasMessageContaining("Field 1 (A)").hasMessageContaining("placeholder is longer than 120");
+        FormField twoLines = new FormField("a", "A", "text", false, null, null);
+        twoLines.setPlaceholder("first\nsecond");
+        assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(twoLines))).hasMessageContaining("one line of text");
+        FormField most = new FormField("a", "A", "text", false, "h".repeat(500), null);
+        most.setPlaceholder("p".repeat(120));
+        assertThat(FormFields.valid(Collections.singletonList(most)).get(0).getPlaceholder()).hasSize(120);
+        assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("a", "A", "text", false, "h".repeat(501), null))))
+            .hasMessageContaining("help text is longer than 500");
+    }
+
+    @Test
     void everyWayADefinitionIsWrongIsRefusedInASentenceNamingTheField() {
         assertThatThrownBy(() -> FormFields.valid(Collections.singletonList(new FormField("Patient", "P", "text", false, null, null))))
             .hasMessageContaining("Field 1 (P)").hasMessageContaining("lower-case");
