@@ -13,6 +13,7 @@ import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.RowSource;
+import process.pipeline.items.RunItems;
 import process.pipeline.data.RowCollector;
 import process.pipeline.review.RunReaders;
 import process.pipeline.review.RunReviews;
@@ -131,6 +132,18 @@ public class StepTimelineService {
     @Autowired(required = false)
     public void useReaders(RunReaders readers) {
         this.readers = readers;
+    }
+
+    /**
+     * ZT-M21: the reader's masks for a run's data (Run Items' -- the Data Catalog's for the person, a sensitive pipeline's
+     * own columns read from its rows): a step's output viewed or downloaded is masked as its items are. Absent in hand-built
+     * tests.
+     */
+    private RunItems items;
+
+    @Autowired(required = false)
+    public void useItems(RunItems items) {
+        this.items = items;
     }
 
     /** MIG-345: retrying a failed run (from its failed step, or from the start), and the attempts someone asked for. */
@@ -301,7 +314,8 @@ public class StepTimelineService {
             }
             // MIG-344: a dataset streams from the store to the download, a batch at a time -- a streamed step's output may be
             // far bigger than memory. Opened here, so a dataset that is gone still answers 410 before anything is sent.
-            RowSource rows = this.datasets.open(dataset.storageKey, RowSource.DEFAULT_BATCH);
+            RowSource opened = this.datasets.open(dataset.storageKey, RowSource.DEFAULT_BATCH);
+            RowSource rows = this.items == null ? opened : this.items.masksForRun(dataset.jobQueueId).rows(opened);
             String as = wanted == null ? "csv" : wanted;
             String name = String.format("run-%d-attempt-%d-%s-%s.%s", dataset.jobQueueId, dataset.attempt, dataset.stepKey, dataset.name, as);
             return Download.file(name, as, out -> {

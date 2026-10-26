@@ -165,6 +165,31 @@ class StepPreviewTest {
         assertThat((List<String>) data.get("masked")).contains("patient_name");
     }
 
+    /**
+     * ZT-M21: the preview masks a person's details by the column's name and the value's shape, never by counting values, so one
+     * patient's row (or two) is masked as thirty are. Characterisation: it held before the fix; it must keep holding.
+     */
+    @Test
+    void oneOrTwoPatientsRowsAreMaskedAsManyAre() {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("mappings", Collections.singletonList(row("target", "STATUS", "op", "upper", "source", "status")));
+        config.put("keepUnmapped", true);
+        for (int n = 1; n <= 2; n++) {
+            List<Map<String, Object>> given = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                given.add(row("patient_name", i == 0 ? "Pat Synthetic" : "Robin Testcase", "email", "pat" + i + "@example.test", "ssn", "123-45-678" + i,
+                    "status", "active"));
+            }
+            ResponseDto answer = this.preview.preview(request("transform", config, given));
+            assertThat(answer.getStatus()).as(answer.getMessage()).isEqualTo(ProcessUtil.SUCCESS);
+            Map<String, Object> data = data(answer);
+            String shown = String.valueOf(data.get("rows"));
+            assertThat(shown).as(n + " row(s)").doesNotContain("Pat Synthetic").doesNotContain("Robin Testcase").doesNotContain("@example.test")
+                .doesNotContain("123-45-678").contains("ACTIVE");
+            assertThat((List<String>) data.get("masked")).contains("patient_name", "email", "ssn");
+        }
+    }
+
     @Test
     void aJoinReadsTheOtherSideFromItsInputs() {
         Map<String, Object> config = new LinkedHashMap<>();

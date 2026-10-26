@@ -7,16 +7,20 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.barco.platform.sensitive.SensitiveValues;
 import org.barco.platform.sensitive.SensitiveValues.Kind;
+import process.pipeline.data.RowSource;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -25,7 +29,9 @@ import java.util.Set;
  * (GET analyticsCatalog.json/masks, their own token): every column one of them tags is masked by name -- in the rows, and
  * inside a JSON answer's fields of that name -- and every pattern kind they hold is masked wherever it shows. A pipeline whose
  * settings say its data is sensitive has its rows' columns read too (SensitiveValues.columnKind: a person's name, an email,
- * a phone number... by the column's name and values), so masking holds from its first run, before any file is scanned.
+ * a phone number... by the column's name and values), so masking holds from its first run, before any file is scanned --
+ * and, ZT-M21, from its first ROW: a sensitive pipeline's columns are read by {@link #sensitiveColumnKind}, where a small
+ * sample (one item's fields, one patient's result, a short batch) never weakens masking.
  * When the catalog cannot be asked, every pattern kind is masked everywhere (fail closed). A workspace administrator (and a
  * managed session, which acts as one) has none.
  */
@@ -34,14 +40,6 @@ public final class ItemMasks {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     static final ItemMasks NONE = new ItemMasks(new LinkedHashMap<>(), EnumSet.noneOf(Kind.class), false, false);
-
-    /**
-     * MIG-424: a reader who is no one person (a workflow's history, the API's run result) often reads one row -- one patient
-     * -- and a sample under {@link SensitiveValues#MIN_VALUES} values says nothing by value alone, so a sensitive pipeline's
-     * one patient_name would show. For these masks a small sample is read as a column of that many such values: masking
-     * errs towards hiding.
-     */
-    private boolean smallSamples;
 
     private final Map<String, Kind> columns;
     private final Set<Kind> kinds;
@@ -81,9 +79,7 @@ public final class ItemMasks {
      * for a member with no access to any of them; fail closed when it could not be read (null).
      */
     public static ItemMasks forWorkspace(JsonNode sensitiveAssets, boolean sensitivePipeline) {
-        ItemMasks masks = of(sensitiveAssets, sensitiveAssets != null, sensitivePipeline);
-        masks.smallSamples = true;
-        return masks;
+        return of(sensitiveAssets, sensitiveAssets != null, sensitivePipeline);
     }
 
     /** No masks: a workspace administrator's read (or a managed session's) of a pipeline that is not marked sensitive. */
@@ -109,12 +105,25 @@ public final class ItemMasks {
      * read first for the columns that hold a person's details.
      */
     public List<Map<String, Object>> rows(List<Map<String, Object>> rows, Collection<String> columnNames, Set<String> masked) {
+        return this.rows(rows, columnNames, masked, new LinkedHashMap<>());
+    }
+
+    /**
+     * The same, for one batch of many (a dataset streamed to a download): a column found to hold a person's details in one
+     * batch stays masked in every later one ({@code found} carries them), so a short last batch never shows what the
+     * first hid.
+     */
+    List<Map<String, Object>> rows(List<Map<String, Object>> rows, Collection<String> columnNames, Set<String> masked, Map<String, Kind> found) {
         if (!this.any() || rows.isEmpty()) {
             return rows;
         }
         Map<String, Kind> byName = new LinkedHashMap<>(this.columns);
+        found.forEach(byName::putIfAbsent);
         if (this.detect) {
             for (String column : columnNames) {
+                if (byName.containsKey(column.toLowerCase(Locale.ROOT))) {
+                    continue;
+                }
                 List<String> sample = new ArrayList<>();
                 for (Map<String, Object> row : rows) {
                     Object v = row.get(column);
@@ -122,14 +131,10 @@ public final class ItemMasks {
                         sample.add(String.valueOf(v));
                     }
                 }
-                if (this.smallSamples && !sample.isEmpty() && sample.size() < SensitiveValues.MIN_VALUES) {
-                    List<String> padded = new ArrayList<>(sample);
-                    while (padded.size() < SensitiveValues.MIN_VALUES) {
-                        padded.add(sample.get(padded.size() % sample.size()));
-                    }
-                    sample = padded;
-                }
-                SensitiveValues.columnKind(column, sample).ifPresent(kind -> byName.putIfAbsent(column.toLowerCase(Locale.ROOT), kind));
+                sensitiveColumnKind(column, sample).ifPresent(kind -> {
+                    byName.put(column.toLowerCase(Locale.ROOT), kind);
+                    found.put(column.toLowerCase(Locale.ROOT), kind);
+                });
             }
         }
         List<Map<String, Object>> out = new ArrayList<>(rows.size());
@@ -226,6 +231,79 @@ public final class ItemMasks {
             }
         }
         return node;
+    }
+
+    /**
+     * ZT-M21: what a column of SENSITIVE data holds -- a pipeline marked sensitive, a dataset the catalog holds as
+     * Confidential or Restricted. {@link SensitiveValues#columnKind} decides a column from at least
+     * {@link SensitiveValues#MIN_VALUES} values, so one patient's row (a workflow's result, an item's fields, a one-row
+     * output) said nothing and showed. Here a small sample never weakens masking: under that many values, the column is a
+     * kind when ANY of its values is one (each read as a column of that value; a bare "name" as a person's name column,
+     * since two values cannot show the distinctness a list of people has). At that many values or more the platform's rule
+     * holds unchanged. Data that is not sensitive is never read with this rule.
+     */
+    public static Optional<Kind> sensitiveColumnKind(String column, Collection<String> sample) {
+        Optional<Kind> kind = SensitiveValues.columnKind(column, sample);
+        if (kind.isPresent()) {
+            return kind;
+        }
+        List<String> values = new ArrayList<>();
+        for (String s : sample == null ? Collections.<String>emptyList() : sample) {
+            if (s != null && !s.trim().isEmpty()) {
+                values.add(s.trim());
+            }
+        }
+        if (values.isEmpty() || values.size() >= SensitiveValues.MIN_VALUES) {
+            return Optional.empty();
+        }
+        String name = column == null ? "" : column.trim();
+        String asked = "name".equalsIgnoreCase(name) ? "full_name" : name;
+        for (String v : values) {
+            kind = SensitiveValues.columnKind(asked, Collections.nCopies(SensitiveValues.MIN_VALUES, v));
+            if (kind.isPresent()) {
+                return kind;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * ZT-M21: a dataset as this person may see it, batch by batch (a run's output downloaded or viewed): each batch masked as
+     * {@link #rows} masks, a column found in one batch masked in the rest. No masks: the source itself.
+     */
+    public RowSource rows(RowSource source) {
+        if (!this.any()) {
+            return source;
+        }
+        Map<String, Kind> found = new LinkedHashMap<>();
+        ItemMasks masks = this;
+        return new RowSource() {
+            @Override
+            public List<String> columns() {
+                return source.columns();
+            }
+
+            @Override
+            public long size() {
+                return source.size();
+            }
+
+            @Override
+            public List<Map<String, Object>> next() throws Exception {
+                List<Map<String, Object>> batch = source.next();
+                if (batch == null) {
+                    return null;
+                }
+                List<String> names = source.columns() == null || source.columns().isEmpty()
+                    ? new ArrayList<>(batch.get(0).keySet()) : source.columns();
+                return masks.rows(batch, names, new HashSet<>(), found);
+            }
+
+            @Override
+            public void close() throws Exception {
+                source.close();
+            }
+        };
     }
 
     /** The column names this person has masked by name (for the console's "masked" mark on a field it lists). */

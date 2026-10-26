@@ -288,6 +288,14 @@ public class RunItems {
         return ItemMasks.of(data, data != null, sensitive);
     }
 
+    /**
+     * ZT-M21: the caller's masks for a run's data read elsewhere -- a run output viewed or downloaded (sourceJob.json/runDataset)
+     * -- the same as its items get, from the definition the run ran.
+     */
+    public ItemMasks masksForRun(long jobQueueId) {
+        return this.masksFor(null, this.definitionOf(jobQueueId));
+    }
+
     /** A run's steps as items see them, from the definition it ran. */
     private Steps stepsOf(long jobQueueId) {
         PipelineDefinition definition = null;

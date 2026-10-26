@@ -196,6 +196,26 @@ class RunResultsTest {
             .values).containsEntry("patient_name", "Pat Synthetic");
     }
 
+    /**
+     * ZT-M21: two patients read as rows (a selection of rows, not one value): both masked -- by name, email and a national id --
+     * from the shared rule (ItemMasks.sensitiveColumnKind). MIG-424's padding of the sample read ["not given", an email] as
+     * [not given, email, not given] -- one in three -- and showed the email; not marked sensitive, everything shown.
+     */
+    @Test
+    void aSensitivePipelinesTwoPatientsAreMaskedAsRows() throws Exception {
+        output(52L, new Dataset(Arrays.asList("patient_name", "email", "ssn", "risk"), Arrays.asList(
+            row("patient_name", "Pat Synthetic", "email", "not given", "ssn", "123456789", "risk", "High"),
+            row("patient_name", "Robin Testcase", "email", "robin.testcase@example.test", "ssn", "234-56-7890", "risk", "Low"))));
+        wire(step(52L, 0, "decide", "Completed", 2));
+        RunResults.Result r = this.results.read(RUN, selection("{\"take\": \"all\"}"), ItemMasks.forWorkspace(JSON.readTree("[]"), true));
+        String shown = String.valueOf(r.rows);
+        assertThat(shown).doesNotContain("Pat Synthetic").doesNotContain("Robin Testcase").doesNotContain("robin.testcase@example.test")
+            .doesNotContain("123456789").doesNotContain("234-56-7890").contains("High").contains("Low");
+        assertThat(r.masked).contains("patient_name", "email", "ssn").doesNotContain("risk");
+        RunResults.Result open = this.results.read(RUN, selection("{\"take\": \"all\"}"), ItemMasks.forWorkspace(JSON.readTree("[]"), false));
+        assertThat(String.valueOf(open.rows)).contains("Pat Synthetic").contains("123456789");
+    }
+
     @Test
     void aSelectionThatDoesNotStandSaysWhereInWords() throws Exception {
         List<String> problems = new ArrayList<>();
