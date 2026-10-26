@@ -138,6 +138,7 @@ class CoreCrossTenantProbeJobsPostgresTest {
                     () -> fx.sourceJobs.fetchSourceJobDetailWithSourceJobId(theirs))).contains(REFUSED);
                 assertThat(fx.probe("GET sourceJob.json/fetchSourceJobQueueListWithJobId", caller,
                     () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs, 5, null))).contains(REFUSED);
+                assertThat(fx.probe("GET sourceJob.json/outputFields", caller, () -> fx.sourceJobs.outputFields(theirs))).contains(REFUSED);
                 assertThat(fx.probe("PUT sourceJob.json/updateSourceJob", caller,
                     () -> fx.sourceJobs.updateSourceJob(job(theirs, "Renamed By Acme", A_TASK)))).contains(REFUSED);
                 assertThat(fx.probe("PUT sourceJob.json/toggleSourceJobStatus", caller,

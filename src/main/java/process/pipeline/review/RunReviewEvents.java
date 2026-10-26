@@ -28,7 +28,8 @@ import java.util.UUID;
  *       attempt, finishedAt, title, link, reviewers {kind, value}}: the run's facts for the task (never a bucket or a
  *       key) and whose inbox it goes to (the pipeline's settings.review.reviewers, else the administrators);</li>
  *   <li>{@value #DECIDED}: a party decided the review, however -- {jobQueueId, reviewStatus}: a task still open for it is
- *       no longer needed.</li>
+ *       no longer needed;</li>
+ *   <li>{@value #WORKFLOW_RUN_ENDED} (MIG-424): a run a workflow's run_pipeline step started ended -- its waiting step goes on.</li>
  * </ul>
  *
  * Written by CustomerEventRelay from the api_event_out journal, in the transaction that stamps the journal row: once per
@@ -40,6 +41,12 @@ public class RunReviewEvents {
     public static final String TOPIC = "platform.process.run-review.v1";
     public static final String REQUESTED = "run-review.requested";
     public static final String DECIDED = "run-review.decided";
+    /**
+     * MIG-424: a run a workflow request's run_pipeline step started has ended (Completed or Failed) -- {jobQueueId, jobId,
+     * workflowInstanceId, stepKey, status}: the step that waits for it goes on now, not at its next look. A consumer that does
+     * not know the type ignores it.
+     */
+    public static final String WORKFLOW_RUN_ENDED = "workflow-run.ended";
     static final String PRODUCER = "process";
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -80,6 +87,17 @@ public class RunReviewEvents {
         payload.put("jobQueueId", jobQueueId);
         payload.put("reviewStatus", reviewStatus);
         this.write(DECIDED, tenantId, jobQueueId, payload, occurredAt);
+    }
+
+    /** MIG-424: a workflow's run ended: the waiting run_pipeline step goes on. */
+    public void workflowRunEnded(long tenantId, JobQueue run, String status, Instant occurredAt) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("jobQueueId", run.getJobQueueId());
+        payload.put("jobId", run.getJobId());
+        payload.put("workflowInstanceId", run.getWorkflowInstanceId());
+        payload.put("stepKey", run.getWorkflowStepKey());
+        payload.put("status", status);
+        this.write(WORKFLOW_RUN_ENDED, tenantId, run.getJobQueueId(), payload, occurredAt);
     }
 
     private void write(String type, long tenantId, long jobQueueId, Map<String, Object> payload, Instant occurredAt) {

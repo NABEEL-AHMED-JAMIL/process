@@ -206,7 +206,7 @@ class RunFacetsPostgresTest {
             entry("Beta labs", 3L));
         assertThat(counts(all, "triggers", "key")).containsExactly(entry("schedule", 1L),
             entry("manual", 1L), entry("file", 2L),
-            entry("document", 1L), entry("form", 0L), entry("backfill", 0L), entry("workflow", 0L), entry("api", 1L),
+            entry("document", 1L), entry("form", 0L), entry("backfill", 0L), entry("workflow", 0L), entry("called", 0L), entry("api", 1L),
             entry("retry", 1L));
 
         MessageQSearchDto failed = week();

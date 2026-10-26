@@ -1,16 +1,32 @@
 package process.customer;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
+import process.forms.FormStore;
+import process.model.pojo.JobQueue;
+import process.model.pojo.SourceJob;
+import process.outbox.OutboxWriter;
+import process.pipeline.StepStore;
+import process.pipeline.review.RunReviewEvents;
+import process.pipeline.review.RunReviews;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /** MIG-333: which run statuses are news, and the run as a journal row saw it. */
 class CustomerEventRelayTest {
@@ -105,5 +121,51 @@ class CustomerEventRelayTest {
         pending.startedAt = Instant.parse("2026-10-06T14:00:00Z");
         pending.attempt = 1;
         return pending;
+    }
+
+    /** MIG-424: a workflow's run that ends tells the waiting run_pipeline step at once; any other run does not. */
+    @Test
+    void aWorkflowsRunThatEndsAnnouncesItForItsWaitingStep() {
+        CustomerRuns runs = mock(CustomerRuns.class);
+        RunReviews reviews = mock(RunReviews.class);
+        RunReviewEvents reviewEvents = mock(RunReviewEvents.class);
+        CustomerEventRelay relay = new CustomerEventRelay(mock(JdbcTemplate.class), mock(TransactionTemplate.class), mock(OutboxWriter.class),
+            runs, reviews, mock(StepStore.class), mock(FormStore.class));
+        relay.setReviewEvents(reviewEvents);
+        JobQueue workflowRun = new JobQueue();
+        workflowRun.setJobQueueId(7L);
+        workflowRun.setWorkflowInstanceId(1201L);
+        workflowRun.setWorkflowStepKey("registration");
+        SourceJob job = new SourceJob();
+        when(runs.found(2946L, 7L)).thenReturn(Optional.of(new CustomerRuns.Found(row("Completed"), workflowRun, job)));
+        when(reviews.summary(workflowRun, job)).thenReturn(new LinkedHashMap<>());
+        CustomerEventRelay.Pending completed = pending("Completed");
+        completed.tenantId = 2946L;
+        completed.jobQueueId = 7L;
+
+        List<CustomerEventRelay.Event> events = relay.eventsOf(completed);
+        List<String> types = new ArrayList<>();
+        events.forEach(e -> types.add(e.type));
+        assertThat(types).containsExactly("run.completed", RunReviewEvents.WORKFLOW_RUN_ENDED);
+        events.get(1).internal.run();
+        verify(reviewEvents).workflowRunEnded(eq(2946L), eq(workflowRun), eq("Completed"), any());
+
+        CustomerEventRelay.Pending started = pending("Running");
+        started.tenantId = 2946L;
+        started.jobQueueId = 7L;
+        List<String> runningTypes = new ArrayList<>();
+        relay.eventsOf(started).forEach(e -> runningTypes.add(e.type));
+        assertThat(runningTypes).containsExactly("run.started");
+
+        JobQueue ownRun = new JobQueue();
+        ownRun.setJobQueueId(8L);
+        when(runs.found(2946L, 8L)).thenReturn(Optional.of(new CustomerRuns.Found(row("Failed"), ownRun, job)));
+        when(reviews.summary(ownRun, job)).thenReturn(new LinkedHashMap<>());
+        CustomerEventRelay.Pending failed = pending("Failed");
+        failed.tenantId = 2946L;
+        failed.jobQueueId = 8L;
+        List<String> ownTypes = new ArrayList<>();
+        relay.eventsOf(failed).forEach(e -> ownTypes.add(e.type));
+        assertThat(ownTypes).containsExactly("run.failed");
     }
 }

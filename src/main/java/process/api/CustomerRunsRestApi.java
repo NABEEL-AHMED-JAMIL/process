@@ -62,6 +62,12 @@ public class CustomerRunsRestApi {
         return CustomerResponses.of(this.runs.steps(runId));
     }
 
+    /** MIG-424: a completed run's answer -- its final output's rows, masked; 409 run-not-completed before it completes. */
+    @GetMapping("/{runId}/result")
+    public ResponseEntity<Map<String, Object>> result(@PathVariable("runId") String runId) {
+        return CustomerResponses.of(this.runs.result(runId));
+    }
+
     @GetMapping("/{runId}/outputs")
     public ResponseEntity<Map<String, Object>> outputs(@PathVariable("runId") String runId) {
         return CustomerResponses.of(this.runs.outputs(runId));

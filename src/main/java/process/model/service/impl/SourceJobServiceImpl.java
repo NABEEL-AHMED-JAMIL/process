@@ -740,11 +740,18 @@ public class SourceJobServiceImpl implements SourceJobService {
     @Override
     @Transactional
     public ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason) throws Exception {
+        return this.runSourceJobFor(jobId, workflowInstanceId, workflowStepKey, reason, null);
+    }
+
+    @Override
+    @Transactional
+    public ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason,
+        Map<String, ?> parameters) throws Exception {
         if (ProcessUtil.isNull(jobId)) {
             return new ResponseDto(ERROR, "SourceJob jobId missing.");
         }
         this.tenantFilterHelper.enableIfNeeded(this.entityManager);
-        Object queued = this.queueRun(jobId, null, null, workflowInstanceId, workflowStepKey);
+        Object queued = this.queueRun(jobId, null, null, workflowInstanceId, workflowStepKey, parameters);
         if (queued instanceof ResponseDto) {
             return (ResponseDto) queued;
         }
@@ -765,6 +772,12 @@ public class SourceJobServiceImpl implements SourceJobService {
 
     /** As above; a workflow request's run of a step pipeline (V220) goes beside the job's own runs, not refused by them. */
     private Object queueRun(Long jobId, String modelProfiles, String runParams, Long workflowInstanceId, String workflowStepKey) {
+        return this.queueRun(jobId, modelProfiles, runParams, workflowInstanceId, workflowStepKey, null);
+    }
+
+    /** MIG-424: as above, with a workflow step's parameter values by name, checked here against the job's pipeline. */
+    private Object queueRun(Long jobId, String modelProfiles, String runParams, Long workflowInstanceId, String workflowStepKey,
+        Map<String, ?> given) {
         Optional<SourceJob> sourceJob = this.sourceJobRepository.findByJobIdAndJobStatus(jobId, Status.Active);
         boolean beside = workflowInstanceId != null && sourceJob.isPresent() && this.pipelineParameters != null
             && this.pipelineParameters.runsSteps(sourceJob.get());
@@ -786,6 +799,16 @@ public class SourceJobServiceImpl implements SourceJobService {
         }
         // MIG-347: a run given no values takes its pipeline's defaults; one whose required parameter has none cannot start --
         // said here rather than as a failed run ("Run with..." gives the value).
+        if (given != null && !given.isEmpty()) {
+            if (this.pipelineParameters == null) {
+                return new ResponseDto(ERROR, "This Core cannot check run parameters.");
+            }
+            PipelineParameters.Checked checked = this.pipelineParameters.check(sourceJob.get(), given);
+            if (checked.refusal != null) {
+                return new ResponseDto(ERROR, checked.refusal);
+            }
+            runParams = checked.runParams;
+        }
         if (runParams == null && this.pipelineParameters != null) {
             PipelineParameters.Checked defaults = this.pipelineParameters.check(sourceJob.get(), null);
             if (defaults.refusal != null) {
@@ -793,7 +816,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             }
         }
         if (beside) {
-            return this.producerBulkEngine.addWorkflowJobInQueue(sourceJob.get(), workflowInstanceId, workflowStepKey);
+            return runParams == null ? this.producerBulkEngine.addWorkflowJobInQueue(sourceJob.get(), workflowInstanceId, workflowStepKey)
+                : this.producerBulkEngine.addWorkflowJobInQueue(sourceJob.get(), workflowInstanceId, workflowStepKey, runParams);
         }
         return runParams == null ? this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles)
             : this.producerBulkEngine.addManualJobInQueue(sourceJob.get(), modelProfiles, runParams);

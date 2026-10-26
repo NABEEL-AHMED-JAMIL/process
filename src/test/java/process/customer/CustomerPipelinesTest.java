@@ -21,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -214,5 +215,102 @@ class CustomerPipelinesTest {
         step.setKey(task);
         step.setTask(task);
         return step;
+    }
+
+    private static PipelineCatalogue.Entry withParameters(long jobId) {
+        PipelineDefinition definition = new PipelineDefinition();
+        PipelineDefinition.Step step = new PipelineDefinition.Step();
+        step.setKey("read");
+        step.setTask("sample");
+        definition.setSteps(Collections.singletonList(step));
+        PipelineDefinition.Parameter mrn = new PipelineDefinition.Parameter();
+        mrn.setName("mrn");
+        mrn.setType("text");
+        mrn.setRequired(true);
+        PipelineDefinition.Parameter days = new PipelineDefinition.Parameter();
+        days.setName("days");
+        days.setType("number");
+        days.setDefaultValue("30");
+        definition.setParameters(Arrays.asList(mrn, days));
+        return new PipelineCatalogue.Entry(jobId, TENANT, "Registration", "Active", "Completed", "REGISTRATION", definition);
+    }
+
+    /** MIG-424: a run's parameters are checked as Run with... checks them, each problem at parameters.<name>; nothing starts. */
+    @Test
+    void parametersThatDoNotStandAre422AtTheirNamesAndNothingStarts() {
+        when(this.catalogue.find(TENANT, "43")).thenReturn(Optional.of(withParameters(43L)));
+        CustomerAnswer missing = this.pipelines.startRun("43", json("{\"parameters\":{\"days\":\"lots\",\"ward\":\"7\"}}"), "reg-0001");
+        assertThat(missing.status).isEqualTo(422);
+        assertThat(missing.body.toString()).contains("path=parameters.ward").contains("path=parameters.mrn").contains("path=parameters.days");
+        CustomerAnswer notObject = this.pipelines.startRun("43", json("{\"parameters\":[1]}"), "reg-0002");
+        assertThat(notObject.status).isEqualTo(422);
+        verify(this.intake, never()).start(any(), any());
+    }
+
+    @Test
+    void goodParametersGoWithTheRun() {
+        when(this.catalogue.find(TENANT, "43")).thenReturn(Optional.of(withParameters(43L)));
+        this.started();
+        CustomerAnswer answer = this.pipelines.startRun("43", json("{\"parameters\":{\"mrn\":\"MRN-1\"}}"), "reg-0003");
+        assertThat(answer.status).isEqualTo(202);
+        verify(this.intake).start(any(), argThat(start -> start.runParams != null
+            && start.runParams.contains("\"mrn\":\"MRN-1\"")));
+    }
+
+    /** MIG-424: run-and-wait -- the run's end in time is 200 with its result; after it, the 202 and its Location as before. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void runAndWaitAnswersTheResultWhenTheRunEndsInTime() {
+        CustomerRuns runs = mock(CustomerRuns.class);
+        this.pipelines.useRuns(runs);
+        CustomerPipelines.waitPollMillis = 5;
+        when(this.catalogue.find(TENANT, "42")).thenReturn(Optional.of(pipeline(42L, null)));
+        this.started();
+        Map<String, Object> running = new LinkedHashMap<>();
+        running.put("id", "7001");
+        running.put("status", "running");
+        Map<String, Object> done = new LinkedHashMap<>();
+        done.put("id", "7001");
+        done.put("status", "completed");
+        done.put("result", Collections.singletonMap("rows", Collections.singletonList(Collections.singletonMap("risk", "High"))));
+        when(runs.runWithResult("7001")).thenReturn(Optional.of(running), Optional.of(running), Optional.of(done));
+
+        CustomerAnswer answer = this.pipelines.startRun("42", json("{\"record\":{\"a\":1}}"), "wait-0001", "5s");
+
+        assertThat(answer.status).isEqualTo(200);
+        assertThat(answer.location).isEqualTo("/v1/runs/7001");
+        assertThat(answer.body).containsEntry("status", "completed").containsKey("result");
+    }
+
+    @Test
+    void runAndWaitPastItsWaitIs202AsBefore() {
+        CustomerRuns runs = mock(CustomerRuns.class);
+        this.pipelines.useRuns(runs);
+        CustomerPipelines.waitPollMillis = 5;
+        when(this.catalogue.find(TENANT, "42")).thenReturn(Optional.of(pipeline(42L, null)));
+        this.started();
+        Map<String, Object> running = new LinkedHashMap<>();
+        running.put("id", "7001");
+        running.put("status", "running");
+        when(runs.runWithResult("7001")).thenReturn(Optional.of(running));
+
+        long began = System.nanoTime();
+        CustomerAnswer answer = this.pipelines.startRun("42", json("{\"record\":{\"a\":1}}"), "wait-0002", "1");
+
+        assertThat(answer.status).isEqualTo(202);
+        assertThat(answer.location).isEqualTo("/v1/runs/7001");
+        assertThat((System.nanoTime() - began) / 1_000_000L).isBetween(900L, 5000L);
+    }
+
+    @Test
+    void aWaitOutsideOneToSixtySecondsIs422AndStartsNothing() {
+        for (String wait : new String[] {"0", "61", "61s", "1m", "soon", "-5"}) {
+            CustomerAnswer answer = this.pipelines.startRun("42", json("{}"), "wait-0003", wait);
+            assertThat(answer.status).as(wait).isEqualTo(422);
+            assertThat(answer.body.toString()).contains("path=wait");
+        }
+        assertThat(CustomerPipelines.waitSeconds("60s")).isEqualTo(60);
+        assertThat(CustomerPipelines.waitSeconds(" 30 ")).isEqualTo(30);
+        verify(this.intake, never()).start(any(), any());
     }
 }

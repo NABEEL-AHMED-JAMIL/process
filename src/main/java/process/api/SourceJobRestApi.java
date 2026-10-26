@@ -1,6 +1,11 @@
 package process.api;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
+import process.pipeline.PipelineOutputFields;
+import process.security.TenantContext;
 import org.barco.platform.security.AuditedRead;
 import org.barco.platform.security.BuilderAction;
 import org.barco.platform.security.WorkspaceData;
@@ -60,6 +65,14 @@ public class SourceJobRestApi {
         this.sourceJobService = sourceJobService;
         this.sourceJobBulkService = sourceJobBulkService;
         this.jobAssistantService = jobAssistantService;
+    }
+
+    /** MIG-424: a pipeline's parameters and output fields; absent in hand-built tests. */
+    private PipelineOutputFields outputFields;
+
+    @Autowired(required = false)
+    public void useOutputFields(PipelineOutputFields outputFields) {
+        this.outputFields = outputFields;
     }
 
     @BuilderAction
@@ -182,6 +195,21 @@ public class SourceJobRestApi {
             logger.error("An error occurred while fetchAllLinkJobsWithSourceTask.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * MIG-424: what a caller of this pipeline (schedule) needs -- its declared parameters, its steps and the columns their
+     * output had in its latest completed run, and its final output's columns: the workflow designer's run_pipeline step and a
+     * pipeline's Run pipeline step build their parameter mapping and result fields from it. Column names only, never a row.
+     * Another workspace's job is "not found".
+     */
+    @RequestMapping(value = "/outputFields", method = RequestMethod.GET)
+    public ResponseEntity<?> outputFields(@RequestParam(value = "jobId") Long jobId) {
+        Long tenantId = TenantContext.getTenantId();
+        Optional<Map<String, Object>> found = tenantId == null || jobId == null || this.outputFields == null ? Optional.empty()
+            : this.outputFields.of(tenantId, jobId);
+        return found.isPresent() ? new ResponseEntity<>(new ResponseDto(ProcessUtil.SUCCESS, "Pipeline fields.", found.get()), HttpStatus.OK)
+            : new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR, "SourceJob not found with jobId."), HttpStatus.NOT_FOUND);
     }
 
     @RequestMapping(value = "/fetchSourceJobQueueListWithJobId", method = RequestMethod.GET)

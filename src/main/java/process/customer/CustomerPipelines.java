@@ -11,6 +11,7 @@ import org.barco.platform.api.Problem;
 import org.barco.platform.security.ApiScopes;
 import org.springframework.stereotype.Service;
 import process.pipeline.PipelineDefinition;
+import process.pipeline.PipelineParameters;
 import process.security.TenantContext;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -121,6 +123,72 @@ public class CustomerPipelines {
         }
     }
 
+    /** MIG-424: run-and-wait's runs (their state and result) and its clock; absent in hand-built tests (no wait). */
+    private CustomerRuns runs;
+    static volatile long waitPollMillis = 500;
+    public static final int MAX_WAIT_SECONDS = 60;
+
+    @Autowired(required = false)
+    public void useRuns(CustomerRuns runs) {
+        this.runs = runs;
+    }
+
+    /**
+     * MIG-424: POST /v1/pipelines/{id}/runs?wait=30s -- as {@link #startRun(String, byte[], String)}, then, when the run was
+     * started (202), its end waited for up to {@code wait} (1 to {@value #MAX_WAIT_SECONDS} seconds: "30", "30s"): ended in
+     * time, 200 with the Run and its result (a completed run's rows, masked); else the 202 and its Location, as without wait.
+     * A replayed start waits again for the same run. The wait holds no transaction: the run is read afresh each half second.
+     */
+    public CustomerAnswer startRun(String pipelineId, byte[] body, String idempotencyKey, String wait) {
+        String instance = "/v1/pipelines/" + pipelineId + "/runs";
+        Integer seconds = null;
+        if (wait != null && !wait.trim().isEmpty()) {
+            seconds = waitSeconds(wait);
+            if (seconds == null) {
+                return CustomerAnswer.problem(Problem.validation("wait is how long to wait for the run to end.", Collections.singletonList(
+                    new Problem.FieldError("wait", "a number of seconds from 1 to " + MAX_WAIT_SECONDS + " (wait=30s)"))), instance);
+            }
+        }
+        CustomerAnswer started = this.startRun(pipelineId, body, idempotencyKey);
+        if (seconds == null || started.status != 202 || this.runs == null || started.body == null || started.body.get("id") == null) {
+            return started;
+        }
+        String runId = String.valueOf(started.body.get("id"));
+        long deadline = System.nanoTime() + seconds * 1_000_000_000L;
+        while (true) {
+            Optional<Map<String, Object>> now = this.runs.runWithResult(runId);
+            if (!now.isPresent()) {
+                return started;
+            }
+            Object status = now.get().get("status");
+            if ("completed".equals(status) || "failed".equals(status) || "skipped".equals(status) || "interrupted".equals(status)) {
+                return new CustomerAnswer(200, now.get(), started.location, started.replayed);
+            }
+            if (System.nanoTime() >= deadline) {
+                return started;
+            }
+            try {
+                Thread.sleep(Math.min(waitPollMillis, Math.max(1, (deadline - System.nanoTime()) / 1_000_000L)));
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+                return started;
+            }
+        }
+    }
+
+    /** "30", "30s": seconds from 1 to {@value #MAX_WAIT_SECONDS}; null for anything else. */
+    static Integer waitSeconds(String wait) {
+        String text = wait.trim().toLowerCase(Locale.ROOT);
+        if (text.endsWith("s")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        if (!text.matches("\\d{1,3}")) {
+            return null;
+        }
+        int seconds = Integer.parseInt(text);
+        return seconds >= 1 && seconds <= MAX_WAIT_SECONDS ? seconds : null;
+    }
+
     /** POST /v1/pipelines/{id}/runs with the raw body, so the request's fingerprint is exactly what was sent. */
     public CustomerAnswer startRun(String pipelineId, byte[] body, String idempotencyKey) {
         String instance = "/v1/pipelines/" + pipelineId + "/runs";
@@ -149,7 +217,7 @@ public class CustomerPipelines {
             return CustomerAnswer.problem(Problem.of(400, "The request is not JSON."), instance);
         }
         if (request == null || !request.isObject()) {
-            return CustomerAnswer.problem(Problem.of(400, "The request is a JSON object: {record, files, reference}."), instance);
+            return CustomerAnswer.problem(Problem.of(400, "The request is a JSON object: {record, files, reference, parameters}."), instance);
         }
         List<Problem.FieldError> errors = new ArrayList<>();
         JsonNode record = request.get("record");
@@ -159,6 +227,30 @@ public class CustomerPipelines {
         JsonNode reference = request.get("reference");
         if (reference != null && !reference.isNull() && (!reference.isTextual() || reference.asText().length() > MAX_REFERENCE)) {
             errors.add(new Problem.FieldError("reference", "must be text of at most " + MAX_REFERENCE + " characters"));
+        }
+        // MIG-424: the run's parameters ({name: value}), checked as Run with... checks them: an undeclared name, a value of the
+        // wrong type, a required one with no value and no default are each a field error at parameters.<name>.
+        JsonNode params = request.get("parameters");
+        String runParams = null;
+        if (params != null && !params.isNull() && !params.isObject()) {
+            errors.add(new Problem.FieldError("parameters", "must be an object of parameter values by name"));
+        } else {
+            Map<String, Object> given = new LinkedHashMap<>();
+            if (params != null && params.isObject()) {
+                params.properties().forEach(e -> given.put(e.getKey(), e.getValue().isValueNode() ? JSON.convertValue(e.getValue(), Object.class)
+                    : e.getValue().toString()));
+            }
+            List<PipelineDefinition.Parameter> declared = pipeline.definition == null || pipeline.definition.isLegacy()
+                ? Collections.<PipelineDefinition.Parameter>emptyList() : pipeline.definition.effectiveParameters();
+            PipelineParameters.Checked checked = PipelineParameters.check(declared, given);
+            if (checked.refusal != null) {
+                for (String problem : checked.resolved.problems) {
+                    int colon = problem.indexOf(':');
+                    errors.add(new Problem.FieldError(colon < 0 ? "parameters" : "parameters." + problem.substring(0, colon),
+                        colon < 0 ? problem : problem.substring(colon + 1).trim()));
+                }
+            }
+            runParams = checked.runParams;
         }
         JsonNode fileList = request.get("files");
         List<String> ids = new ArrayList<>();
@@ -224,6 +316,7 @@ public class CustomerPipelines {
         start.reference = reference == null || reference.isNull() ? null : reference.asText();
         start.clientId = TenantContext.getClientId();
         start.origin = "a run started";
+        start.runParams = runParams;
         RunIntake.Outcome outcome = this.intake.start(pipeline, start);
         if (outcome.refusal != null) {
             return CustomerAnswer.problem(outcome.refusal, instance);

@@ -235,7 +235,13 @@ public class BulkAction {
      * one-in-flight index counts it with the request's runs (one per job and request) and never with the job's own.
      */
     public JobQueue createWorkflowJobQueue(Long jobId, LocalDateTime startTime, Long instanceId, String stepKey) {
+        return this.createWorkflowJobQueue(jobId, startTime, instanceId, stepKey, null);
+    }
+
+    /** MIG-424: as above, with the run's parameter values (job_queue.run_params, checked by the caller; null for the defaults). */
+    public JobQueue createWorkflowJobQueue(Long jobId, LocalDateTime startTime, Long instanceId, String stepKey, String runParams) {
         JobQueue jobQueue = new JobQueue();
+        jobQueue.setRunParams(runParams);
         jobQueue.setRunManual(true);
         jobQueue.setStartTime(startTime);
         jobQueue.setJobStatus(JobStatus.Queue);
@@ -243,6 +249,28 @@ public class BulkAction {
         jobQueue.setJobStatusMessage(String.format("Job %s now in the queue for workflow request %s.", jobId, instanceId));
         jobQueue.setWorkflowInstanceId(instanceId);
         jobQueue.setWorkflowStepKey(stepKey);
+        RunCorrelation.stamp(jobQueue);
+        this.applyJobSnapshot(jobQueue, jobId);
+        this.transactionService.saveOrUpdateJobQueue(jobQueue);
+        this.outcomes.born(JobStatus.Queue, null);
+        return jobQueue;
+    }
+
+    /**
+     * V235 (MIG-424): a run another run's Run pipeline step started -- made with its caller, its depth and its parameter values
+     * on the row before it is written, so the one-in-flight index counts it with its caller's runs (one per job and caller),
+     * never with the job's own. The calling step claims it for the step engine in the same transaction and runs it itself.
+     */
+    public JobQueue createCalledJobQueue(Long jobId, LocalDateTime startTime, long callerRunId, int depth, String runParams) {
+        JobQueue jobQueue = new JobQueue();
+        jobQueue.setRunManual(false);
+        jobQueue.setStartTime(startTime);
+        jobQueue.setJobStatus(JobStatus.Queue);
+        jobQueue.setJobId(jobId);
+        jobQueue.setJobStatusMessage(String.format("Job %s now in the queue: called by run %d.", jobId, callerRunId));
+        jobQueue.setCalledByRunId(callerRunId);
+        jobQueue.setCallDepth(depth);
+        jobQueue.setRunParams(runParams);
         RunCorrelation.stamp(jobQueue);
         this.applyJobSnapshot(jobQueue, jobId);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);

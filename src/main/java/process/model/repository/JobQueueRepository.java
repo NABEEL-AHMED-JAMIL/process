@@ -76,7 +76,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
     // MIG-347: the job's own lane (0): a backfill's runs, in lanes of their own, do not make the job busy. V220: nor do a
     // workflow's runs (one per request, beside the job's own).
     @Query(value = "select count(*) from job_queue where job_id = ?1 and run_lane = 0 and UPPER(job_status) in ('QUEUE', 'START', 'RUNNING') "
-        + "and workflow_instance_id is null", nativeQuery = true)
+        + "and workflow_instance_id is null and called_by_run_id is null", nativeQuery = true)
     int getCountForInQueueJobByJobId(Long jobId);
 
     /** V220: a workflow request's run of the job still in flight, if any -- what a request asking twice is answered with. */
@@ -169,7 +169,7 @@ public interface JobQueueRepository extends CrudRepository<JobQueue, Long> {
 
     /** The newest run of a job after a given one, or null: what a rerun queued (RunReviewService), without the history. V220: never a
      * workflow's run of the job, which runs beside it. */
-    @Query(value = "select max(job_queue_id) from job_queue where job_id = :jobId and job_queue_id > :afterId and workflow_instance_id is null",
+    @Query(value = "select max(job_queue_id) from job_queue where job_id = :jobId and job_queue_id > :afterId and workflow_instance_id is null and called_by_run_id is null",
         nativeQuery = true)
     Long findNewestRunIdAfter(@Param("jobId") Long jobId, @Param("afterId") long afterId);
 

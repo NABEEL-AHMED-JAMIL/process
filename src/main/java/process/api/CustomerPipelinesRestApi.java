@@ -45,11 +45,15 @@ public class CustomerPipelinesRestApi {
         return CustomerResponses.of(this.pipelines.get(pipelineId));
     }
 
-    /** Body {record, files, reference}; Idempotency-Key required. 202 with the Run and Location: /v1/runs/{id}. */
+    /**
+     * Body {record, files, reference, parameters}; Idempotency-Key required. 202 with the Run and Location: /v1/runs/{id}.
+     * MIG-424: ?wait=30s (1 to 60 seconds) answers 200 with the Run and its result when the run ends in time.
+     */
     @PostMapping("/{pipelineId}/runs")
     public ResponseEntity<Map<String, Object>> startRun(@PathVariable("pipelineId") String pipelineId,
         @RequestHeader(value = IdempotencyKeys.HEADER, required = false) String idempotencyKey,
+        @RequestParam(value = "wait", required = false) String wait,
         @RequestBody(required = false) byte[] body) {
-        return CustomerResponses.of(this.pipelines.startRun(pipelineId, body, idempotencyKey));
+        return CustomerResponses.of(this.pipelines.startRun(pipelineId, body, idempotencyKey, wait));
     }
 }

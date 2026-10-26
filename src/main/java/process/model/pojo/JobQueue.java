@@ -237,6 +237,16 @@ public class JobQueue {
     @Column(name = "workflow_step_key", length = 128)
     private String workflowStepKey;
 
+    /** V235 (MIG-424): the run whose Run pipeline step started this run (beside the job's own, one per job and caller); null otherwise. */
+    @JsonIgnore
+    @Column(name = "called_by_run_id")
+    private Long calledByRunId;
+
+    /** V235: how deep in a call chain this run is (1 to 3); null for a run nothing called. */
+    @JsonIgnore
+    @Column(name = "call_depth")
+    private Integer callDepth;
+
     @Column(name = "status",
         nullable = false)
     @Enumerated(EnumType.STRING)
@@ -482,11 +492,23 @@ public class JobQueue {
     public boolean isWorkflowRun() { return this.workflowInstanceId != null; }
 
     /**
-     * A run beside the job's own lane -- a backfill's (MIG-347) or a workflow's (V220): it neither holds the job's lane nor
-     * writes the job's one running status, which belongs to the job's own runs.
+     * A run beside the job's own lane -- a backfill's (MIG-347), a workflow's (V220) or a called run's (V235): it neither
+     * holds the job's lane nor writes the job's one running status, which belongs to the job's own runs.
      */
     @JsonIgnore
-    public boolean isSideRun() { return this.isBackfillRun() || this.isWorkflowRun(); }
+    public boolean isSideRun() { return this.isBackfillRun() || this.isWorkflowRun() || this.isCalledRun(); }
+
+    public Long getCalledByRunId() { return calledByRunId; }
+
+    public void setCalledByRunId(Long calledByRunId) { this.calledByRunId = calledByRunId; }
+
+    public Integer getCallDepth() { return callDepth; }
+
+    public void setCallDepth(Integer callDepth) { this.callDepth = callDepth; }
+
+    /** V235 (MIG-424): whether another run's Run pipeline step started this run, beside the job's own runs. */
+    @JsonIgnore
+    public boolean isCalledRun() { return this.calledByRunId != null; }
 
     public Long getTenantId() {
         return tenantId;

@@ -18,6 +18,7 @@ import process.pipeline.tasks.LegacyStepTask;
 import process.pipeline.tasks.MeasureImageStepTask;
 import process.pipeline.tasks.MeasureMaskStepTask;
 import process.pipeline.tasks.ReadRunsStepTask;
+import process.pipeline.tasks.RunPipelineStepTask;
 import process.pipeline.tasks.ReadApiStepTask;
 import process.pipeline.tasks.ReadDatabaseStepTask;
 import process.pipeline.tasks.ReadFileStepTask;
@@ -67,6 +68,8 @@ public final class AllTasks {
     public final Fakes.Documents documents = new Fakes.Documents();
     public final Fakes.Runs runs = new Fakes.Runs();
     public final Fakes.Media media = new Fakes.Media();
+    /** MIG-424: Run pipeline's calls. */
+    public final PipelineCalls calls = mock(PipelineCalls.class);
 
     public List<StepTask> list() {
         return new ArrayList<>(Arrays.asList(new LegacyStepTask(), new SampleStepTask(), new SelectStepTask(),
@@ -81,7 +84,7 @@ public final class AllTasks {
             new DedupeStepTask(), new SplitColumnStepTask(), new PivotStepTask(), new UnpivotStepTask(), new FillMissingStepTask(),
             new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio),
             new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets),
-            new SplitPagesStepTask(this.buckets), new OcrPagesStepTask(this.media)));
+            new SplitPagesStepTask(this.buckets), new OcrPagesStepTask(this.media), new RunPipelineStepTask(this.calls)));
     }
 
     public StepTasks tasks() {

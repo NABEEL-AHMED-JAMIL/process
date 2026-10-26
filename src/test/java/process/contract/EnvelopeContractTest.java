@@ -84,6 +84,9 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.pipeline.backing.ReportStudio$Busy"), "MIG-418: thrown by HttpReportStudio inside a "
             + "Generate report step only (media answered 429/503): asked again under Calls at once, else the step's error in media's "
             + "words; no request thread meets it");
+        internal.put(declared("process.pipeline.PipelineCalls$Refused"), "MIG-424: thrown by PipelineCalls inside a Run pipeline "
+            + "step's try only (another workspace's pipeline, a loop, too deep, parameters that do not stand): the row's outcome or the "
+            + "step's error in words; no request thread meets it");
         internal.put(declared("process.pipeline.tasks.AtOnce$Busy"), "MIG-418: a per-row step's busy call, caught in AtOnce and "
             + "asked again (or the row's failure); never leaves a step");
         internal.put(declared("process.pipeline.tasks.CallApiStepTask$Stop"), "MIG-418: carries a call that ends the step out of "

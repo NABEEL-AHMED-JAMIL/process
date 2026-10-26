@@ -1,5 +1,6 @@
 package process.workflow;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,15 +14,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import process.engine.OneRunInFlight;
 import process.model.dto.ResponseDto;
+import process.model.enums.JobStatus;
 import process.model.pojo.JobQueue;
 import process.model.repository.JobQueueRepository;
 import process.model.service.SourceJobService;
+import process.pipeline.PipelineDefinition;
+import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.PipelineOutputFields;
+import process.pipeline.RunResults;
+import process.pipeline.StepStore;
+import process.pipeline.items.WorkspaceMasks;
 import process.security.TenantContext;
 import process.slo.RunSlo;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -43,11 +53,23 @@ public class InternalWorkflowRunRestApi {
     private final SourceJobService jobs;
     private final JobQueueRepository runs;
     private final byte[] token;
+    /** MIG-424: a finished run's answer, the masks it is read with, and a pipeline's parameters and output fields. */
+    private final RunResults results;
+    private final WorkspaceMasks masks;
+    private final PipelineOutputFields fields;
+    private final StepStore steps;
+    private final PipelineDefinitionStore definitions;
 
-    public InternalWorkflowRunRestApi(SourceJobService jobs, JobQueueRepository runs, @Value("${internal.service-token:}") String token) {
+    public InternalWorkflowRunRestApi(SourceJobService jobs, JobQueueRepository runs, @Value("${internal.service-token:}") String token,
+        RunResults results, WorkspaceMasks masks, PipelineOutputFields fields, StepStore steps, PipelineDefinitionStore definitions) {
         this.jobs = jobs;
         this.runs = runs;
         this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
+        this.results = results;
+        this.masks = masks;
+        this.fields = fields;
+        this.steps = steps;
+        this.definitions = definitions;
     }
 
     /** What the step asks to run. */
@@ -56,6 +78,12 @@ public class InternalWorkflowRunRestApi {
         private Long jobId;
         private Long instanceId;
         private String stepKey;
+        /** MIG-424: the run's parameter values by name, as the step mapped them; null or empty for the pipeline's defaults. */
+        private Map<String, Object> parameters;
+
+        public Map<String, Object> getParameters() { return parameters; }
+
+        public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
 
         public Long getTenantId() { return tenantId; }
 
@@ -90,7 +118,8 @@ public class InternalWorkflowRunRestApi {
             ResponseDto answer;
             try {
                 // V220: the run goes beside the job's own runs, one in flight per job and request.
-                answer = this.jobs.runSourceJobFor(request.getJobId(), request.getInstanceId(), request.getStepKey(), reason);
+                answer = this.jobs.runSourceJobFor(request.getJobId(), request.getInstanceId(), request.getStepKey(), reason,
+                    request.getParameters());
             } catch (RuntimeException refused) {
                 if (request.getInstanceId() != null && OneRunInFlight.isWorkflowViolation(refused)) {
                     // The request asked twice (a retried call): its run is the one already in flight.
@@ -116,6 +145,8 @@ public class InternalWorkflowRunRestApi {
     public static class StateRequest {
         private Long tenantId;
         private Long runId;
+        /** MIG-424: what to take from the run's output once it has completed ({from, take, fields, maxRows}); null for nothing. */
+        private JsonNode results;
 
         public Long getTenantId() { return tenantId; }
 
@@ -124,6 +155,10 @@ public class InternalWorkflowRunRestApi {
         public Long getRunId() { return runId; }
 
         public void setRunId(Long runId) { this.runId = runId; }
+
+        public JsonNode getResults() { return results; }
+
+        public void setResults(JsonNode results) { this.results = results; }
     }
 
     /**
@@ -153,7 +188,73 @@ public class InternalWorkflowRunRestApi {
             state.put("ended", RunSlo.isTerminal(q.getJobStatus()));
             state.put("message", q.getJobStatusMessage());
             state.put("endedAt", q.getEndTime() == null ? null : q.getEndTime().toString());
+            if (request.getResults() != null && !request.getResults().isNull() && q.getJobStatus() == JobStatus.Completed) {
+                state.put("results", this.resultsOf(request.getTenantId(), q, request.getResults()));
+            }
             return ResponseEntity.ok(new ResponseDto("SUCCESS", "Run state.", state));
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    /**
+     * MIG-424: what the step chose of a completed run's output, masked for a reader who is no one person (the request's
+     * history is read by many): {step, rowCount, values | rows, truncated, masked, problem}. A selection that does not stand,
+     * or an output that cannot be read, answers its problem in words, never an error: the step keeps the run's outcome.
+     */
+    private Map<String, Object> resultsOf(long tenantId, JobQueue run, JsonNode asked) {
+        List<String> problems = new ArrayList<>();
+        RunResults.Selection selection = RunResults.Selection.of(asked, problems);
+        if (!problems.isEmpty()) {
+            Map<String, Object> refused = new LinkedHashMap<>();
+            refused.put("problem", String.join("; ", problems) + ".");
+            return refused;
+        }
+        try {
+            PipelineDefinition definition = this.steps.pinnedDefinition(run.getJobQueueId()).flatMap(this.definitions::byId)
+                .map(PipelineDefinitionStore.Stored::definition).orElse(null);
+            return this.results.read(run.getJobQueueId(), selection, this.masks.of(tenantId, definition)).toMap(selection.take);
+        } catch (Exception unreadable) {
+            this.logger.warn("Run {}'s results could not be read for its workflow step: {}", run.getJobQueueId(), unreadable.getMessage());
+            Map<String, Object> failed = new LinkedHashMap<>();
+            failed.put("problem", "The run's output could not be read.");
+            return failed;
+        }
+    }
+
+    /** Which job a workflow designer or a publish asks about. */
+    public static class PipelineRequest {
+        private Long tenantId;
+        private Long jobId;
+
+        public Long getTenantId() { return tenantId; }
+
+        public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+
+        public Long getJobId() { return jobId; }
+
+        public void setJobId(Long jobId) { this.jobId = jobId; }
+    }
+
+    /**
+     * MIG-424: a job of the named workspace as a workflow publish checks a run_pipeline step against it -- its declared
+     * parameters, its steps and their output columns (PipelineOutputFields). Another workspace's job is "No pipeline", as
+     * one that does not exist. Nothing changes.
+     */
+    @PostMapping(value = "/pipeline", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> pipeline(@RequestHeader(value = "X-Internal-Token", required = false) String presented,
+        @RequestBody PipelineRequest request) {
+        if (!this.admits(presented)) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        if (request == null || request.getTenantId() == null || request.getJobId() == null) {
+            return ResponseEntity.badRequest().body(new ResponseDto("ERROR", "Name the workspace (tenantId) and the job (jobId)."));
+        }
+        TenantContext.set(request.getTenantId(), WORKSPACE_ROLE, null, "workflow-service");
+        try {
+            Optional<Map<String, Object>> found = this.fields.of(request.getTenantId(), request.getJobId());
+            return ResponseEntity.ok(found.isPresent() ? new ResponseDto("SUCCESS", "Pipeline.", found.get())
+                : new ResponseDto("ERROR", "No pipeline " + request.getJobId() + " in this workspace."));
         } finally {
             TenantContext.clear();
         }

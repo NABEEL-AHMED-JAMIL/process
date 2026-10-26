@@ -22,6 +22,9 @@ public final class OneRunInFlight {
     /** V220: one run in flight per job and workflow request (a request asking twice starts one run). */
     public static final String WORKFLOW_INDEX = "ux_job_queue_one_in_flight_per_workflow";
 
+    /** V235 (MIG-424): one run in flight per job and calling run (a Run pipeline step calls one at a time). */
+    public static final String CALLER_INDEX = "ux_job_queue_one_in_flight_per_caller";
+
     private static final String UNIQUE_VIOLATION = "23505";
 
     private OneRunInFlight() {
@@ -33,6 +36,17 @@ public final class OneRunInFlight {
         for (Throwable cause = failure; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
             if (cause instanceof SQLException && UNIQUE_VIOLATION.equals(((SQLException) cause).getSQLState())
                 && cause.getMessage() != null && cause.getMessage().contains(WORKFLOW_INDEX)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** V235: the failure is a calling run's second run of a job while its first is in flight. */
+    public static boolean isCallerViolation(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
+            if (cause instanceof SQLException && UNIQUE_VIOLATION.equals(((SQLException) cause).getSQLState())
+                && cause.getMessage() != null && cause.getMessage().contains(CALLER_INDEX)) {
                 return true;
             }
         }

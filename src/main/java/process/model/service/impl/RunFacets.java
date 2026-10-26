@@ -50,6 +50,8 @@ public final class RunFacets {
     public static final String FORM = "form";
     public static final String BACKFILL = "backfill";
     public static final String WORKFLOW = "workflow";
+    /** V235 (MIG-424): a run another pipeline's Run pipeline step called. */
+    public static final String CALLED = "called";
     public static final String MANUAL = "manual";
     public static final String SCHEDULE = "schedule";
 
@@ -65,6 +67,7 @@ public final class RunFacets {
         triggers.put(FORM, "Form submitted");
         triggers.put(BACKFILL, "Backfill");
         triggers.put(WORKFLOW, "Workflow");
+        triggers.put(CALLED, "Called by a pipeline");
         triggers.put(API, "API");
         triggers.put(RETRY, "Retry");
         TRIGGERS = Collections.unmodifiableMap(triggers);
@@ -98,6 +101,8 @@ public final class RunFacets {
             + " WHEN EXISTS (SELECT 1 FROM backfill_slot bs WHERE bs.job_queue_id = " + run + ".job_queue_id) THEN '" + BACKFILL + "'"
             // V220: a workflow request's run reads "Workflow", not "Run now".
             + " WHEN " + run + ".workflow_instance_id IS NOT NULL THEN '" + WORKFLOW + "'"
+            // V235: a run a Run pipeline step called reads "Called by a pipeline".
+            + " WHEN " + run + ".called_by_run_id IS NOT NULL THEN '" + CALLED + "'"
             + " WHEN " + run + ".input_key IS NOT NULL OR EXISTS (SELECT 1 FROM inbox_arrival ia WHERE ia.job_queue_id = " + run
             + ".job_queue_id) THEN '" + FILE + "'"
             + " WHEN " + run + ".run_manual THEN '" + MANUAL + "'"

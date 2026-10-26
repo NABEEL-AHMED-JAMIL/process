@@ -99,7 +99,7 @@ public class JdbcDocumentTriggerStore implements DocumentTriggerStore, RunDocume
         // reads that index: the job's own lane -- a backfill's runs (MIG-347) do not hold its live runs back, nor (V220) a
         // workflow's runs, one per request beside the job's own.
         Boolean busy = this.jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM job_queue WHERE job_id = ? AND run_lane = 0 "
-            + "AND UPPER(job_status) IN ('QUEUE', 'START', 'RUNNING') AND workflow_instance_id IS NULL)", Boolean.class, jobId);
+            + "AND UPPER(job_status) IN ('QUEUE', 'START', 'RUNNING') AND workflow_instance_id IS NULL AND called_by_run_id IS NULL)", Boolean.class, jobId);
         return Boolean.TRUE.equals(busy);
     }
 

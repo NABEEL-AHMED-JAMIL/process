@@ -6,6 +6,7 @@ import org.barco.platform.api.Problem;
 import org.barco.platform.security.ApiScopes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import process.model.pojo.JobQueue;
@@ -13,6 +14,9 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineDefinition;
+import process.pipeline.RunResults;
+import process.pipeline.items.ItemMasks;
+import process.pipeline.items.WorkspaceMasks;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.StepStore;
 import process.pipeline.review.RunReviews;
@@ -286,6 +290,102 @@ public class CustomerRuns {
         body.put("files", listed);
         body.put("review", this.reviewOf(found.get()));
         return CustomerAnswer.of(200, body, null);
+    }
+
+    /** MIG-424: a finished run's answer, and the workspace's masks it is read with; absent in hand-built tests. */
+    private RunResults results;
+    private WorkspaceMasks masks;
+
+    @Autowired(required = false)
+    public void useResults(RunResults results, WorkspaceMasks masks) {
+        this.results = results;
+        this.masks = masks;
+    }
+
+    /** MIG-424: the most rows a run's result gives. */
+    static final int RESULT_ROWS = RunResults.MAX_ROWS;
+
+    /**
+     * MIG-424: GET /v1/runs/{id}/result -- a completed run's answer: its final output's rows (at most
+     * {@value #RESULT_ROWS}, at most 16 KB of JSON), masked as the workspace's data policy masks data no one person reads.
+     * runs:read. A run that has not completed is a 409 (run-not-completed); another workspace's run a 404.
+     */
+    @Transactional(readOnly = true)
+    public CustomerAnswer result(String runId) {
+        String instance = "/v1/runs/" + runId + "/result";
+        if (!TenantContext.hasScope(ApiScopes.RUNS_READ)) {
+            return CustomerAnswer.problem(CustomerPipelines.insufficient(ApiScopes.RUNS_READ), instance);
+        }
+        Optional<Found> found = this.found(runId);
+        if (!found.isPresent()) {
+            return CustomerAnswer.problem(Problem.of(404, NO_SUCH_RUN), instance);
+        }
+        String status = RunIntake.statusOf(found.get().row.jobStatus);
+        if (!"completed".equals(status)) {
+            return CustomerAnswer.problem(Problem.of(409, "The run has not completed (" + status + "), so it has no result yet.")
+                .kind("run-not-completed"), instance);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("runId", String.valueOf(found.get().row.runId));
+        body.put("pipelineId", String.valueOf(found.get().row.jobId));
+        body.put("status", status);
+        body.put("result", this.resultOf(found.get()));
+        return CustomerAnswer.of(200, body, null);
+    }
+
+    /**
+     * MIG-424: a completed run's answer as the API gives it -- {step, columns, rowCount, rows, truncated, masked, problem}; null
+     * for a run that has not completed. Its output past retention, or none kept, is said in {@code problem}.
+     */
+    Map<String, Object> resultOf(Found found) {
+        if (!"completed".equals(RunIntake.statusOf(found.row.jobStatus)) || this.results == null) {
+            return null;
+        }
+        RunResults.Selection all = new RunResults.Selection();
+        all.take = "all";
+        all.maxRows = RESULT_ROWS;
+        Map<String, Object> out;
+        try {
+            PipelineDefinition definition = this.steps.pinnedDefinition(found.row.runId).flatMap(this.definitions::byId)
+                .map(PipelineDefinitionStore.Stored::definition).orElse(null);
+            ItemMasks shown = this.masks == null ? ItemMasks.forWorkspace(null, false) : this.masks.of(found.row.tenantId, definition);
+            RunResults.Result result = this.results.read(found.row.runId, all, shown);
+            out = new LinkedHashMap<>();
+            out.put("step", result.step);
+            out.put("columns", result.columns);
+            out.put("rowCount", result.rowCount);
+            out.put("rows", result.rows);
+            out.put("truncated", result.truncated);
+            out.put("masked", new ArrayList<>(result.masked));
+            out.put("problem", result.problem);
+        } catch (Exception unreadable) {
+            logger.warn("Run {}'s result could not be read for the API: {}", found.row.runId, unreadable.getMessage());
+            out = new LinkedHashMap<>();
+            out.put("step", null);
+            out.put("columns", Collections.emptyList());
+            out.put("rowCount", 0);
+            out.put("rows", Collections.emptyList());
+            out.put("truncated", false);
+            out.put("masked", Collections.emptyList());
+            out.put("problem", "The run's output could not be read.");
+        }
+        return out;
+    }
+
+    /**
+     * MIG-424: the run as GET /v1/runs/{id} answers it, with its result when it has completed; empty when it is not there.
+     * For run-and-wait: read in its own read-only transaction each time it is asked.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Map<String, Object>> runWithResult(String runId) {
+        Optional<Found> found = this.found(runId);
+        if (!found.isPresent()) {
+            return Optional.empty();
+        }
+        Map<String, Object> summary = this.reviews.summary(found.get().run, found.get().job);
+        Map<String, Object> view = new LinkedHashMap<>(CustomerViews.run(found.get().row, CustomerViews.reviewWordOf(summary.get("reviewStatus"))));
+        view.put("result", this.resultOf(found.get()));
+        return Optional.of(view);
     }
 
     /** A run of the caller's workspace, with its entities (for the review), or empty. */

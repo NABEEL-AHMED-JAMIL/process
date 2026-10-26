@@ -173,9 +173,28 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * last run stay its own runs' (Run now and the schedule read them), and no job-status notice goes. Answers the run.
      */
     public JobQueue addWorkflowJobInQueue(SourceJob sourceJob, Long instanceId, String stepKey) {
-        JobQueue jobQueue = this.bulkAction.createWorkflowJobQueue(sourceJob.getJobId(), BusinessTime.now(), instanceId, stepKey);
+        return this.addWorkflowJobInQueue(sourceJob, instanceId, stepKey, null);
+    }
+
+    /** MIG-424: as above, with the run's parameter values (job_queue.run_params, checked by the caller; null for the defaults). */
+    public JobQueue addWorkflowJobInQueue(SourceJob sourceJob, Long instanceId, String stepKey, String runParams) {
+        JobQueue jobQueue = this.bulkAction.createWorkflowJobQueue(sourceJob.getJobId(), BusinessTime.now(), instanceId, stepKey, runParams);
         logger.info("Run {} of job {} queued by workflow request {}, step {}.", jobQueue.getJobQueueId(), sourceJob.getJobId(), instanceId, stepKey);
         this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue.", sourceJob.getJobId()));
+        return jobQueue;
+    }
+
+    /**
+     * V235 (MIG-424): queues a run another run's Run pipeline step called, beside the job's own runs: the job's running status
+     * and last run stay its own runs', and no job-status notice goes. The caller has checked the job, the workspace, the
+     * parameters and the call chain. Answers the run.
+     */
+    public JobQueue addCalledJobInQueue(SourceJob sourceJob, long callerRunId, int depth, String runParams) {
+        JobQueue jobQueue = this.bulkAction.createCalledJobQueue(sourceJob.getJobId(), BusinessTime.now(), callerRunId, depth, runParams);
+        logger.info("Run {} of job {} queued by run {}'s Run pipeline step (depth {}).", jobQueue.getJobQueueId(), sourceJob.getJobId(),
+            callerRunId, depth);
+        this.bulkAction.saveJobAuditLogs(jobQueue.getJobQueueId(), String.format("Job %s now in the queue: called by run %d.",
+            sourceJob.getJobId(), callerRunId));
         return jobQueue;
     }
 
@@ -281,12 +300,19 @@ public class ProducerBulkEngine implements DispatchOutcomes {
      * rules; the one-in-flight index still refuses a racing second run (OneRunInFlight).
      */
     public JobQueue addApiJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String clientId, String origin) {
+        return this.addApiJobInQueue(sourceJob, inputBucket, inputKey, clientId, origin, null);
+    }
+
+    /** MIG-424: as above, with the run's parameter values (job_queue.run_params, checked by the caller; null for the defaults). */
+    public JobQueue addApiJobInQueue(SourceJob sourceJob, String inputBucket, String inputKey, String clientId, String origin,
+        String runParams) {
         this.bulkAction.changeJobStatus(sourceJob.getJobId(), JobStatus.Queue);
         JobQueue jobQueue = this.bulkAction.createJobQueueV1(sourceJob.getJobId(),
             BusinessTime.now(), JobStatus.Queue, "Job %s now in the queue: started through the API.", false);
         jobQueue.setRunManual(false);
         jobQueue.setInputBucket(inputBucket);
         jobQueue.setInputKey(inputKey);
+        jobQueue.setRunParams(runParams);
         this.transactionService.saveOrUpdateJobQueue(jobQueue);
         logger.info("Run {} of job {} queued through the API by client {} ({}).", jobQueue.getJobQueueId(), sourceJob.getJobId(), clientId,
             origin);

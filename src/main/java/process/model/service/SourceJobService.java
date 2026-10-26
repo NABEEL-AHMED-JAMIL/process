@@ -2,6 +2,7 @@ package process.model.service;
 
 import process.model.dto.ResponseDto;
 import java.util.List;
+import java.util.Map;
 import process.model.dto.SchedulerDto;
 import process.model.dto.SourceJobDto;
 
@@ -50,6 +51,19 @@ public interface SourceJobService {
      * the job's one run in flight. Answers the run's id.
      */
     ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason) throws Exception;
+
+    /**
+     * MIG-424: as above, with the run's parameter values mapped by the step ({@code parameters}, by name; null or empty for the
+     * pipeline's defaults), checked against the pipeline's declared parameters as Run with... checks them: a name it does not
+     * declare, a value of the wrong type or a required one missing is the refusal, in words.
+     */
+    default ResponseDto runSourceJobFor(Long jobId, Long workflowInstanceId, String workflowStepKey, String reason,
+        Map<String, ?> parameters) throws Exception {
+        if (parameters != null && !parameters.isEmpty()) {
+            throw new UnsupportedOperationException("This job service does not take run parameters.");
+        }
+        return this.runSourceJobFor(jobId, workflowInstanceId, workflowStepKey, reason);
+    }
 
     ResponseDto skipNextSourceJob(SourceJobDto sourceJobDto) throws Exception;
 

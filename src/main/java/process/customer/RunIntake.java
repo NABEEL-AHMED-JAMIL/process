@@ -68,6 +68,8 @@ public class RunIntake {
         public String eventType;
         /** For the run's audit line: "a run started", "event order.received". */
         public String origin;
+        /** MIG-424: the run's parameter values (job_queue.run_params), checked against the pipeline; null for its defaults. */
+        public String runParams;
     }
 
     /** A start's outcome: the run as the API shows it, or why it did not start (a problem without its instance). */
@@ -137,7 +139,7 @@ public class RunIntake {
             return refused(Problem.of(503, "Runs cannot be started right now. Try again in a moment."));
         }
         return this.queue(this.transactions, pipeline, job.get(), inbox.alias, key, start.clientId, start.origin, start.reference,
-            start.eventId, fileIds(start.files));
+            start.eventId, fileIds(start.files), start.runParams);
     }
 
     /**
@@ -153,7 +155,7 @@ public class RunIntake {
             return refused(refusal.get());
         }
         return this.queue(this.ownTransaction, pipeline, job.get(), intake.inputBucket, intake.inputKey, clientId, origin, intake.reference,
-            intake.eventId, intake.fileIds.isEmpty() ? null : String.join(",", intake.fileIds));
+            intake.eventId, intake.fileIds.isEmpty() ? null : String.join(",", intake.fileIds), null);
     }
 
     /** Run now's rules for a start through the API: the job the workspace's and active, the workspace not paused, nothing in flight. */
@@ -176,12 +178,13 @@ public class RunIntake {
 
     /** The run queued with this intake file as its input, and recorded in api_intake. */
     private Outcome queue(TransactionTemplate within, PipelineCatalogue.Entry pipeline, SourceJob job, String bucket, String key, String clientId,
-        String origin, String reference, Long eventId, String fileIds) {
+        String origin, String reference, Long eventId, String fileIds, String runParams) {
         long tenantId = pipeline.tenantId;
         long runId;
         try {
             runId = within.execute(status -> {
-                JobQueue run = this.engine.addApiJobInQueue(job, bucket, key, clientId, origin);
+                JobQueue run = runParams == null ? this.engine.addApiJobInQueue(job, bucket, key, clientId, origin)
+                    : this.engine.addApiJobInQueue(job, bucket, key, clientId, origin, runParams);
                 this.sql.update("INSERT INTO api_intake (tenant_id, job_id, job_queue_id, client_id, reference, event_id, input_bucket, "
                     + "input_key, file_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", tenantId, pipeline.jobId, run.getJobQueueId(), clientId,
                     reference, eventId, bucket, key, fileIds);

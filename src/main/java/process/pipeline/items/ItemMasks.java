@@ -67,6 +67,15 @@ public final class ItemMasks {
         return new ItemMasks(columns, kinds, false, sensitivePipeline);
     }
 
+    /**
+     * MIG-424: the masks for data that leaves the run for a reader who is no one person -- a workflow request's history, the
+     * customer API's run result: every sensitive asset of the workspace (analytics' service read, {@link WorkspaceMasks}), as
+     * for a member with no access to any of them; fail closed when it could not be read (null).
+     */
+    public static ItemMasks forWorkspace(JsonNode sensitiveAssets, boolean sensitivePipeline) {
+        return of(sensitiveAssets, sensitiveAssets != null, sensitivePipeline);
+    }
+
     /** No masks: a workspace administrator's read (or a managed session's) of a pipeline that is not marked sensitive. */
     static ItemMasks none() {
         return NONE;

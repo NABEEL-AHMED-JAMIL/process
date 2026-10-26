@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import process.forms.FormStore;
+import process.model.pojo.JobQueue;
 import process.outbox.OutboxWriter;
 import process.pipeline.StepStore;
 import process.pipeline.review.RunReviewEvents;
@@ -267,6 +268,14 @@ public class CustomerEventRelay {
             data.put("run", run);
             data.put("review", review);
             events.add(new Event(CustomerEventTypes.REVIEW_REQUESTED, subjectOfRun(row.jobQueueId), data));
+        }
+        if (this.reviewEvents != null && found.get().run.isWorkflowRun()
+            && ("Completed".equals(row.jobStatus) || "Failed".equals(row.jobStatus))) {
+            // MIG-424: the workflow step that waits for this run goes on now.
+            JobQueue ended = found.get().run;
+            String status = row.jobStatus;
+            events.add(Event.internal(RunReviewEvents.WORKFLOW_RUN_ENDED, () -> this.reviewEvents.workflowRunEnded(row.tenantId, ended, status,
+                row.occurredAt)));
         }
         if (completed && "pending".equals(reviewWord) && asksUs(summary) && this.reviewEvents != null) {
             // MIG-361: the internal review waits -- a Task inbox task for the pipeline's reviewers.

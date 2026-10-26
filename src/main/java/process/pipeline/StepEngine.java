@@ -353,10 +353,41 @@ public class StepEngine {
         return pool;
     }
 
+    /** V235: the tries of called runs (MIG-424), made the first time one runs. */
+    private volatile ExecutorService calledTryThreads;
+
+    private ExecutorService triesFor(JobQueue run) {
+        if (run == null || !run.isCalledRun()) {
+            return this.tryThreads;
+        }
+        if (this.calledTryThreads == null) {
+            synchronized (this) {
+                if (this.calledTryThreads == null) {
+                    this.calledTryThreads = newCalledTryThreads();
+                }
+            }
+        }
+        return this.calledTryThreads;
+    }
+
+    /** V235: as {@link #newTryThreads}, for called runs: up to 32 at once, idle ones gone after a minute. */
+    static ExecutorService newCalledTryThreads() {
+        AtomicInteger count = new AtomicInteger();
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(0, 32, 60, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+            Thread thread = new Thread(runnable, "step-called-try-" + count.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+        return pool;
+    }
+
     @PreDestroy
     void stop() {
         this.runThreads.shutdownNow();
         this.tryThreads.shutdownNow();
+        if (this.calledTryThreads != null) {
+            this.calledTryThreads.shutdownNow();
+        }
     }
 
     /**
@@ -506,6 +537,30 @@ public class StepEngine {
 
     /** One run, start to end. Never throws: what cannot be reported is logged, and the stall sweep closes the run. */
     void run(StepPlan plan) {
+        this.run(plan, false);
+    }
+
+    /**
+     * V235 (MIG-424): a run another run's Run pipeline step called, already claimed for the engine with its row (in the
+     * calling step's transaction), run start to end on the caller's thread -- the calling step waits for it without holding
+     * a second run thread. Its tries run on a pool of their own, so a chain of calls never waits for its own try threads.
+     * A run whose pipeline the engine does not run (a legacy one) fails, saying so. Never throws.
+     */
+    public void runCalled(SourceJob job, JobQueue run) {
+        Optional<StepPlan> plan = this.planFor(job, run);
+        if (!plan.isPresent()) {
+            try {
+                this.report(run, JobStatus.Failed, "The called pipeline does not run on Core's step engine, so a Run pipeline step cannot call it.");
+            } catch (RuntimeException unreported) {
+                logger.error("Called run {} could not be reported Failed; the stall sweep will close it: {}", run.getJobQueueId(),
+                    ExceptionUtil.getRootCauseMessage(unreported));
+            }
+            return;
+        }
+        this.run(plan.get(), true);
+    }
+
+    private void run(StepPlan plan, boolean alreadyClaimed) {
         JobQueue run = plan.run;
         boolean claimed = false;
         if (run.getCorrelationId() == null) {
@@ -513,7 +568,7 @@ public class StepEngine {
         }
         CorrelationScope scope = CorrelationScope.open(run.getCorrelationId());
         try {
-            if (!this.steps.claimForEngine(run.getJobQueueId(), run.getCorrelationId())) {
+            if (!alreadyClaimed && !this.steps.claimForEngine(run.getJobQueueId(), run.getCorrelationId())) {
                 logger.info("Run {} was taken, sent or closed before the step engine could take it; left as it is.", run.getJobQueueId());
                 return;
             }
@@ -1744,7 +1799,7 @@ public class StepEngine {
                 InputDigests.Recorder recorder = new InputDigests.Recorder();
                 Future<StepResult> future;
                 try {
-                    future = tryThreads.submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
+                    future = triesFor(this.run).submit(() -> RowSecurity.forTenant(this.tenantId, () -> {
                         try {
                             return InputDigests.recording(recorder, () -> streams ? ((StreamingStepTask) task.get()).stream((StreamTry) context)
                                 : task.get().run(context));

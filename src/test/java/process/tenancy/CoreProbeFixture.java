@@ -66,6 +66,8 @@ import process.pipeline.DefinitionValidator;
 import process.pipeline.Definitions;
 import process.pipeline.PipelineDefinitionService;
 import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.PipelineOutputFields;
+import process.pipeline.PipelineParameters;
 import process.pipeline.PipelineReads;
 import process.pipeline.PipelineSummaries;
 import process.pipeline.StepReferences;
@@ -514,6 +516,10 @@ final class CoreProbeFixture implements AutoCloseable {
         SourceJobBulkServiceImpl bulk = new SourceJobBulkServiceImpl(transactions, jobRows, schedulerRows, new BulkExcel(),
             this.notifications);
         this.sourceJobs = new SourceJobRestApi(jobs, bulk, assistant);
+        // MIG-424: a pipeline's parameters and output fields, read as the app reads them (row security, the tenant check).
+        PipelineDefinitionStore outputDefinitions = new PipelineDefinitionStore(this.db.appJdbc());
+        this.sourceJobs.useOutputFields(new PipelineOutputFields(transactions, outputDefinitions, new PipelineParameters(outputDefinitions),
+            new JdbcStepStore(this.db.appJdbc()), this.db.appJdbc()));
 
         SourceTaskServiceImpl tasks = new SourceTaskServiceImpl(new BulkExcel(), queries, jobRows, taskRows, typeRows, filters,
             new TaskPayloadLocationUtil(), this.identity, this.notifications, names);

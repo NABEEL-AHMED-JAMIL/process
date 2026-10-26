@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 235.0-called-runs
+      author: nabeel.amd93
+      description: "MIG-424: a run another pipeline's Run pipeline step started (job_queue.called_by_run_id, call_depth) runs beside the job's own runs, one in flight per job and calling run; depth at most 3"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V235.0-called-runs/V235__called_runs.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V235.0-called-runs/V235__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false
