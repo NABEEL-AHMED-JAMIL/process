@@ -69,9 +69,15 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
 
     /** How often the step asks how its job is doing. */
     static final Duration POLL = Duration.ofSeconds(2);
-    /** The checks' codes that mean the report itself (its design or the data) is wrong, not that media was busy. */
-    static final Set<String> VALIDATION = Set.of("TEMPLATE_INVALID", "DATA_SCHEMA_MISMATCH", "DATA_REQUIRED_MISSING", "BINDING_INVALID",
-        "EXPRESSION_INVALID", "DATA_UNREADABLE", "TEMPLATE_VERSION_NOT_PUBLISHED", "TEMPLATE_NOT_FOUND");
+    /**
+     * The refusals that are "the checks refuse it" (onValidationError), in media's own codes (Report Studio's ErrorCode): the
+     * design, the data against it, the page limit and its pictures. ZT-S1: this named DATA_REQUIRED_MISSING and BINDING_INVALID,
+     * which media never sends, so a required field missing or a binding the data does not have failed the step even with
+     * CONTINUE_WITH_WARNING. A busy or unreachable service is not a check: the step's tries decide.
+     */
+    static final Set<String> VALIDATION = Set.of("TEMPLATE_INVALID", "DATA_SCHEMA_MISMATCH", "REQUIRED_FIELD_MISSING", "BINDING_NOT_RESOLVED",
+        "EXPRESSION_INVALID", "DATA_UNREADABLE", "TEMPLATE_VERSION_NOT_PUBLISHED", "TEMPLATE_NOT_FOUND", "LIMIT_EXCEEDED", "ASSET_NOT_FOUND",
+        "IMAGE_UNREADABLE", "CHART_FIELD_TYPE_INVALID", "UNSUPPORTED_COMPONENT");
     static final Pattern VERSION = Pattern.compile("^(latest|[1-9][0-9]{0,5})$");
     /** The most reports one step makes, one a row. */
     static final int MAX_REPORTS = 200;

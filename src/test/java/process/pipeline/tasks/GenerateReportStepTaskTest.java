@@ -211,6 +211,28 @@ class GenerateReportStepTaskTest {
             .hasMessageContaining("OUTPUT_STORAGE_FAILED");
     }
 
+    /**
+     * ZT-S1 (showcase job 133): every refusal Report Studio's checks answer with -- in media's own codes -- warns under
+     * CONTINUE_WITH_WARNING. The set named DATA_REQUIRED_MISSING and BINDING_INVALID, which media never sends, so an unresolved
+     * binding, a required field missing, the page limit and a missing image failed the step whatever it said.
+     */
+    @Test
+    void everyCheckRefusalMediaSendsWarnsWhenTheStepSaysSo() throws Exception {
+        for (String code : List.of("BINDING_NOT_RESOLVED", "REQUIRED_FIELD_MISSING", "LIMIT_EXCEEDED", "ASSET_NOT_FOUND", "IMAGE_UNREADABLE")) {
+            FakeStudio studio = new FakeStudio();
+            studio.failCode = code;
+            Path dir = Files.createDirectories(this.dir.resolve("zts1-" + code));
+            StreamTry warning = new StreamTry(config("templateId", DESIGN, "onValidationError", "CONTINUE_WITH_WARNING"), wounds(), 64L << 20,
+                dir, 2);
+            assertThat(new GenerateReportStepTask(studio, d -> { }).stream(warning).getRecordsOut()).as(code).isEqualTo(3);
+            assertThat(warning.lines).as(code).anyMatch(l -> l.startsWith("WARN") && l.contains("goes on without a report"));
+            StreamTry failing = new StreamTry(config("templateId", DESIGN), wounds(), 64L << 20, Files.createDirectories(dir.resolve("f")), 2);
+            FakeStudio again = new FakeStudio();
+            again.failCode = code;
+            assertThatThrownBy(() -> new GenerateReportStepTask(again, d -> { }).stream(failing)).as(code).hasMessageContaining(code);
+        }
+    }
+
     @Test
     void aStepWithoutADesignSaysWhatToDoAndAVersionIsLatestOrANumber() {
         assertThatThrownBy(() -> new GenerateReportStepTask(new FakeStudio(), d -> { }).stream(new StreamTry(config(), wounds(), 64L << 20, this.dir, 2)))
