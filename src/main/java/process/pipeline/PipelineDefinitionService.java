@@ -141,6 +141,8 @@ public class PipelineDefinitionService {
         Map<String, Object> payload = views(definition);
         payload.put("valid", true);
         payload.put("problems", new ArrayList<>());
+        // ZT-S4: what is valid but will not do what it seems -- each at its path, as the problems are.
+        payload.put("warnings", this.resources == null ? new ArrayList<>() : this.resources.warnings(definition, TenantContext.getTenantId()));
         return new ResponseDto(SUCCESS, "The definition is valid.", payload);
     }
 

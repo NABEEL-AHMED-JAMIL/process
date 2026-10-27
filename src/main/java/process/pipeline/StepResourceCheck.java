@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.ai.AiPort;
+import process.model.dto.AiPromptDto;
 import process.identity.IdentityPort;
 import process.pipeline.backing.IntegrationNames;
 import process.pipeline.backing.ReportStudio;
@@ -180,6 +181,94 @@ public class StepResourceCheck {
         String at() {
             return "steps[" + this.step + "].config." + this.property;
         }
+    }
+
+    /**
+     * ZT-S4: what Validate warns of without refusing -- an AI prompt step whose prompt has a required variable the step does not
+     * map in Variables, while the rows it reads (when the definition itself shows them: a sample step) have no column of
+     * that name. Such a row's call fails unsent. Unknown rows: the warning says the column is needed. Unanswered: no warnings.
+     */
+    public List<DefinitionProblem> warnings(PipelineDefinition definition, Long tenantId) {
+        List<DefinitionProblem> warnings = new ArrayList<>();
+        if (this.ai == null || definition == null || definition.isLegacy() || definition.getSteps() == null || tenantId == null || tenantId <= 0) {
+            return warnings;
+        }
+        List<PipelineDefinition.Step> steps = definition.getSteps();
+        Map<Integer, Long> promptOf = new LinkedHashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            PipelineDefinition.Step step = steps.get(i);
+            Optional<StepTask> task = step == null ? Optional.empty() : this.tasks.find(step.getTask());
+            if (!task.isPresent()) {
+                continue;
+            }
+            for (String property : StepReferences.propertiesOfFormat(task.get().spec(), StepReferences.PROMPT)) {
+                Long id = StepReferences.idOf(step.effectiveConfig().get(property));
+                if (id != null) {
+                    promptOf.put(i, id);
+                }
+            }
+        }
+        if (promptOf.isEmpty()) {
+            return warnings;
+        }
+        Map<Long, AiPort.PromptInfo> prompts;
+        try {
+            prompts = this.ai.prompts(new LinkedHashSet<>(promptOf.values()));
+        } catch (AiPort.AiUnavailableException | RuntimeException unanswered) {
+            this.logger.info("The prompts' variables were not checked: {}", unanswered.getMessage());
+            return warnings;
+        }
+        for (Map.Entry<Integer, Long> entry : promptOf.entrySet()) {
+            AiPort.PromptInfo prompt = prompts == null ? null : prompts.get(entry.getValue());
+            if (prompt == null || prompt.variables == null) {
+                continue;
+            }
+            PipelineDefinition.Step step = steps.get(entry.getKey());
+            Object values = step.effectiveConfig().get("values");
+            Set<String> columns = sampleColumns(steps, entry.getKey());
+            for (AiPromptDto.Variable variable : prompt.variables) {
+                if (variable == null || variable.name == null || !Boolean.TRUE.equals(variable.required)
+                    || (values instanceof Map && ((Map<?, ?>) values).containsKey(variable.name))) {
+                    continue;
+                }
+                if (columns == null) {
+                    warnings.add(new DefinitionProblem("steps[" + entry.getKey() + "].config.values", String.format("Prompt variable '%s' is "
+                        + "required and not mapped in Variables: each row needs a column named %s, or that row's call fails.", variable.name,
+                        variable.name)));
+                } else if (!columns.contains(variable.name)) {
+                    warnings.add(new DefinitionProblem("steps[" + entry.getKey() + "].config.values", String.format("Prompt variable '%s' is "
+                        + "required, not mapped in Variables, and the input has no column named %s: map it, or every row's call fails.",
+                        variable.name, variable.name)));
+                }
+            }
+        }
+        return warnings;
+    }
+
+    /** The columns a step reads when the definition shows them -- its input is a sample step's rows; null when not known. */
+    @SuppressWarnings("unchecked")
+    static Set<String> sampleColumns(List<PipelineDefinition.Step> steps, int index) {
+        PipelineDefinition.Step step = steps.get(index);
+        PipelineDefinition.Step from = null;
+        if (step.getInput() != null && !step.getInput().isEmpty()) {
+            for (PipelineDefinition.Step other : steps) {
+                if (other != null && step.getInput().equals(other.getKey())) {
+                    from = other;
+                }
+            }
+        } else if (index > 0) {
+            from = steps.get(index - 1);
+        }
+        if (from == null || !"sample".equals(from.getTask()) || !(from.effectiveConfig().get("rows") instanceof List)) {
+            return null;
+        }
+        Set<String> columns = new LinkedHashSet<>();
+        for (Object row : (List<Object>) from.effectiveConfig().get("rows")) {
+            if (row instanceof Map) {
+                ((Map<?, ?>) row).keySet().forEach(k -> columns.add(String.valueOf(k)));
+            }
+        }
+        return columns;
     }
 
     /** The definition's problems with what it names in this workspace; empty when all is there (or nobody could say). */

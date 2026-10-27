@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import process.ai.AiPort;
+import process.model.dto.AiPromptDto;
 import process.pipeline.Dataset;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
@@ -28,6 +29,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 /**
@@ -69,7 +72,8 @@ public class AiPromptStepTask extends RegisteredTask {
             .required("promptId", JsonSchema.integer().minimum(1).format("prompt").title("Prompt")
                 .description("A saved prompt in this workspace (AI > Prompts). Its model connection runs it."))
             .property("values", JsonSchema.map(JsonSchema.string().format("template")).title("Variables")
-                .description("The prompt's variables by name, filled from the row: {{record_id}}."))
+                .description("The prompt's variables by name, filled from the row: {{record_id}}. A variable not named here is "
+                    + "filled from the row's column of its name; a required one with no value fails that row."))
             .property("image", JsonSchema.object()
                 .required("bucket", JsonSchema.string().minLength(1).format("bucket").title("Bucket"))
                 .required("keyColumn", JsonSchema.string().minLength(1).format("column").title("Image key column")
@@ -104,7 +108,7 @@ public class AiPromptStepTask extends RegisteredTask {
     public StepResult run(StepContext context) throws Exception {
         Map<String, Object> config = context.config();
         Long promptId = Configs.longValue(config, "promptId");
-        Map<String, String> templates = Configs.textMap(config, "values");
+        Map<String, String> templates = new LinkedHashMap<>(Configs.textMap(config, "values"));
         @SuppressWarnings("unchecked")
         Map<String, Object> image = config.get("image") instanceof Map ? (Map<String, Object>) config.get("image") : null;
         String outputColumn = Configs.text(config, "outputColumn", DEFAULT_OUTPUT);
@@ -127,6 +131,34 @@ public class AiPromptStepTask extends RegisteredTask {
             // step may run on, in this workspace, and refuses the row (422) otherwise -- which onError then handles.
             context.log(String.format("Asked to run on model option %s (from the %s).", context.modelProfile(), context.modelProfileSource()));
         }
+
+        // ZT-S4: each prompt variable the step does not name is filled from the row's column of that name, then the run's
+        // placeholders; a required one still empty fails that row's call (never sent), an optional one goes blank, said once.
+        List<AiPromptDto.Variable> declared = this.declaredVariables(context, promptId);
+        Set<String> fromRow = new LinkedHashSet<>();
+        Set<String> required = new LinkedHashSet<>();
+        for (AiPromptDto.Variable variable : declared) {
+            if (variable == null || variable.name == null || variable.name.trim().isEmpty()) {
+                continue;
+            }
+            if (!templates.containsKey(variable.name)) {
+                templates.put(variable.name, "{{" + variable.name + "}}");
+                fromRow.add(variable.name);
+            }
+            if (Boolean.TRUE.equals(variable.required)) {
+                required.add(variable.name);
+            }
+        }
+        if (!fromRow.isEmpty()) {
+            context.log("Prompt variables filled from the row's columns of the same name: " + String.join(", ", fromRow) + ".");
+        }
+        for (String name : required) {
+            if (fromRow.contains(name) && !input.getColumns().contains(name) && !runValues.containsKey(name)) {
+                context.warn(String.format("Prompt variable '%s' is required, not mapped in Variables, and the input has no column named %s: "
+                    + "no row's call can be sent.", name, name));
+            }
+        }
+        Map<String, AtomicInteger> blank = new ConcurrentHashMap<>();
 
         Set<String> columns = new LinkedHashSet<>(input.getColumns());
         columns.add(outputColumn);
@@ -157,7 +189,17 @@ public class AiPromptStepTask extends RegisteredTask {
             Map<String, Object> values = new HashMap<>(runValues);
             values.putAll(row);
             Map<String, String> variables = new LinkedHashMap<>();
-            templates.forEach((name, template) -> variables.put(name, Templates.fill(template, values)));
+            templates.forEach((name, template) -> variables.put(name,
+                fromRow.contains(name) && !values.containsKey(name) ? "" : Templates.fill(template, values)));
+            for (Map.Entry<String, String> variable : variables.entrySet()) {
+                if (variable.getValue() != null && !variable.getValue().trim().isEmpty()) {
+                    continue;
+                }
+                if (required.contains(variable.getKey())) {
+                    throw new IllegalStateException("Row " + (i + 1) + ": " + noValue(variable.getKey()));
+                }
+                blank.computeIfAbsent(variable.getKey(), k -> new AtomicInteger()).incrementAndGet();
+            }
             List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
             // MIG-420: in an item run a row's call is keyed by its item and what it asks (itemTag), so a retry of some items never
             // takes another item's answer, and reuses an item's own only when it asks the same.
@@ -208,11 +250,34 @@ public class AiPromptStepTask extends RegisteredTask {
             }
             rows.add(out);
         }
+        for (String name : templates.keySet()) {
+            AtomicInteger none = blank.get(name);
+            if (none != null && none.get() > 0) {
+                context.warn(String.format("Prompt variable '%s' had no value in %d of %d row(s); it was sent blank.", name, none.get(), input.size()));
+            }
+        }
         context.log(String.format("%d row(s) answered%s; %d row(s) out.", input.size() - failed, model == null ? "" : " on " + model, rows.size()));
         if (failed > 0) {
             context.warn(String.format("%d row(s) failed: %s.", failed, "skip".equals(onError) ? skipped + " row(s) skipped" : "their answer is empty"));
         }
         return StepResult.of(new Dataset(new ArrayList<>(columns), rows));
+    }
+
+    /** ZT-S4: why a row's call was not sent -- a required prompt variable with no value. */
+    static String noValue(String name) {
+        return String.format("Prompt variable '%s' has no value: map it in Variables or add a column named %s", name, name);
+    }
+
+    /** ZT-S4: the prompt's own variables, as ai-service describes it; none when it cannot say (the step's Variables alone, as before). */
+    private List<AiPromptDto.Variable> declaredVariables(StepContext context, Long promptId) {
+        try {
+            Map<Long, AiPort.PromptInfo> found = this.ai.prompts(Collections.singletonList(promptId));
+            AiPort.PromptInfo prompt = found == null ? null : found.get(promptId);
+            return prompt == null || prompt.variables == null ? Collections.emptyList() : prompt.variables;
+        } catch (AiPort.AiUnavailableException | RuntimeException unanswered) {
+            context.log("The prompt's variables could not be read (" + unanswered.getMessage() + "): only the step's Variables are filled.");
+            return Collections.emptyList();
+        }
     }
 
     /** A row's error in the item's own words: without the "Row 3: " the step's message starts with. */

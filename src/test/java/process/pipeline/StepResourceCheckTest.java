@@ -2,6 +2,7 @@ package process.pipeline;
 
 import org.junit.jupiter.api.Test;
 import process.ai.AiPort;
+import process.model.dto.AiPromptDto;
 import process.identity.IdentityPort;
 import process.pipeline.backing.IntegrationNames;
 import process.pipeline.backing.ReportTemplates;
@@ -104,6 +105,43 @@ class StepResourceCheckTest {
         assertThat(this.problems(Definitions.of(step("labs", "read_api", config("requestId", 1084, "variables", config("loinc", "4548-4"))))))
             .isEmpty();
         assertThat(this.problems(Definitions.of(step("labs", "read_api", config("requestId", 1084, "environmentId", 7))))).isEmpty();
+    }
+
+    /**
+     * ZT-S4: Validate warns -- never refuses -- of a required prompt variable the AI step does not map in Variables: by name
+     * when the rows it reads (a sample step) have no such column, as "needs a column" when the rows are not known; a mapped
+     * one, an optional one, or a column the sample has: no warning.
+     */
+    @Test
+    void anUnmappedRequiredPromptVariableIsAWarning() throws Exception {
+        this.riverside();
+        AiPort.PromptInfo discharge = prompt(1080L, "Discharge", RIVERSIDE);
+        AiPromptDto.Variable reason = new AiPromptDto.Variable();
+        reason.name = "reason";
+        reason.required = true;
+        AiPromptDto.Variable notes = new AiPromptDto.Variable();
+        notes.name = "notes";
+        notes.required = false;
+        discharge.variables = Arrays.asList(reason, notes);
+        when(this.ai.prompts(anyCollection())).thenReturn(Collections.singletonMap(1080L, discharge));
+        PipelineDefinition definition = Definitions.of(
+            step("rows", "sample", config("rows", Arrays.asList(config("name", "A")))),
+            step("blind", "ai_prompt", config("promptId", 1080)),
+            step("rows2", "sample", config("rows", Arrays.asList(config("reason", "Foot wound")))),
+            step("column", "ai_prompt", config("promptId", 1080)),
+            step("mapped", "ai_prompt", config("promptId", 1080, "values", config("reason", "{{diagnosis}}"))),
+            step("read", "read_api", config("requestId", 1084, "variables", config("loinc", "4548-4"))),
+            step("unknown", "ai_prompt", config("promptId", 1080)));
+
+        List<String> warnings = this.check.warnings(definition, RIVERSIDE).stream().map(p -> p.getPath() + ": " + p.getMessage())
+            .collect(Collectors.toList());
+
+        assertThat(warnings).containsExactly(
+            "steps[1].config.values: Prompt variable 'reason' is required, not mapped in Variables, and the input has no column named "
+                + "reason: map it, or every row's call fails.",
+            "steps[6].config.values: Prompt variable 'reason' is required and not mapped in Variables: each row needs a column named "
+                + "reason, or that row's call fails.");
+        assertThat(this.problems(definition)).isEmpty();
     }
 
     /**
