@@ -5,6 +5,7 @@ import org.barco.platform.api.Problem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
 import process.pipeline.PipelineDefinition;
 import process.security.TenantContext;
 
@@ -312,5 +313,62 @@ class CustomerPipelinesTest {
         assertThat(CustomerPipelines.waitSeconds("60s")).isEqualTo(60);
         assertThat(CustomerPipelines.waitSeconds(" 30 ")).isEqualTo(30);
         verify(this.intake, never()).start(any(), any());
+    }
+
+    /**
+     * MIG-426: run-and-wait in a document format answers what GET /v1/runs/{id}/result gives in it once the run ends -- here
+     * the run's Markdown -- with the run's Location; Accept chooses it as format= does.
+     */
+    @Test
+    void runAndWaitInAFormatAnswersTheRunsDocument() {
+        CustomerRuns runs = mock(CustomerRuns.class);
+        this.pipelines.useRuns(runs);
+        CustomerPipelines.waitPollMillis = 5;
+        when(this.catalogue.find(TENANT, "42")).thenReturn(Optional.of(pipeline(42L, null)));
+        this.started();
+        Map<String, Object> done = new LinkedHashMap<>();
+        done.put("id", "7001");
+        done.put("status", "completed");
+        when(runs.runWithResult("7001")).thenReturn(Optional.of(done));
+        ResultDocument md = new ResultDocument("From signed report RPT-0093 version 1\n".getBytes(StandardCharsets.UTF_8),
+            ResultFormat.MD.contentType, "RPT-0093_v1.md", "RPT-0093", 1, true);
+        when(runs.resultAs("7001", ResultFormat.MD, null)).thenReturn(CustomerAnswer.document(md));
+        when(runs.resultAs("7001", ResultFormat.PDF, "RPT-0093")).thenReturn(CustomerAnswer.problem(
+            Problem.of(403, "sensitive").kind("sensitive-files"), "/v1/runs/7001/result"));
+
+        CustomerAnswer byFormat = this.pipelines.startRun("42", json("{\"record\":{\"a\":1}}"), "wait-0101", "5s", "md", null, null);
+        CustomerAnswer byAccept = this.pipelines.startRun("42", json("{\"record\":{\"a\":1}}"), "wait-0102", "5s", null, "text/markdown", null);
+        CustomerAnswer refused = this.pipelines.startRun("42", json("{\"record\":{\"a\":1}}"), "wait-0103", "5s", "pdf", null, "RPT-0093");
+
+        assertThat(byFormat.status).isEqualTo(200);
+        assertThat(byFormat.document).isSameAs(md);
+        assertThat(byFormat.location).isEqualTo("/v1/runs/7001");
+        assertThat(byAccept.document).isSameAs(md);
+        assertThat(refused.status).as("the format's problem, with the run's Location").isEqualTo(403);
+        assertThat(refused.location).isEqualTo("/v1/runs/7001");
+        ResponseEntity<?> http = CustomerResponses.ofResult(byFormat);
+        assertThat(http.getHeaders().getContentType().toString()).isEqualToIgnoringCase("text/markdown;charset=UTF-8");
+        assertThat(http.getHeaders().getFirst("Location")).isEqualTo("/v1/runs/7001");
+        assertThat(http.getHeaders().getFirst("X-Report")).isEqualTo("RPT-0093");
+        assertThat(http.getHeaders().getFirst("Cache-Control")).isEqualTo("no-store");
+        assertThat(http.getHeaders().getFirst("Content-Disposition")).contains("RPT-0093_v1.md");
+    }
+
+    /** MIG-426: an unsupported format, or a report that is not a report's number, is a 400 and nothing starts. */
+    @Test
+    void anUnsupportedFormatIs400AndStartsNothing() {
+        CustomerAnswer xlsx = this.pipelines.startRun("42", json("{}"), "wait-0104", "5s", "xlsx", null, null);
+        CustomerAnswer accept = this.pipelines.startRun("42", json("{}"), "wait-0105", "5s", null, "text/plain", null);
+        CustomerAnswer report = this.pipelines.startRun("42", json("{}"), "wait-0106", "5s", "md", null, "the first one");
+
+        assertThat(xlsx.status).isEqualTo(400);
+        assertThat(xlsx.body).containsEntry("detail", "format is one of json, pdf, html, md.");
+        assertThat(accept.status).isEqualTo(400);
+        assertThat(String.valueOf(accept.body.get("detail"))).contains("text/markdown");
+        assertThat(report.status).isEqualTo(400);
+        assertThat(report.body).containsEntry("detail", "report is a report's number, as RPT-0093.");
+        verify(this.intake, never()).start(any(), any());
+        assertThat(this.pipelines.startRun("42", json("{}"), "wait-0107", null, null, "text/plain", null).status)
+            .as("without wait Accept says nothing: the answer is the Run").isNotEqualTo(400);
     }
 }

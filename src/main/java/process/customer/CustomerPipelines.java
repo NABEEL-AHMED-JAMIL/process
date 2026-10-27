@@ -140,6 +140,17 @@ public class CustomerPipelines {
      * A replayed start waits again for the same run. The wait holds no transaction: the run is read afresh each half second.
      */
     public CustomerAnswer startRun(String pipelineId, byte[] body, String idempotencyKey, String wait) {
+        return this.startRun(pipelineId, body, idempotencyKey, wait, null, null, null);
+    }
+
+    /**
+     * MIG-426: run-and-wait in the format the client chose -- {@code format} (json, pdf, html, md) or, with wait, the Accept
+     * header; json by default. A run that ends in time answers, in a document format, what GET /v1/runs/{id}/result gives in
+     * it (the document, or its problem: a failed run's run-not-completed), with the run's Location; json is the Run and its
+     * result as before. An unsupported format, or a report that is not a report's number, is a 400 and nothing starts.
+     */
+    public CustomerAnswer startRun(String pipelineId, byte[] body, String idempotencyKey, String wait, String format, String accept,
+        String report) {
         String instance = "/v1/pipelines/" + pipelineId + "/runs";
         Integer seconds = null;
         if (wait != null && !wait.trim().isEmpty()) {
@@ -148,6 +159,17 @@ public class CustomerPipelines {
                 return CustomerAnswer.problem(Problem.validation("wait is how long to wait for the run to end.", Collections.singletonList(
                     new Problem.FieldError("wait", "a number of seconds from 1 to " + MAX_WAIT_SECONDS + " (wait=30s)"))), instance);
             }
+        }
+        ResultFormat chosen;
+        try {
+            // Accept speaks only for the waited answer; without wait the answer is the Run (JSON) whatever it says.
+            chosen = ResultFormat.choose(format, seconds == null ? null : accept);
+        } catch (IllegalArgumentException unsupported) {
+            return CustomerAnswer.problem(Problem.of(400, unsupported.getMessage()).kind("unsupported-format"), instance);
+        }
+        String named = report == null || report.trim().isEmpty() ? null : report.trim();
+        if (named != null && !RunDocuments.REPORT_LABEL.matcher(named).matches()) {
+            return CustomerAnswer.problem(Problem.of(400, RunDocuments.REPORT_REFUSAL), instance);
         }
         CustomerAnswer started = this.startRun(pipelineId, body, idempotencyKey);
         if (seconds == null || started.status != 202 || this.runs == null || started.body == null || started.body.get("id") == null) {
@@ -162,6 +184,9 @@ public class CustomerPipelines {
             }
             Object status = now.get().get("status");
             if ("completed".equals(status) || "failed".equals(status) || "skipped".equals(status) || "interrupted".equals(status)) {
+                if (chosen.document()) {
+                    return this.runs.resultAs(runId, chosen, named).at(started.location, started.replayed);
+                }
                 return new CustomerAnswer(200, now.get(), started.location, started.replayed);
             }
             if (System.nanoTime() >= deadline) {

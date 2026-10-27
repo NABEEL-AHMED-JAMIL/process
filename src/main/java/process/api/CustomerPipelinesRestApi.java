@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.api.IdempotencyKeys;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,13 +48,17 @@ public class CustomerPipelinesRestApi {
 
     /**
      * Body {record, files, reference, parameters}; Idempotency-Key required. 202 with the Run and Location: /v1/runs/{id}.
-     * MIG-424: ?wait=30s (1 to 60 seconds) answers 200 with the Run and its result when the run ends in time.
+     * MIG-424: ?wait=30s (1 to 60 seconds) answers 200 with the Run and its result when the run ends in time. MIG-426: with
+     * wait, ?format=pdf|html|md (or Accept) answers what GET /v1/runs/{id}/result gives in that format once the run ends.
      */
     @PostMapping("/{pipelineId}/runs")
-    public ResponseEntity<Map<String, Object>> startRun(@PathVariable("pipelineId") String pipelineId,
+    public ResponseEntity<?> startRun(@PathVariable("pipelineId") String pipelineId,
         @RequestHeader(value = IdempotencyKeys.HEADER, required = false) String idempotencyKey,
         @RequestParam(value = "wait", required = false) String wait,
+        @RequestParam(value = "format", required = false) String format,
+        @RequestParam(value = "report", required = false) String report,
+        @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
         @RequestBody(required = false) byte[] body) {
-        return CustomerResponses.of(this.pipelines.startRun(pipelineId, body, idempotencyKey, wait));
+        return CustomerResponses.ofResult(this.pipelines.startRun(pipelineId, body, idempotencyKey, wait, format, accept, report));
     }
 }

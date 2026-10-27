@@ -1,6 +1,7 @@
 package process.customer;
 
 import org.barco.platform.api.Cursors;
+import org.barco.platform.api.Problem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import process.pipeline.review.RunReviewStatus;
 import process.pipeline.review.RunReviews;
 import process.security.TenantContext;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -285,5 +287,62 @@ class CustomerRunsTest {
         row.recordedAt = LocalDateTime.parse("2026-10-06T09:01:00");
         row.fileId = fileId;
         return row;
+    }
+
+    // ---- MIG-426: the result in the format the client chose -----------------------------------------------------------
+
+    @Test
+    void anUnsupportedResultFormatIs400NamingTheAllowedOnes() {
+        this.exists(RUN, "Completed");
+        CustomerAnswer xlsx = this.runs.result(String.valueOf(RUN), "xlsx", null, null);
+        CustomerAnswer plain = this.runs.result(String.valueOf(RUN), null, "text/plain", null);
+        CustomerAnswer report = this.runs.result(String.valueOf(RUN), "md", null, "first");
+
+        assertThat(xlsx.status).isEqualTo(400);
+        assertThat(xlsx.body).containsEntry("detail", "format is one of json, pdf, html, md.").containsEntry("type", "/problems/unsupported-format");
+        assertThat(plain.status).isEqualTo(400);
+        assertThat(report.status).isEqualTo(400);
+        assertThat(this.runs.result(String.valueOf(RUN), "xlsx", null, null).body).containsEntry("instance", "/v1/runs/" + RUN + "/result");
+        this.client("runs:write");
+        assertThat(this.runs.result(String.valueOf(RUN), "xlsx", null, null).status).as("the scope is checked first").isEqualTo(403);
+    }
+
+    @Test
+    void aDocumentFormatIsTheRunsDocumentAndJsonStaysAsItWas() {
+        this.exists(RUN, "Completed");
+        RunDocuments documents = mock(RunDocuments.class);
+        this.runs.useDocuments(documents);
+        ResultDocument md = new ResultDocument("From signed report RPT-0093 version 1\n".getBytes(StandardCharsets.UTF_8),
+            ResultFormat.MD.contentType, "RPT-0093_v1.md", "RPT-0093", 1, true);
+        when(documents.document(eq(TENANT), eq(RUN), eq(ResultFormat.MD), isNull(), any(), eq("cl_test"), eq("api")))
+            .thenReturn(RunDocuments.Outcome.of(md));
+        when(documents.document(eq(TENANT), eq(RUN), eq(ResultFormat.PDF), eq("RPT-0093"), any(), eq("cl_test"), eq("api")))
+            .thenReturn(RunDocuments.Outcome.refused(Problem.of(403, "sensitive").kind("sensitive-files")));
+
+        CustomerAnswer byFormat = this.runs.result(String.valueOf(RUN), "md", null, null);
+        CustomerAnswer byAccept = this.runs.result(String.valueOf(RUN), null, "text/markdown, */*;q=0.1", null);
+        CustomerAnswer refused = this.runs.result(String.valueOf(RUN), "pdf", null, " RPT-0093 ");
+        CustomerAnswer json = this.runs.result(String.valueOf(RUN), null, "application/json", null);
+
+        assertThat(byFormat.status).isEqualTo(200);
+        assertThat(byFormat.document).isSameAs(md);
+        assertThat(byAccept.document).isSameAs(md);
+        assertThat(refused.status).isEqualTo(403);
+        assertThat(refused.body).containsEntry("type", "/problems/sensitive-files").containsEntry("instance", "/v1/runs/" + RUN + "/result");
+        assertThat(json.document).isNull();
+        assertThat(json.body).containsEntry("status", "completed").containsKey("result");
+    }
+
+    @Test
+    void aRunThatHasNotCompletedHasNoDocumentEither() {
+        this.exists(RUN, "Running");
+        RunDocuments documents = mock(RunDocuments.class);
+        this.runs.useDocuments(documents);
+
+        CustomerAnswer pdf = this.runs.result(String.valueOf(RUN), "pdf", null, null);
+
+        assertThat(pdf.status).isEqualTo(409);
+        assertThat(pdf.body).containsEntry("type", "/problems/run-not-completed");
+        verify(documents, never()).document(anyLong(), anyLong(), any(), any(), any(), any(), any());
     }
 }

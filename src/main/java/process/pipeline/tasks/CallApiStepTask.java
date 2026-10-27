@@ -5,11 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import process.forms.StorageFormInbox;
 import process.pipeline.Dataset;
+import process.pipeline.RunReportFiles;
 import process.pipeline.DefinitionProblem;
 import process.pipeline.StepContext;
 import process.pipeline.StepResult;
 import process.pipeline.backing.ApiRunner;
 import process.pipeline.backing.BucketStore;
+import process.pipeline.backing.ReportStudio;
 import process.pipeline.data.FileFormats;
 import process.pipeline.data.Limits;
 import process.pipeline.data.Values;
@@ -24,11 +26,13 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -82,6 +86,10 @@ public class CallApiStepTask extends RegisteredTask {
     static final long MAX_CALL_BYTES = 8L * 1024 * 1024;
     /** What a chosen file fills (MIG-419), sent as the request's variables too. */
     private static final List<String> FILE_VALUES = Arrays.asList("file_bucket", "file_key", "file_name", "file_format");
+    /** MIG-426: the formats a report from an earlier step is sent in, and what each fills. */
+    static final List<String> REPORT_FORMATS = Arrays.asList("pdf", "html", "md");
+    static final List<String> REPORT_VALUES = Arrays.asList("report_label", "report_version", "report_signed", "report_pdf", "report_html",
+        "report_md");
     private static final Pattern JSON_PLACEHOLDER = Pattern.compile("\\{\\{\\s*(row|rows_json)\\s*}}");
     static final int LOGGED_BODY_CHARS = 300;
     private static final List<String> UNARY = Arrays.asList("is_null", "not_null", "is_empty", "not_empty");
@@ -118,6 +126,17 @@ public class CallApiStepTask extends RegisteredTask {
                 .title("A file from an earlier step")
                 .description("Fills {{file_bucket}}, {{file_key}}, {{file_name}} and {{file_format}} for the request's file or "
                     + "multipart body: the request gets them as its variables, and the step's own variables may use them too."))
+            .property("report", JsonSchema.object()
+                .required("step", JsonSchema.string().minLength(1).maxLength(128).format("step").title("From step")
+                    .description("An earlier Generate report step of this run."))
+                .required("formats", JsonSchema.array(JsonSchema.string().enumOf(REPORT_FORMATS.toArray(new String[0]))).minItems(1).maxItems(3)
+                    .title("Formats sent")
+                    .description("pdf: the report's PDF (the signed one once approved and signed) as base64 in {{report_pdf}}; html: its "
+                        + "HTML in {{report_html}}; md: Markdown made from its HTML in {{report_md}} (never signed). The rows go as JSON "
+                        + "({{row}}, {{rows_json}}) as always."))
+                .title("A report from an earlier step")
+                .description("Sends the report that step made -- with Send: each, each row's own (one report per row) -- in the chosen "
+                    + "formats, with {{report_label}}, {{report_version}} and {{report_signed}}: the request gets them as its variables."))
             .property("variables", JsonSchema.map(JsonSchema.string().maxLength(2000).format("template")).title("Variables")
                 .description("Request variables by name, filled from the row and the run: {{patient_id}}, {{row}}, {{rows_json}}, "
                     + "{{run}}, {{call_key}}. A variable holding {{row}} or {{rows_json}} is sent as JSON."))
@@ -152,6 +171,13 @@ public class CallApiStepTask extends RegisteredTask {
     /** MIG-419: puts a file kept with the run where the request's file body can read it; and the workspace's file drop. */
     private FileDrop drop;
     private LongFunction<String> fileDropOf;
+    /** MIG-426: the run's reports, in the formats a client app gets them; absent in hand-built tests. */
+    private RunReportFiles reports;
+
+    @Autowired(required = false)
+    void useReports(RunReportFiles reports) {
+        this.reports = reports;
+    }
 
     public CallApiStepTask(ApiRunner runner) {
         super(SPEC);
@@ -255,6 +281,7 @@ public class CallApiStepTask extends RegisteredTask {
 
         Map<String, Object> runValues = Templates.ofRun(context, sources.size());
         runValues.putAll(this.fileValues(context, config));
+        ReportSource report = this.reportSource(context, config, once || batch);
         Set<String> columns = new LinkedHashSet<>(inputColumns);
         columns.add(prefix + "status");
         columns.add(prefix + "ok");
@@ -284,7 +311,7 @@ public class CallApiStepTask extends RegisteredTask {
             long began = System.nanoTime();
             Sent made;
             try {
-                made = this.send(context, config, templates, runValues, sources, sent, batch, once, batchSize, total, i, atOnce > 1, tags);
+                made = this.send(context, config, templates, runValues, sources, sent, batch, once, batchSize, total, i, atOnce > 1, tags, report);
             } finally {
                 took[i] = (System.nanoTime() - began) / 1_000_000L;
             }
@@ -386,10 +413,14 @@ public class CallApiStepTask extends RegisteredTask {
      */
     private Sent send(StepContext context, Map<String, Object> config, Map<String, String> templates, Map<String, Object> runValues,
         List<Map<String, Object>> sources, List<Map<String, Object>> sent, boolean batch, boolean once, int batchSize, int total, int i,
-        boolean backOff, String[] tags) throws Exception {
+        boolean backOff, String[] tags, ReportSource report) throws Exception {
         List<Map<String, Object>> part = batch ? sources.subList(i * batchSize, Math.min(sources.size(), (i + 1) * batchSize))
             : Collections.singletonList(sources.get(i));
         Map<String, Object> values = new HashMap<>(runValues);
+        // MIG-426: the report's chosen formats -- the step's one report, or with Send: each this row's own.
+        Map<String, Object> reportValues = report == null ? Collections.<String, Object>emptyMap()
+            : report.valuesFor(context, batch || once ? null : tags[i]);
+        values.putAll(reportValues);
         if (batch) {
             List<Object> array = new ArrayList<>(part.size());
             part.forEach(source -> array.add(rowObject(source, sent)));
@@ -421,6 +452,14 @@ public class CallApiStepTask extends RegisteredTask {
             Object value = runValues.get(name);
             if (value != null) {
                 variables.putIfAbsent(name, String.valueOf(value));
+            }
+        }
+        // MIG-426: and {{report_pdf}}, {{report_md}}... the report's chosen formats, likewise.
+        for (String name : REPORT_VALUES) {
+            Object value = reportValues.get(name);
+            if (value != null && !variables.containsKey(name)) {
+                variables.put(name, String.valueOf(value));
+                size += String.valueOf(value).length();
             }
         }
         if (size > MAX_CALL_BYTES) {
@@ -495,6 +534,119 @@ public class CallApiStepTask extends RegisteredTask {
             at.put(path[path.length - 1], written);
         }
         return out;
+    }
+
+    /**
+     * MIG-426: the report an earlier Generate report step of this run made, in the formats the step sends ({@code report}:
+     * {step, formats}); null when the step sends none. With one report per row and Send: each, each row's own (by its item);
+     * otherwise the step's one report -- several, sent once or in batches, fail before any call, saying so.
+     */
+    private ReportSource reportSource(StepContext context, Map<String, Object> config, boolean oneForAll) throws Exception {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> asked = config.get("report") instanceof Map ? (Map<String, Object>) config.get("report") : null;
+        if (asked == null) {
+            return null;
+        }
+        String step = Configs.text(asked, "step", "");
+        List<String> formats = new ArrayList<>();
+        for (String f : Configs.texts(asked, "formats")) {
+            if (REPORT_FORMATS.contains(f) && !formats.contains(f)) {
+                formats.add(f);
+            }
+        }
+        if (step.isEmpty() || formats.isEmpty()) {
+            throw new IllegalStateException("A report from an earlier step: name the Generate report step and at least one format (pdf, html, md).");
+        }
+        if (this.reports == null || this.reports.unavailable().isPresent()) {
+            throw new IllegalStateException("A report from an earlier step cannot be sent from here: Report Studio is not reachable.");
+        }
+        List<RunReportFiles.Report> made = this.reports.ofStep(context.tenantId(), context.jobQueueId(), step);
+        if (made.isEmpty()) {
+            throw new IllegalStateException(String.format("A report from an earlier step: step <%s> made no report in this run.", step));
+        }
+        if (oneForAll && made.size() > 1) {
+            throw new IllegalStateException(String.format("A report from an earlier step: step <%s> made %d reports, one per row; Call API sends "
+                + "one report a call -- set Send to each so each row sends its own.", step, made.size()));
+        }
+        context.log(String.format("Sends step <%s>'s report%s as %s.", step, made.size() == 1 ? " " + made.get(0).label : "s (each row's own)",
+            String.join(", ", formats)));
+        return new ReportSource(this.reports, step, formats, made);
+    }
+
+    /** MIG-426: the reports a Call API step sends, each fetched once in each chosen format. */
+    static final class ReportSource {
+        /** The most one report's formats may hold, under a call's 8 MB. */
+        static final long MAX_BYTES = 6L * 1024 * 1024;
+        private final RunReportFiles files;
+        private final String step;
+        private final List<String> formats;
+        private final List<RunReportFiles.Report> made;
+        private final Map<String, Map<String, Object>> fetched = new HashMap<>();
+
+        ReportSource(RunReportFiles files, String step, List<String> formats, List<RunReportFiles.Report> made) {
+            this.files = files;
+            this.step = step;
+            this.formats = formats;
+            this.made = made;
+        }
+
+        /** The values a call sends: the report's label, version, whether it is signed, and each chosen format. */
+        synchronized Map<String, Object> valuesFor(StepContext context, String rowTag) throws IOException {
+            RunReportFiles.Report report = this.reportFor(rowTag);
+            Map<String, Object> values = this.fetched.get(report.reportId + "#" + report.version);
+            if (values != null) {
+                return values;
+            }
+            values = new LinkedHashMap<>();
+            values.put("report_label", report.label);
+            values.put("report_version", report.version);
+            values.put("report_signed", report.signed);
+            long held = 0;
+            String linkTo = "/v1/runs/" + context.jobQueueId() + "/result?format=pdf&report=" + report.label;
+            for (String format : this.formats) {
+                if (!report.has(format)) {
+                    throw new IllegalStateException(String.format("Report %s version %d was made as %s only, so it has no %s to send: add %s to "
+                        + "step <%s>'s formats, or send %s.", report.label, report.version, String.join(" and ", report.formats),
+                        "md".equals(format) ? "Markdown (made from its HTML)" : format.toUpperCase(Locale.ROOT),
+                        "pdf".equals(format) ? "PDF" : "HTML", this.step, "pdf".equals(format) ? "html or md" : "pdf"));
+                }
+                ReportStudio.Delivered d = this.files.deliver(context.tenantId(), report, format, "md".equals(format) ? linkTo : null, "call_api",
+                    MAX_BYTES - held);
+                held += "pdf".equals(format) ? (d.bytes.length + 2L) / 3 * 4 : d.bytes.length;
+                if (held > MAX_BYTES) {
+                    throw new IllegalStateException(String.format("Report %s's formats come to more than %d MB, over what a call sends; send fewer formats.",
+                        report.label, MAX_BYTES / 1048576));
+                }
+                values.put("report_" + format, "pdf".equals(format) ? Base64.getEncoder().encodeToString(d.bytes)
+                    : new String(d.bytes, StandardCharsets.UTF_8));
+            }
+            this.fetched.put(report.reportId + "#" + report.version, values);
+            return values;
+        }
+
+        /** The row's own report (one report per row, by its item), else the step's one report; an exception when there is none. */
+        private RunReportFiles.Report reportFor(String rowTag) {
+            if (rowTag != null) {
+                for (RunReportFiles.Report r : this.made) {
+                    if (rowTag.equals(r.row)) {
+                        return r;
+                    }
+                }
+            }
+            List<RunReportFiles.Report> ofAll = new ArrayList<>();
+            for (RunReportFiles.Report r : this.made) {
+                if (r.row == null) {
+                    ofAll.add(r);
+                }
+            }
+            if (ofAll.size() == 1) {
+                return ofAll.get(0);
+            }
+            if (this.made.size() == 1 && rowTag == null) {
+                return this.made.get(0);
+            }
+            throw new IllegalStateException(String.format("A report from an earlier step: step <%s> made no report for this row.", this.step));
+        }
     }
 
     /**

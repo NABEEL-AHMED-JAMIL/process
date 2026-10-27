@@ -91,6 +91,47 @@ public class HttpReportStudio implements ReportStudio {
     }
 
     @Override
+    public Delivered deliver(long tenantId, String reportId, int version, String format, String linkTo, String via, long maxBytes)
+        throws IOException {
+        HttpUrl.Builder url = HttpUrl.get(this.base + "/file").newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId))
+            .addQueryParameter("reportId", reportId).addQueryParameter("version", String.valueOf(version)).addQueryParameter("format", format)
+            .addQueryParameter("as", "client").addQueryParameter("via", via == null ? "api" : via);
+        if (linkTo != null) {
+            url.addQueryParameter("linkTo", linkTo);
+        }
+        Request call = new Request.Builder().url(url.build()).header("X-Internal-Token", this.serviceToken).get().build();
+        OkHttpClient bounded = this.http.newBuilder().readTimeout(60, TimeUnit.SECONDS).build();
+        try (Response response = bounded.newCall(call).execute()) {
+            if (response.code() != 200 || response.body() == null) {
+                String code = "";
+                String message = "";
+                try {
+                    JsonNode answer = this.json.readTree(response.body() == null ? "" : response.body().string());
+                    code = answer == null ? "" : answer.path("code").asText("");
+                    message = answer == null ? "" : answer.path("message").asText("");
+                } catch (IOException notJson) {
+                    message = "";
+                }
+                throw new Refused(response.code(), code, message.isEmpty() ? "media-service could not deliver the report (HTTP " + response.code()
+                    + (code.isEmpty() ? "" : ", " + code) + ")." : message);
+            }
+            long length = response.body().contentLength();
+            if (length > maxBytes) {
+                throw new IOException(String.format("The report's %s is %,d bytes, over the %,d this answer carries.", format, length, maxBytes));
+            }
+            byte[] bytes;
+            try (InputStream in = response.body().byteStream()) {
+                bytes = in.readNBytes((int) Math.min(Integer.MAX_VALUE - 8, maxBytes + 1));
+            }
+            if (bytes.length > maxBytes) {
+                throw new IOException(String.format("The report's %s is over the %,d bytes this answer carries.", format, maxBytes));
+            }
+            MediaType type = response.body().contentType();
+            return new Delivered(bytes, type == null ? "application/octet-stream" : type.toString(), null);
+        }
+    }
+
+    @Override
     public JsonNode runReports(long tenantId, long jobQueueId) throws IOException {
         HttpUrl url = HttpUrl.get(this.base + "/runReports").newBuilder().addQueryParameter("tenantId", String.valueOf(tenantId))
             .addQueryParameter("pipelineRunId", String.valueOf(jobQueueId)).build();

@@ -84,6 +84,9 @@ class EnvelopeContractTest extends EnvelopeContract {
         internal.put(declared("process.pipeline.backing.ReportStudio$Busy"), "MIG-418: thrown by HttpReportStudio inside a "
             + "Generate report step only (media answered 429/503): asked again under Calls at once, else the step's error in media's "
             + "words; no request thread meets it");
+        internal.put(declared("process.pipeline.backing.ReportStudio$Refused"), "MIG-426: thrown by HttpReportStudio.deliver and "
+            + "caught in RunDocuments (the result's 404 format-not-kept, 410 report-expired or 503 problem) or, inside a Call API step, "
+            + "the step's error in media's words; no request thread meets it");
         internal.put(declared("process.pipeline.PipelineCalls$Refused"), "MIG-424: thrown by PipelineCalls inside a Run pipeline "
             + "step's try only (another workspace's pipeline, a loop, too deep, parameters that do not stand): the row's outcome or the "
             + "step's error in words; no request thread meets it");

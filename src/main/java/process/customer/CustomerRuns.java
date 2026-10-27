@@ -8,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import process.model.pojo.JobQueue;
 import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
@@ -34,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * The customer API's runs (MIG-334, ADR-025 decision 3; OpenAPI listRuns, getRun, listRunSteps, getRunOutputs). Scope
@@ -305,18 +308,60 @@ public class CustomerRuns {
     /** MIG-424: the most rows a run's result gives. */
     static final int RESULT_ROWS = RunResults.MAX_ROWS;
 
+    /** MIG-426: a run's result as a document (pdf, html, md); absent in hand-built tests (json only). */
+    private RunDocuments documents;
+    /**
+     * MIG-426: the reads a result needs, in a read-only transaction of their own -- never around a document's making, which
+     * waits on media-service and writes the file access log. Absent in hand-built tests (read as they come).
+     */
+    private TransactionTemplate reads;
+
+    @Autowired(required = false)
+    public void useDocuments(RunDocuments documents) {
+        this.documents = documents;
+    }
+
+    @Autowired(required = false)
+    public void useTransactions(PlatformTransactionManager transactions) {
+        TransactionTemplate template = new TransactionTemplate(transactions);
+        template.setReadOnly(true);
+        this.reads = template;
+    }
+
+    private <T> T inRead(Supplier<T> read) {
+        return this.reads == null ? read.get() : this.reads.execute(status -> read.get());
+    }
+
     /**
      * MIG-424: GET /v1/runs/{id}/result -- a completed run's answer: its final output's rows (at most
      * {@value #RESULT_ROWS}, at most 16 KB of JSON), masked as the workspace's data policy masks data no one person reads.
      * runs:read. A run that has not completed is a 409 (run-not-completed); another workspace's run a 404.
      */
-    @Transactional(readOnly = true)
     public CustomerAnswer result(String runId) {
+        return this.result(runId, null, null, null);
+    }
+
+    /**
+     * MIG-426: GET /v1/runs/{id}/result in the format the client chose -- {@code format} (json, pdf, html, md) or the Accept
+     * header, json when neither says ({@link ResultFormat#choose}; anything else a 400 naming the allowed ones). pdf, html
+     * and md are the run's report, or with none its result rows ({@link RunDocuments}); {@code report} names one report
+     * (RPT-0093) of a run that made several.
+     */
+    public CustomerAnswer result(String runId, String format, String accept, String report) {
         String instance = "/v1/runs/" + runId + "/result";
         if (!TenantContext.hasScope(ApiScopes.RUNS_READ)) {
             return CustomerAnswer.problem(CustomerPipelines.insufficient(ApiScopes.RUNS_READ), instance);
         }
-        Optional<Found> found = this.found(runId);
+        ResultFormat chosen;
+        try {
+            chosen = ResultFormat.choose(format, accept);
+        } catch (IllegalArgumentException unsupported) {
+            return CustomerAnswer.problem(Problem.of(400, unsupported.getMessage()).kind("unsupported-format"), instance);
+        }
+        if (report != null && !report.trim().isEmpty() && !RunDocuments.REPORT_LABEL.matcher(report.trim()).matches()) {
+            return CustomerAnswer.problem(Problem.of(400, RunDocuments.REPORT_REFUSAL), instance);
+        }
+        Optional<Found> found = this.inRead(() -> this.found(runId));
         if (!found.isPresent()) {
             return CustomerAnswer.problem(Problem.of(404, NO_SUCH_RUN), instance);
         }
@@ -325,11 +370,14 @@ public class CustomerRuns {
             return CustomerAnswer.problem(Problem.of(409, "The run has not completed (" + status + "), so it has no result yet.")
                 .kind("run-not-completed"), instance);
         }
+        if (chosen.document()) {
+            return this.documentOf(found.get(), chosen, report == null || report.trim().isEmpty() ? null : report.trim(), instance);
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("runId", String.valueOf(found.get().row.runId));
         body.put("pipelineId", String.valueOf(found.get().row.jobId));
         body.put("status", status);
-        body.put("result", this.resultOf(found.get()));
+        body.put("result", this.inRead(() -> this.resultOf(found.get())));
         return CustomerAnswer.of(200, body, null);
     }
 
@@ -370,6 +418,62 @@ public class CustomerRuns {
             out.put("problem", "The run's output could not be read.");
         }
         return out;
+    }
+
+    /** MIG-426: a completed run's result as a document, or its problem, about {@code instance}. */
+    private CustomerAnswer documentOf(Found found, ResultFormat format, String report, String instance) {
+        if (this.documents == null) {
+            return CustomerAnswer.problem(Problem.of(503, "The run's result cannot be given as " + format.word + " here."), instance);
+        }
+        return CustomerAnswer.of(this.documents.document(found.row.tenantId, found.row.runId, format, report,
+            () -> this.inRead(() -> this.resultOf(found)), TenantContext.getClientId(), "api"), instance);
+    }
+
+    /**
+     * MIG-426: run-and-wait's answer in a document format, once the run has ended -- what GET /v1/runs/{id}/result gives in
+     * that format (the document, or its problem: run-not-completed for a run that failed); its own read-only transaction.
+     */
+    public CustomerAnswer resultAs(String runId, ResultFormat format, String report) {
+        String instance = "/v1/runs/" + runId + "/result";
+        Optional<Found> found = this.inRead(() -> this.found(runId));
+        if (!found.isPresent()) {
+            return CustomerAnswer.problem(Problem.of(404, NO_SUCH_RUN), instance);
+        }
+        String status = RunIntake.statusOf(found.get().row.jobStatus);
+        if (!"completed".equals(status)) {
+            return CustomerAnswer.problem(Problem.of(409, "The run has not completed (" + status + "), so it has no result.")
+                .kind("run-not-completed"), instance);
+        }
+        return this.documentOf(found.get(), format, report, instance);
+    }
+
+    /**
+     * MIG-426: a run of a workspace's result in each of {@code formats}, for a webhook's delivery (no request: the event's
+     * workspace); json is the result as GET /v1/runs/{id}/result gives it, every other format its document or its problem.
+     * Empty when the run is not there.
+     */
+    public Optional<Map<ResultFormat, Object>> resultsFor(long tenantId, long runId, List<ResultFormat> formats, String report, String who,
+        String via) {
+        Optional<Found> found = this.inRead(() -> this.found(tenantId, runId));
+        if (!found.isPresent()) {
+            return Optional.empty();
+        }
+        Map<ResultFormat, Object> out = new LinkedHashMap<>();
+        boolean completed = "completed".equals(RunIntake.statusOf(found.get().row.jobStatus));
+        Map<String, Object> rows = completed ? this.inRead(() -> this.resultOf(found.get())) : null;
+        for (ResultFormat format : formats) {
+            if (!completed) {
+                out.put(format, RunDocuments.Outcome.refused(Problem.of(409, "The run has not completed, so it has no result.")
+                    .kind("run-not-completed")));
+            } else if (!format.document()) {
+                out.put(format, rows);
+            } else if (this.documents == null) {
+                out.put(format, RunDocuments.Outcome.refused(Problem.of(503, "The run's result cannot be given as " + format.word + " here.")));
+            } else {
+                out.put(format, this.documents.document(tenantId, runId, format, report, () -> rows, who, via));
+            }
+        }
+        return Optional.of(out);
     }
 
     /**

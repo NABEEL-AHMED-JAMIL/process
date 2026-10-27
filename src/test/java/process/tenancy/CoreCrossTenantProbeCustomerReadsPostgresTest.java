@@ -194,7 +194,9 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
         assertThat(asClient("GET customer/runs/{runId}", () -> runs.get(b), READER)).contains("\"status\":404");
         assertThat(asClient("GET customer/runs/{runId}/steps", () -> runs.steps(b), READER)).contains("\"status\":404");
         assertThat(asClient("GET customer/runs/{runId}/outputs", () -> runs.outputs(b), READER)).contains("\"status\":404");
-        assertThat(asClient("GET customer/runs/{runId}/result", () -> runs.result(b), READER)).contains("\"status\":404");
+        assertThat(asClient("GET customer/runs/{runId}/result", () -> runs.result(b, null, null, null), READER)).contains("\"status\":404");
+        // MIG-426: in a document format too: B's run is not there, and nothing of it is asked of media.
+        assertThat(asClient("GET customer/runs/{runId}/result(md)", () -> runs.result(b, "md", null, null), READER)).contains("\"status\":404");
         assertThat(asClient("GET customer/runs/{runId}/review", () -> runs.review(b), READER)).contains("\"status\":404");
         assertThat(asClient("POST customer/runs/{runId}/review", () -> runs.decide(b, "probe-review-b-0001",
             "{\"decision\":\"rejected\",\"reason\":\"probe says no\"}".getBytes(StandardCharsets.UTF_8)), READER)).contains("\"status\":404");
@@ -217,7 +219,7 @@ class CoreCrossTenantProbeCustomerReadsPostgresTest {
             .contains("\"status\":\"completed\"").contains("\"review\":\"pending\"").contains("\"pipelineId\":\"" + A_JOB + "\"");
         assertThat(asClient("GET customer/runs/{runId}/steps(A's own)", () -> runs.steps(a), READER))
             .contains("\"key\":\"keep\"").contains("\"task\":\"save_file\"").contains("\"status\":\"completed\"");
-        assertThat(asClient("GET customer/runs/{runId}/result(A's own)", () -> runs.result(a), READER)).contains("\"status\":\"completed\"")
+        assertThat(asClient("GET customer/runs/{runId}/result(A's own)", () -> runs.result(a, null, null, null), READER)).contains("\"status\":\"completed\"")
             .contains("\"runId\":\"" + A_RUN + "\"");
         assertThat(asClient("GET customer/runs/{runId}/outputs(A's own)", () -> runs.outputs(a), READER))
             .contains("\"id\":\"" + A_FILE + "\"").contains("\"role\":\"result\"").doesNotContain("runs/" + A_RUN);

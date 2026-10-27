@@ -162,9 +162,9 @@ class CoreCrossTenantProbeCustomerApiPostgresTest {
         assertThat(asClient("GET customer/pipelines/{pipelineId}", () -> pipelines.get(String.valueOf(B_JOB)), "pipelines:read"))
             .contains("\"status\":404");
         assertThat(asClient("POST customer/pipelines/{pipelineId}/runs", () -> pipelines.startRun(String.valueOf(B_JOB),
-            "probe-key-b-0001", null, body("{\"record\":{\"a\":1}}")), "runs:write")).contains("\"status\":404");
+            "probe-key-b-0001", null, null, null, null, body("{\"record\":{\"a\":1}}")), "runs:write")).contains("\"status\":404");
         assertThat(asClient("POST customer/pipelines/{pipelineId}/runs(B's file)", () -> pipelines.startRun(String.valueOf(A_JOB),
-            "probe-key-a-file", null, body("{\"files\":[\"" + B_FILE + "\"]}")), "runs:write"))
+            "probe-key-a-file", null, null, null, null, body("{\"files\":[\"" + B_FILE + "\"]}")), "runs:write"))
             .contains("\"status\":422").contains("\"path\":\"files[0]\"").contains("no such file");
         assertThat(asClient("POST customer/events", () -> events.send("probe-key-event-b", body("{\"type\":\"bravo.secret.event\","
             + "\"data\":{}}")), "events:write")).contains("\"status\":422").contains("no event route takes this type");
@@ -179,11 +179,11 @@ class CoreCrossTenantProbeCustomerApiPostgresTest {
     @Test
     void aStartOfAsOwnPipelineQueuesOnceAndAReplayQueuesNothing() throws Exception {
         String first = asClient("POST customer/pipelines/{pipelineId}/runs(A's own)", () -> pipelines.startRun(String.valueOf(A_JOB),
-            "probe-key-a-0001", null, body("{\"record\":{\"order\":7},\"files\":[\"" + A_FILE + "\"],\"reference\":\"po-7\"}")), "runs:write");
+            "probe-key-a-0001", null, null, null, null, body("{\"record\":{\"order\":7},\"files\":[\"" + A_FILE + "\"],\"reference\":\"po-7\"}")), "runs:write");
         String again = asClient("POST customer/pipelines/{pipelineId}/runs(replayed)", () -> pipelines.startRun(String.valueOf(A_JOB),
-            "probe-key-a-0001", null, body("{\"record\":{\"order\":7},\"files\":[\"" + A_FILE + "\"],\"reference\":\"po-7\"}")), "runs:write");
+            "probe-key-a-0001", null, null, null, null, body("{\"record\":{\"order\":7},\"files\":[\"" + A_FILE + "\"],\"reference\":\"po-7\"}")), "runs:write");
         String other = asClient("POST customer/pipelines/{pipelineId}/runs(same key, other body)", () -> pipelines.startRun(
-            String.valueOf(A_JOB), "probe-key-a-0001", null, body("{\"record\":{\"order\":8}}")), "runs:write");
+            String.valueOf(A_JOB), "probe-key-a-0001", null, null, null, null, body("{\"record\":{\"order\":8}}")), "runs:write");
 
         assertThat(first).contains("\"id\":\"" + A_RUN + "\"").contains("\"pipelineId\":\"" + A_JOB + "\"").contains("\"reference\":\"po-7\"");
         assertThat(again).isEqualTo(first);
@@ -199,7 +199,7 @@ class CoreCrossTenantProbeCustomerApiPostgresTest {
     void theScopeIsCheckedForEveryCall() throws Exception {
         assertThat(asClient("GET customer/pipelines(no scope)", () -> pipelines.list(null, null), "runs:write")).contains("\"status\":403");
         assertThat(asClient("POST customer/pipelines/{pipelineId}/runs(no scope)", () -> pipelines.startRun(String.valueOf(A_JOB),
-            "probe-key-scope", null, body("{}")), "pipelines:read")).contains("\"status\":403");
+            "probe-key-scope", null, null, null, null, body("{}")), "pipelines:read")).contains("\"status\":403");
         assertThat(asClient("POST customer/events(no scope)", () -> events.send("probe-key-scope", body("{}")), "runs:write"))
             .contains("\"status\":403");
         verify(fx.engine, never()).addApiJobInQueue(any(), anyString(), anyString(), anyString(), anyString());

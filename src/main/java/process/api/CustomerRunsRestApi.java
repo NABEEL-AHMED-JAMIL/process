@@ -1,6 +1,7 @@
 package process.api;
 
 import org.barco.platform.api.IdempotencyKeys;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -62,10 +63,16 @@ public class CustomerRunsRestApi {
         return CustomerResponses.of(this.runs.steps(runId));
     }
 
-    /** MIG-424: a completed run's answer -- its final output's rows, masked; 409 run-not-completed before it completes. */
+    /**
+     * MIG-424: a completed run's answer -- its final output's rows, masked; 409 run-not-completed before it completes.
+     * MIG-426: ?format=json|pdf|html|md (or Accept; json by default): pdf, html and md are the run's report (report=RPT-…
+     * names one of several), or with none its result rows as a table (html, md); an unsupported format is a 400.
+     */
     @GetMapping("/{runId}/result")
-    public ResponseEntity<Map<String, Object>> result(@PathVariable("runId") String runId) {
-        return CustomerResponses.of(this.runs.result(runId));
+    public ResponseEntity<?> result(@PathVariable("runId") String runId, @RequestParam(value = "format", required = false) String format,
+        @RequestParam(value = "report", required = false) String report,
+        @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept) {
+        return CustomerResponses.ofResult(this.runs.result(runId, format, accept, report));
     }
 
     @GetMapping("/{runId}/outputs")

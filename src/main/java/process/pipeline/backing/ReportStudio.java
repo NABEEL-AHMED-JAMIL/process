@@ -50,9 +50,45 @@ public interface ReportStudio {
 
     /**
      * ZT-I24: the reports a run made, as media keeps them: reportId, reportLabel ("RPT-0013"), version, pages, fileName and
-     * the PDF's sha256. An empty array where media is not asked.
+     * the PDF's sha256. An empty array where media is not asked. MIG-426: also stepKey, attempt and row (the step, attempt
+     * and item that made it), formats (PDF, HTML), approved, signed, voidReason and sensitive.
      */
     default JsonNode runReports(long tenantId, long jobQueueId) throws IOException {
         return JsonNodeFactory.instance.arrayNode();
+    }
+
+    /** MIG-426: media's refusal of a delivery: its HTTP status (404 not made as that format, 410 removed by retention, ...). */
+    final class Refused extends IOException {
+        public final int status;
+        public final String code;
+
+        public Refused(int status, String code, String message) {
+            super(message);
+            this.status = status;
+            this.code = code;
+        }
+    }
+
+    /** MIG-426: a version as delivered: its bytes, content type and file name. */
+    final class Delivered {
+        public final byte[] bytes;
+        public final String contentType;
+        public final String fileName;
+
+        public Delivered(byte[] bytes, String contentType, String fileName) {
+            this.bytes = bytes;
+            this.contentType = contentType;
+            this.fileName = fileName;
+        }
+    }
+
+    /**
+     * MIG-426: a version as a client app gets it (media's file?as=client): PDF -- the signed one once approved and signed --,
+     * HTML or MD (made from its HTML, its pictures linking to {@code linkTo}); at most {@code maxBytes}, else an IOException.
+     * {@code via} is how it goes out (api, webhook, call_api), for media's audit. A refusal is {@link Refused}.
+     */
+    default Delivered deliver(long tenantId, String reportId, int version, String format, String linkTo, String via, long maxBytes)
+        throws IOException {
+        throw new IOException("Reports cannot be delivered from here.");
     }
 }

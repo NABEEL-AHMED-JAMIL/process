@@ -1,5 +1,15 @@
 package process.pipeline.tasks;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import process.pipeline.RunReportFiles;
+import process.pipeline.backing.ReportStudio;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Base64;
+import java.util.Collection;
 import org.junit.jupiter.api.Test;
 import process.pipeline.Dataset;
 import process.pipeline.StepContext.RunFile;
@@ -365,5 +375,117 @@ class CallApiStepTaskTest {
         Dataset out = this.task.run(this.context("onError", "continue")).getOutput();
         assertThat(this.api.calls).as("a busy answer is not asked again at 1: it is the row's outcome").hasSize(2);
         assertThat(out.getRows()).allMatch(r -> Integer.valueOf(429).equals(r.get("api_status")) && Boolean.FALSE.equals(r.get("api_ok")));
+    }
+
+    // ---- MIG-426: a report from an earlier step, in the formats the step sends ------------------------------------------
+
+    /** media as the Call API step reads it: the run's reports by step, attempt and row, and each delivery. */
+    static final class Studio implements ReportStudio {
+        final ArrayNode reports = Values.JSON.createArrayNode();
+        final List<String> delivered = Collections.synchronizedList(new ArrayList<>());
+
+        void report(String id, int label, String step, String row, boolean signed, String... formats) {
+            ObjectNode r = this.reports.addObject().put("reportId", id).put("reportLabel", String.format("RPT-%04d", label)).put("version", 1)
+                .put("stepKey", step).put("attempt", 1).put("signed", signed);
+            if (row != null) {
+                r.put("row", row);
+            }
+            ArrayNode f = r.putArray("formats");
+            for (String one : formats) {
+                f.add(one);
+            }
+        }
+
+        @Override
+        public Optional<String> unavailable() {
+            return Optional.empty();
+        }
+
+        @Override
+        public JsonNode generate(long tenantId, Long userId, String userName, String idempotencyKey, Path lines) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public JsonNode job(long tenantId, String jobId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void file(long tenantId, String reportId, int version, String format, OutputStream out) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public JsonNode check(long tenantId, Collection<String> ids, String version, Collection<String> columns) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public JsonNode runReports(long tenantId, long jobQueueId) {
+            return tenantId == TaskContext.TENANT && jobQueueId == TaskContext.RUN ? this.reports : Values.JSON.createArrayNode();
+        }
+
+        @Override
+        public Delivered deliver(long tenantId, String reportId, int version, String format, String linkTo, String via, long maxBytes) {
+            this.delivered.add(reportId + " " + format + " " + via + (linkTo == null ? "" : " " + linkTo));
+            String body = "PDF".equals(format) ? "%PDF " + reportId : "MD".equals(format) ? "# Report " + reportId + "\n\"quoted\"" : "<p>" + reportId;
+            return new Delivered(body.getBytes(StandardCharsets.UTF_8), "PDF".equals(format) ? "application/pdf" : "text/plain", null);
+        }
+    }
+
+    private final Studio studio = new Studio();
+
+    private CallApiStepTask withReports() {
+        this.task.useReports(new RunReportFiles(this.studio));
+        return this.task;
+    }
+
+    @Test
+    void eachRowSendsItsOwnReportInTheChosenFormats() throws Exception {
+        this.studio.report("01A", 11, "report", "1", true, "PDF", "HTML");
+        this.studio.report("01B", 12, "report", "2", false, "PDF", "HTML");
+
+        this.withReports().run(this.context("report", config("step", "report", "formats", Arrays.asList("pdf", "md"))));
+
+        assertThat(this.api.calls).hasSize(2);
+        Map<String, String> first = this.api.calls.get(0).variables;
+        assertThat(first).containsEntry("report_label", "RPT-0011").containsEntry("report_version", "1").containsEntry("report_signed", "true")
+            .containsEntry("report_pdf", Base64.getEncoder().encodeToString("%PDF 01A".getBytes(StandardCharsets.UTF_8)))
+            .containsEntry("report_md", "# Report 01A\n\"quoted\"").doesNotContainKey("report_html").containsEntry("patient", "P-1");
+        assertThat(this.api.calls.get(1).variables).containsEntry("report_label", "RPT-0012").containsEntry("report_signed", "false");
+        assertThat(this.studio.delivered).containsExactlyInAnyOrder("01A PDF call_api", "01A MD call_api /v1/runs/88001/result?format=pdf&report=RPT-0011",
+            "01B PDF call_api", "01B MD call_api /v1/runs/88001/result?format=pdf&report=RPT-0012");
+    }
+
+    @Test
+    void oneReportOfAllTheRowsIsSentOnceAndFetchedOnce() throws Exception {
+        this.studio.report("01A", 11, "report", null, true, "PDF", "HTML");
+
+        this.withReports().run(this.context("mode", "each", "report", config("step", "report", "formats", Collections.singletonList("html"))));
+        this.withReports().run(this.context("mode", "once", "report", config("step", "report", "formats", Collections.singletonList("html"))));
+
+        assertThat(this.api.calls).hasSize(3).allSatisfy(c -> assertThat(c.variables).containsEntry("report_html", "<p>01A"));
+        assertThat(this.studio.delivered).as("each run of the step fetches the report once").containsExactly("01A HTML call_api", "01A HTML call_api");
+    }
+
+    @Test
+    void severalReportsSentOnceOrInBatchesFailBeforeAnyCall() {
+        this.studio.report("01A", 11, "report", "1", true, "PDF");
+        this.studio.report("01B", 12, "report", "2", true, "PDF");
+
+        assertThatThrownBy(() -> this.withReports().run(this.context("mode", "batch", "report", config("step", "report", "formats",
+            Collections.singletonList("pdf"))))).hasMessageContaining("step <report> made 2 reports, one per row").hasMessageContaining("set Send to each");
+        assertThat(this.api.calls).isEmpty();
+    }
+
+    @Test
+    void noReportOrOneMadeWithoutTheFormatSaysSo() {
+        assertThatThrownBy(() -> this.withReports().run(this.context("report", config("step", "report", "formats", Collections.singletonList("pdf")))))
+            .hasMessage("A report from an earlier step: step <report> made no report in this run.");
+        this.studio.report("01A", 11, "report", null, true, "PDF");
+        assertThatThrownBy(() -> this.withReports().run(this.context("report", config("step", "report", "formats", Collections.singletonList("md")))))
+            .hasMessageContaining("Report RPT-0011 version 1 was made as PDF only, so it has no Markdown (made from its HTML) to send");
+        assertThat(this.api.calls).isEmpty();
     }
 }
