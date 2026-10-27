@@ -403,15 +403,119 @@ public final class RunParameters {
      * Returns {@code config} itself when nothing in it names a run value, so a pipeline without parameters costs a scan.
      */
     public static Map<String, Object> fill(Map<String, Object> config, Map<String, Object> values, Collection<String> sqlFields) {
+        return fill(config, values, sqlFields, Collections.<String>emptySet());
+    }
+
+    /**
+     * ZT-I26: as above, and in the settings the task marks as formulas ({@code expressionFields}, {"format": "expression"} at
+     * any depth) a value put inside quoted text has that quote written twice, which the formula reads as one -- so a value
+     * with a quote (O'Brien) stays one text and can never end it and add to the formula. Outside quotes it goes in as written.
+     */
+    public static Map<String, Object> fill(Map<String, Object> config, Map<String, Object> values, Collection<String> sqlFields,
+        Collection<String> expressionFields) {
         if (config == null || config.isEmpty() || values == null || values.isEmpty() || !names(config)) {
             return config;
         }
         Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : config.entrySet()) {
             boolean sql = sqlFields != null && sqlFields.contains(entry.getKey());
-            out.put(entry.getKey(), fillValue(entry.getValue(), values, sql));
+            boolean expression = !sql && expressionFields != null && expressionFields.contains(entry.getKey());
+            out.put(entry.getKey(), expression ? fillExpressions(entry.getValue(), values) : fillValue(entry.getValue(), values, sql));
         }
         return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object fillExpressions(Object value, Map<String, Object> values) {
+        if (value instanceof String) {
+            return fillExpression((String) value, values);
+        }
+        if (value instanceof Map) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            ((Map<String, Object>) value).forEach((k, v) -> out.put(k, fillExpressions(v, values)));
+            return out;
+        }
+        if (value instanceof List) {
+            List<Object> out = new ArrayList<>();
+            for (Object v : (List<Object>) value) {
+                out.add(fillExpressions(v, values));
+            }
+            return out;
+        }
+        return value;
+    }
+
+    /** A formula with its run values filled in: inside '...', "..." or `...` the value's own quote of that kind written twice. */
+    static String fillExpression(String text, Map<String, Object> values) {
+        if (text == null || !text.contains("{{")) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder();
+        char open = 0;
+        int i = 0;
+        while (i < text.length()) {
+            char c = text.charAt(i);
+            if (c == '{' && text.startsWith("{{", i)) {
+                Matcher matcher = PLACEHOLDER.matcher(text);
+                if (matcher.find(i) && matcher.start() == i) {
+                    Object value = values.get(matcher.group(1));
+                    if (value == null) {
+                        out.append(matcher.group(0));
+                    } else {
+                        String replacement = String.valueOf(value);
+                        if (open != 0) {
+                            replacement = replacement.replace(String.valueOf(open), String.valueOf(open) + open);
+                        }
+                        out.append(replacement);
+                    }
+                    i = matcher.end();
+                    continue;
+                }
+            }
+            if (open == 0 && (c == '\'' || c == '"' || c == '`')) {
+                open = c;
+            } else if (open != 0 && c == open) {
+                if (i + 1 < text.length() && text.charAt(i + 1) == open) {
+                    out.append(c).append(c);
+                    i += 2;
+                    continue;
+                }
+                open = 0;
+            }
+            out.append(c);
+            i++;
+        }
+        return out.toString();
+    }
+
+    /** ZT-I26: the top-level settings that hold a formula somewhere inside them ({"format": "expression"} at any depth). */
+    @SuppressWarnings("unchecked")
+    public static Set<String> expressionFields(Map<String, Object> configSchema) {
+        Set<String> out = new HashSet<>();
+        Object properties = configSchema == null ? null : configSchema.get("properties");
+        if (properties instanceof Map) {
+            for (Map.Entry<String, Object> property : ((Map<String, Object>) properties).entrySet()) {
+                if (holdsExpression(property.getValue())) {
+                    out.add(property.getKey());
+                }
+            }
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean holdsExpression(Object schema) {
+        if (schema instanceof Map) {
+            Map<String, Object> node = (Map<String, Object>) schema;
+            if ("expression".equals(node.get("format"))) {
+                return true;
+            }
+            return node.values().stream().anyMatch(RunParameters::holdsExpression);
+        }
+        if (schema instanceof List) {
+            return ((List<Object>) schema).stream().anyMatch(RunParameters::holdsExpression);
+        }
+        return false;
     }
 
     /** The parameter names {{param.name}} placeholders in {@code value} name, at any depth. */

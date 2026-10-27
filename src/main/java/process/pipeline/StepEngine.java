@@ -1793,6 +1793,8 @@ public class StepEngine {
                 boolean streams = task.isPresent() && task.get() instanceof StreamingStepTask;
                 Context context = streams ? new StreamTry(this, step, row, input, t, log) : new Context(this, step, row, input, t, log);
                 context.sqlFields = task.map(found -> RunParameters.sqlFields(found.spec().configSchema())).orElse(Collections.<String>emptySet());
+                context.expressionFields = task.map(found -> RunParameters.expressionFields(found.spec().configSchema()))
+                    .orElse(Collections.<String>emptySet());
                 tried.streamed = streams;
                 tried.reports = context.reports;
                 // MIG-345: the bucket objects this try reads, fingerprinted on the way.
@@ -2313,6 +2315,8 @@ public class StepEngine {
         final Map<String, long[]> kept = new HashMap<>();
         /** MIG-347: the task's SQL settings, whose filled-in text values have their quotes doubled. */
         Set<String> sqlFields = Collections.emptySet();
+        /** ZT-I26: the task's formula settings, whose filled-in values inside quoted text have that quote written twice. */
+        Set<String> expressionFields = Collections.emptySet();
         private Map<String, Object> filled;
         /** MIG-420: what this try said about its rows' items (an item run only). */
         final List<ItemReport> reports = Collections.synchronizedList(new ArrayList<>());
@@ -2361,7 +2365,7 @@ public class StepEngine {
         public Map<String, Object> config() {
             Map<String, Object> config = this.filled;
             if (config == null) {
-                config = RunParameters.fill(this.step.effectiveConfig(), this.execution.placeholders(), this.sqlFields);
+                config = RunParameters.fill(this.step.effectiveConfig(), this.execution.placeholders(), this.sqlFields, this.expressionFields);
                 this.filled = config;
             }
             return config;

@@ -32,7 +32,8 @@ import java.io.IOException;
  * A Compute formula (MIG-255): a small, closed language over one row's columns -- nothing in it can reach outside the row.
  *
  * <ul>
- *   <li>values: numbers (2, 0.785), text ('stable' or "stable"), true, false, null, and columns by name (length_cm, or
+ *   <li>values: numbers (2, 0.785), text ('stable' or "stable"; its own quote written twice inside it: 'it''s'), true, false,
+ *       null, and columns by name (length_cm, or
  *       `item length` in backticks for a name with spaces);</li>
  *   <li>arithmetic + - * / and a leading minus; comparisons == != &gt; &gt;= &lt; &lt;=; and, or, not; parentheses;</li>
  *   <li>functions: abs, coalesce, concat, days_between (ISO dates), if(condition, then, otherwise), is_null, max, min,
@@ -955,14 +956,22 @@ public final class Expression {
             int start = this.at;
             this.at++;
             StringBuilder value = new StringBuilder();
-            while (this.at < this.text.length() && this.text.charAt(this.at) != quote) {
-                value.append(this.text.charAt(this.at++));
+            while (true) {
+                while (this.at < this.text.length() && this.text.charAt(this.at) != quote) {
+                    value.append(this.text.charAt(this.at++));
+                }
+                if (this.at >= this.text.length()) {
+                    throw this.error("Unclosed " + quote, start);
+                }
+                // ZT-I26: the quote written twice inside its text is one quote ('it''s'), as SQL writes it.
+                if (this.at + 1 < this.text.length() && this.text.charAt(this.at + 1) == quote) {
+                    value.append(quote);
+                    this.at += 2;
+                    continue;
+                }
+                this.at++;
+                return value.toString();
             }
-            if (this.at >= this.text.length()) {
-                throw this.error("Unclosed " + quote, start);
-            }
-            this.at++;
-            return value.toString();
         }
 
         private boolean word(String keyword) {
