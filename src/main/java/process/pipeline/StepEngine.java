@@ -1448,7 +1448,8 @@ public class StepEngine {
                     this.itemsAfter(i, row, inputKey, passed, true, null, tried.reports, millis);
                     this.recordReads(row, step, tried.reads);
                     String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, recordsIn,
-                        out == null ? "no records" : out.toString(), tried.tries > 1 ? String.format(", on try %d", tried.tries) : "");
+                        out == null ? "no records" : out.toString(), tried.tries > 1 ? String.format(", on try %d", tried.tries) : "")
+                        + (tried.result.getNote() == null ? "" : " " + tried.result.getNote());
                     steps.ended(row, JobStatus.Completed.name(), out, null, done);
                     this.audit(String.format("%s completed: %d in, %s out, %.1f s.", label, recordsIn, out == null ? "0" : out.toString(),
                         millis / 1000.0));

@@ -147,4 +147,26 @@ class AiPromptVariablesTest {
 
         assertThat(this.sent(1).get(0)).containsOnlyKeys("note");
     }
+
+    /**
+     * ZT-AI66 (AI eval P-step-902, Riverside, 2026-10-27): rows never sent for a required variable with no value were said only in
+     * the step's warnings; its summary read "Completed: 3 in, 3 out". The summary says how many and why, and each item why.
+     */
+    @Test
+    void theStepsSummarySaysRowsWereNotSentForARequiredVariableWithNoValue() throws Exception {
+        this.prompt(variable("mobility", true), variable("pain_score", true));
+        TaskContext context = TaskContext.of(config("promptId", 41, "onError", "null"),
+            Arrays.asList(row("pain_score", "7"), row("pain_score", "4"), row("pain_score", "9")));
+
+        process.pipeline.StepResult result = this.task.run(context);
+
+        assertThat(result.getNote()).isEqualTo("3 of 3 row(s) not sent to the model: the required prompt variable 'mobility' had no value "
+            + "(map it in Variables or add a column named mobility).");
+        assertThat(context.itemEvents).hasSize(3).allMatch(e -> e.contains("Prompt variable 'mobility' has no value"));
+        verify(this.ai, never()).runRowStep(anyLong(), anyLong(), anyString(), anyString(), any(), anyMap(), any(), any(), any());
+
+        this.prompt(variable("pain_score", true));
+        assertThat(this.task.run(TaskContext.of(config("promptId", 41), Collections.singletonList(row("pain_score", "7")))).getNote())
+            .as("every row sent: nothing more to say").isNull();
+    }
 }

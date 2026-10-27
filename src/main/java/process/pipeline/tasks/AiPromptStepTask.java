@@ -219,6 +219,9 @@ public class AiPromptStepTask extends RegisteredTask {
             }
             return result;
         });
+        // ZT-AI66 (AI eval P-step-902): rows never sent because a required variable had no value were said only in the step's
+        // warnings; the run summary read "Completed: 3 in, 3 out". Counted by variable, and said in the summary too.
+        Map<String, Integer> unsent = new LinkedHashMap<>();
         for (int i = 0; i < input.size(); i++) {
             AtOnce.Outcome<AiPort.StepResult> outcome = outcomes.get(i);
             if (!outcome.made) {
@@ -233,6 +236,10 @@ public class AiPromptStepTask extends RegisteredTask {
                     throw outcome.error;
                 }
                 context.itemFailed(row, withoutRow(outcome.error.getMessage()));
+                String variable = unsentFor(outcome.error.getMessage());
+                if (variable != null) {
+                    unsent.merge(variable, 1, Integer::sum);
+                }
                 if ("fail".equals(onError)) {
                     throw outcome.error;
                 }
@@ -264,12 +271,21 @@ public class AiPromptStepTask extends RegisteredTask {
         if (failed > 0) {
             context.warn(String.format("%d row(s) failed: %s.", failed, "skip".equals(onError) ? skipped + " row(s) skipped" : "their answer is empty"));
         }
-        return StepResult.of(new Dataset(new ArrayList<>(columns), rows));
+        List<String> said = new ArrayList<>();
+        unsent.forEach((name, n) -> said.add(String.format("%d of %d row(s) not sent to the model: the required prompt variable '%s' had no "
+            + "value (map it in Variables or add a column named %s)", n, input.size(), name, name)));
+        return StepResult.of(new Dataset(new ArrayList<>(columns), rows)).withNote(said.isEmpty() ? null : String.join("; ", said) + ".");
     }
 
     /** ZT-S4: why a row's call was not sent -- a required prompt variable with no value. */
     static String noValue(String name) {
         return String.format("Prompt variable '%s' has no value: map it in Variables or add a column named %s", name, name);
+    }
+
+    /** The variable a row was not sent for ({@link #noValue}'s message), or null for any other failure. */
+    static String unsentFor(String message) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Prompt variable '([^']+)' has no value").matcher(message == null ? "" : message);
+        return m.find() ? m.group(1) : null;
     }
 
     /** ZT-S4: the prompt's own variables, as ai-service describes it; none when it cannot say (the step's Variables alone, as before). */

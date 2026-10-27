@@ -11,6 +11,8 @@ public final class StepResult {
     private final boolean streamed;
     /** MIG-346: the step asks for an approval: the engine pauses the run here until the reviewers decide. */
     private final ApprovalAsk approval;
+    /** ZT-AI66: what the step's summary must also say (rows not sent, and why); null when nothing more. */
+    private String note;
 
     private StepResult(Dataset output, Long recordsOut) {
         this(output, recordsOut, false);
@@ -73,6 +75,17 @@ public final class StepResult {
     /** No dataset: the step acted (sent, wrote) on {@code records} records. The next step reads what this one read. */
     public static StepResult nothing(Long records) {
         return new StepResult(null, records);
+    }
+
+    /** The same result, its summary saying {@code note} too (ZT-AI66). */
+    public StepResult withNote(String note) {
+        this.note = note == null || note.trim().isEmpty() ? null : note.trim();
+        return this;
+    }
+
+    /** What the step's summary also says, or null. */
+    public String getNote() {
+        return note;
     }
 
     public Dataset getOutput() {
