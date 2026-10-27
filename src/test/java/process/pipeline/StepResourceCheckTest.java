@@ -145,6 +145,45 @@ class StepResourceCheckTest {
     }
 
     /**
+     * ZT-I27 (patient intake): a required prompt variable an earlier step on the AI step's input makes as a column -- a Compute
+     * formula's target, a Transform's, an AI prompt's field -- is no warning; one made on another branch still is.
+     */
+    private static PipelineDefinition.Step on(PipelineDefinition.Step step, String input) {
+        step.setInput(input);
+        return step;
+    }
+
+    @Test
+    void aPromptVariableAnEarlierStepMakesIsNoWarning() throws Exception {
+        this.riverside();
+        AiPort.PromptInfo intake = prompt(1080L, "Intake", RIVERSIDE);
+        AiPromptDto.Variable line = new AiPromptDto.Variable();
+        line.name = "patient_line";
+        line.required = true;
+        AiPromptDto.Variable reason = new AiPromptDto.Variable();
+        reason.name = "reason";
+        reason.required = true;
+        intake.variables = Arrays.asList(line, reason);
+        when(this.ai.prompts(anyCollection())).thenReturn(Collections.singletonMap(1080L, intake));
+        PipelineDefinition definition = Definitions.of(
+            step("read", "read_file", config("bucket", "b", "key", "k.json")),
+            step("facts", "compute", config("formulas", Arrays.asList(config("target", "patient_line", "expression", "concat(a, b)")))),
+            step("shape", "transform", config("mappings", Arrays.asList(config("target", "reason", "op", "upper", "source", "why")))),
+            step("draft", "ai_prompt", config("promptId", 1080)),
+            on(step("other", "compute", config("formulas", Arrays.asList(config("target", "reason", "expression", "'x'")))), "read"),
+            on(step("again", "ai_prompt", config("promptId", 1080)), "read"));
+
+        List<String> warnings = this.check.warnings(definition, RIVERSIDE).stream().map(p -> p.getPath() + ": " + p.getMessage())
+            .collect(Collectors.toList());
+
+        assertThat(warnings).containsExactly(
+            "steps[5].config.values: Prompt variable 'patient_line' is required and not mapped in Variables: each row needs a column named "
+                + "patient_line, or that row's call fails.",
+            "steps[5].config.values: Prompt variable 'reason' is required and not mapped in Variables: each row needs a column named "
+                + "reason, or that row's call fails.");
+    }
+
+    /**
      * ZT-M15: the teams a definition names as reviewers -- its review's and an Approval step's -- are active teams of the
      * pipeline's workspace; another workspace's (or an archived, or unknown) team is refused by name. Identity silent: not
      * checked, as the other references.

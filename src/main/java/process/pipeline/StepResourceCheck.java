@@ -226,10 +226,14 @@ public class StepResourceCheck {
             PipelineDefinition.Step step = steps.get(entry.getKey());
             Object values = step.effectiveConfig().get("values");
             Set<String> columns = sampleColumns(steps, entry.getKey());
+            Set<String> made = madeOnTheWay(steps, entry.getKey());
             for (AiPromptDto.Variable variable : prompt.variables) {
                 if (variable == null || variable.name == null || !Boolean.TRUE.equals(variable.required)
                     || (values instanceof Map && ((Map<?, ?>) values).containsKey(variable.name))) {
                     continue;
+                }
+                if (columns == null && made.contains(variable.name)) {
+                    continue;   // ZT-I27: an earlier step on its input makes that column
                 }
                 if (columns == null) {
                     warnings.add(new DefinitionProblem("steps[" + entry.getKey() + "].config.values", String.format("Prompt variable '%s' is "
@@ -243,6 +247,50 @@ public class StepResourceCheck {
             }
         }
         return warnings;
+    }
+
+    /**
+     * ZT-I27: the columns the steps on a step's input make by name -- a Compute formula's target, a Transform's mapping target,
+     * an AI prompt's fields and output column -- walking back along each step's input (its named input, else the step
+     * before it). What another branch makes is not counted.
+     */
+    @SuppressWarnings("unchecked")
+    static Set<String> madeOnTheWay(List<PipelineDefinition.Step> steps, int index) {
+        Set<String> made = new LinkedHashSet<>();
+        Map<String, Integer> byKey = new LinkedHashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i) != null && steps.get(i).getKey() != null) {
+                byKey.put(steps.get(i).getKey(), i);
+            }
+        }
+        Set<Integer> seen = new LinkedHashSet<>();
+        PipelineDefinition.Step at = steps.get(index);
+        int i = index;
+        while (at != null && seen.add(i)) {
+            Integer from = at.getInput() != null && !at.getInput().isEmpty() ? byKey.get(at.getInput()) : (i > 0 ? i - 1 : null);
+            if (from == null || from >= i) {
+                break;
+            }
+            i = from;
+            at = steps.get(i);
+            Map<String, Object> config = at == null ? null : at.effectiveConfig();
+            if (config == null) {
+                continue;
+            }
+            for (String list : new String[] {"formulas", "mappings", "fields"}) {
+                if (config.get(list) instanceof List) {
+                    for (Object item : (List<Object>) config.get(list)) {
+                        if (item instanceof Map && ((Map<String, Object>) item).get("target") instanceof String) {
+                            made.add((String) ((Map<String, Object>) item).get("target"));
+                        }
+                    }
+                }
+            }
+            if (config.get("outputColumn") instanceof String) {
+                made.add((String) config.get("outputColumn"));
+            }
+        }
+        return made;
     }
 
     /** The columns a step reads when the definition shows them -- its input is a sample step's rows; null when not known. */
