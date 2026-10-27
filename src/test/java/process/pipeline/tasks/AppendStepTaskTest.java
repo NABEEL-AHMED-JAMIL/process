@@ -67,6 +67,24 @@ class AppendStepTaskTest {
         assertThat(result.getOutput().size()).isEqualTo(4);
     }
 
+    /**
+     * ZT-S9 (showcase job 11, 2026-10-27): "common" with an input that found nothing -- no rows, and so no columns (a read of
+     * files since the last run) -- keeps the other steps' common columns; it took every column away, and the next step failed.
+     * An empty input that does know its columns still counts.
+     */
+    @Test
+    void anEmptyInputThatKnowsNoColumnsTakesNoColumnsAwayFromCommon() throws Exception {
+        TaskContext context = this.context(config("steps", Arrays.asList("men", "nothing_new", "total"), "columns", "common"));
+        context.outputs.put("nothing_new", new Dataset(Collections.emptyList(), Collections.emptyList()));
+        Dataset out = this.task.run(context).getOutput();
+        assertThat(out.getColumns()).containsExactly("measure", "mean");
+        assertThat(out.size()).isEqualTo(3);
+
+        TaskContext known = this.context(config("steps", Arrays.asList("men", "empty_known"), "columns", "common"));
+        known.outputs.put("empty_known", new Dataset(Arrays.asList("measure"), Collections.emptyList()));
+        assertThat(this.task.run(known).getOutput().getColumns()).containsExactly("measure");
+    }
+
     @Test
     void aValueThatCannotBeConvertedFailsNamingTheRowStepAndColumn() {
         TaskContext context = this.context(config("steps", Arrays.asList("men", "odd")));

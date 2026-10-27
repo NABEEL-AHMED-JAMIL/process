@@ -92,14 +92,21 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
         // Columns first, from each input's own list (known before a row is read).
         Set<String> columns = new LinkedHashSet<>();
         List<Long> sizes = new ArrayList<>();
+        boolean seen = false;
         for (int i = 0; i < steps.size(); i++) {
             try (RowSource input = context.openOutputOf(steps.get(i))) {
                 sizes.add(input.size());
-                if (i == 0 || !common) {
+                // ZT-S9 (showcase job 11, 2026-10-27): an input with no rows and no columns -- a read that found nothing new, so
+                // knows no columns -- says nothing of what the steps have in common; it took every column of the others away.
+                if (common && input.size() == 0 && input.columns().isEmpty()) {
+                    continue;
+                }
+                if (!seen || !common) {
                     columns.addAll(input.columns());
                 } else {
                     columns.retainAll(new HashSet<>(input.columns()));
                 }
+                seen = true;
             }
         }
         if (sourceColumn != null && columns.contains(sourceColumn)) {

@@ -57,7 +57,7 @@ public class HttpItemReviews implements ItemReviews {
             + "was not sure enough of: the reviewers named check them on the run's Items tab and mark the task done.");
         ensure.put("subjectType", "pipeline_items");
         ensure.set("steps", steps());
-        ensure.put("service", "process (MIG-421)");
+        ensure.put("service", "the pipeline engine (item reviews)");   // ZT-S10: plain words, no build ticket
         JsonNode ready = this.post("/ensure", ensure).path("data");
         if (!"Active".equals(ready.path("status").asText("")) || ready.path("currentVersion").asInt(0) == 0) {
             throw new IllegalStateException("The workspace's \"Pipeline items review\" workflow is switched off, so no Task inbox task was made.");
