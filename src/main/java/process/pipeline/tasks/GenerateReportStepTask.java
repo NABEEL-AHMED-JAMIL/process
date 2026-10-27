@@ -453,6 +453,10 @@ public class GenerateReportStepTask extends RegisteredTask implements StreamingS
         if (row != null) {
             pipeline.put("row", row);
         }
+        // ZT-M21: a sensitive pipeline's report is a sensitive file -- media's library asks Download sensitive files for it.
+        if (context.sensitive()) {
+            pipeline.put("sensitive", true);
+        }
         head.put("pipeline", pipeline);
         return head;
     }

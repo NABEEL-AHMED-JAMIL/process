@@ -161,6 +161,22 @@ class GenerateReportStepTaskTest {
         assertThat(context.lines).anyMatch(l -> l.contains("Report RPT-0007 version 1") && l.contains("REPEAT_CAPPED"));
     }
 
+    /** ZT-M21: a sensitive pipeline's report says so in the job's head, so media's library keeps it as a sensitive file. */
+    @Test
+    void aSensitivePipelinesReportSaysSoInTheHead() throws Exception {
+        FakeStudio studio = new FakeStudio();
+        StreamTry context = new StreamTry(config("design", "STEP", "templateId", DESIGN, "templateVersion", "latest"), wounds(), 64L << 20,
+            this.dir, 2);
+        context.sensitive = true;
+        new GenerateReportStepTask(studio, d -> { }).stream(context);
+        assertThat(JSON.readTree(studio.sent.get(0)).path("head").path("pipeline").path("sensitive").asBoolean()).isTrue();
+        FakeStudio open = new FakeStudio();
+        StreamTry plain = new StreamTry(config("design", "STEP", "templateId", DESIGN, "templateVersion", "latest"), wounds(), 64L << 20,
+            this.dir, 2);
+        new GenerateReportStepTask(open, d -> { }).stream(plain);
+        assertThat(JSON.readTree(open.sent.get(0)).path("head").path("pipeline").has("sensitive")).isFalse();
+    }
+
     /** A run whose pipeline has no name sends none (media then keeps none); a long one is cut to 160 characters. */
     @Test
     void theHeadNamesThePipelineOnlyWhenItHasAName() throws Exception {

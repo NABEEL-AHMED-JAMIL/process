@@ -242,8 +242,17 @@ public final class ItemMasks {
      * since two values cannot show the distinctness a list of people has). At that many values or more the platform's rule
      * holds unchanged. Data that is not sensitive is never read with this rule.
      */
+    /**
+     * ZT-M21: a column's name as the platform's column rules read it. SensitiveValues' name patterns take "_", "-" and a
+     * space as one separator; a flattened JSON path's "." is one too -- "patient.name" names a patient's name as
+     * "patient_name" does, and "contact.address" an address -- so it is read as "_".
+     */
+    public static String columnName(String column) {
+        return column == null ? "" : column.trim().replace('.', '_');
+    }
+
     public static Optional<Kind> sensitiveColumnKind(String column, Collection<String> sample) {
-        Optional<Kind> kind = SensitiveValues.columnKind(column, sample);
+        Optional<Kind> kind = SensitiveValues.columnKind(columnName(column), sample);
         if (kind.isPresent()) {
             return kind;
         }
@@ -256,7 +265,7 @@ public final class ItemMasks {
         if (values.isEmpty() || values.size() >= SensitiveValues.MIN_VALUES) {
             return Optional.empty();
         }
-        String name = column == null ? "" : column.trim();
+        String name = columnName(column);
         String asked = "name".equalsIgnoreCase(name) ? "full_name" : name;
         for (String v : values) {
             kind = SensitiveValues.columnKind(asked, Collections.nCopies(SensitiveValues.MIN_VALUES, v));

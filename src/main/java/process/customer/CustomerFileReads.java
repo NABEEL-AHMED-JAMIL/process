@@ -6,10 +6,12 @@ import org.barco.platform.security.ApiScopes;
 import org.barco.platform.tenancy.RowSecurity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import process.pipeline.DatasetStore;
 import process.pipeline.FileAccessLog;
 import process.pipeline.RunOutput;
+import process.pipeline.SensitiveFiles;
 import process.pipeline.StepStore;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.data.FileFormats;
@@ -114,6 +116,27 @@ public class CustomerFileReads {
         this.accessLog = accessLog;
     }
 
+    /**
+     * ZT-M21: a file a sensitive pipeline made is listed (meta: name, size, type, sensitive) and refused to an API client --
+     * the signed link and its content answer 403 (sensitive-files) -- until a files:sensitive scope is offered. Absent in
+     * hand-built tests (not checked).
+     */
+    private SensitiveFiles sensitiveFiles;
+
+    @Autowired(required = false)
+    public void useSensitiveFiles(SensitiveFiles sensitiveFiles) {
+        this.sensitiveFiles = sensitiveFiles;
+    }
+
+    /** Whether this resolved file is one a sensitive pipeline made. */
+    private boolean sensitive(Resolved file) {
+        return this.sensitiveFiles != null && file.output != null && file.runId != null && this.sensitiveFiles.sensitiveRun(file.runId);
+    }
+
+    static Problem sensitiveProblem() {
+        return Problem.of(403, SensitiveFiles.API_REFUSAL).kind("sensitive-files");
+    }
+
     public CustomerAnswer meta(String fileId) {
         String instance = "/v1/files/" + fileId + "/meta";
         if (!TenantContext.hasScope(ApiScopes.FILES_READ)) {
@@ -127,6 +150,12 @@ public class CustomerFileReads {
         }
         if (!found.isPresent()) {
             return CustomerAnswer.problem(Problem.of(404, NO_SUCH_FILE), instance);
+        }
+        if (this.sensitive(found.get())) {
+            Map<String, Object> view = new LinkedHashMap<>(found.get().view);
+            view.put("sensitive", true);
+            view.put("downloadable", false);
+            return CustomerAnswer.of(200, view, null);
         }
         return CustomerAnswer.of(200, found.get().view, null);
     }
@@ -149,6 +178,10 @@ public class CustomerFileReads {
         }
         if (found.get().expired) {
             return CustomerAnswer.problem(Problem.of(410, EXPIRED_FILE).kind("file-expired"), instance);
+        }
+        if (this.sensitive(found.get())) {
+            this.accessLog.apiFile(tenantId, TenantContext.getClientId(), fileId, found.get().runId, found.get().name, false, 403, "sensitive files");
+            return CustomerAnswer.problem(sensitiveProblem(), instance);
         }
         if (!this.links.available()) {
             logger.warn("A file link was asked for but cannot be signed: internal.service-token is not set.");
@@ -193,6 +226,9 @@ public class CustomerFileReads {
         Resolved file = found.get();
         if (file.expired) {
             return Content.refused(Problem.of(410, EXPIRED_FILE).kind("file-expired"), instance);
+        }
+        if (this.sensitive(file)) {
+            return Content.refused(sensitiveProblem(), instance);
         }
         try {
             if (file.output != null && RunOutput.FILE.equals(file.output.kind)) {

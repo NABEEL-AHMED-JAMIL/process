@@ -15,6 +15,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
 import process.identity.IdentityPort;
+import process.pipeline.SensitiveFiles;
 import process.security.TenantContext;
 
 import java.io.IOException;
@@ -70,6 +71,14 @@ public class CustomerRunViews {
     private final IdentityPort identity;
     private final TransactionOperations transactions;
     private final String consoleUrl;
+
+    /** ZT-M21: absent in hand-built tests (a sensitive run's files are then linked as any). */
+    private SensitiveFiles sensitiveFiles;
+
+    @Autowired(required = false)
+    public void useSensitiveFiles(SensitiveFiles sensitiveFiles) {
+        this.sensitiveFiles = sensitiveFiles;
+    }
 
     @Autowired
     public CustomerRunViews(CustomerRuns runs, ViewLinks views, FileLinks files, IdentityPort identity,
@@ -184,9 +193,15 @@ public class CustomerRunViews {
         view.put("pipelineName", found.get().job.getJobName());
         view.put("steps", steps.data);
         List<Map<String, Object>> made = new ArrayList<>();
+        // ZT-M21: a sensitive pipeline's files are listed and not linked (the API's file routes refuse them).
+        boolean sensitive = this.sensitiveFiles != null && this.sensitiveFiles.sensitiveRun(run.runId);
         for (Map<String, Object> file : this.runs.madeFiles(run, steps.attempt)) {
             Map<String, Object> shown = new LinkedHashMap<>(file);
-            if (!Boolean.TRUE.equals(file.get("expired")) && this.files.available()) {
+            if (sensitive) {
+                shown.put("download", null);
+                shown.put("sensitive", true);
+                shown.put("refusal", SensitiveFiles.API_REFUSAL);
+            } else if (!Boolean.TRUE.equals(file.get("expired")) && this.files.available()) {
                 String fileId = String.valueOf(file.get("id"));
                 FileLinks.Issued download = this.files.issue(link.tenantId, fileId, link.clientId, link.expiresAt);
                 Map<String, Object> linkView = new LinkedHashMap<>();

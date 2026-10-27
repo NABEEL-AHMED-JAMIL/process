@@ -12,6 +12,7 @@ import process.model.pojo.SourceJob;
 import process.model.repository.JobQueueRepository;
 import process.model.repository.SourceJobRepository;
 import process.pipeline.PipelineDefinitionStore;
+import process.pipeline.SensitiveFiles;
 import process.pipeline.StepStore;
 import process.pipeline.review.RunReviews;
 import process.security.TenantContext;
@@ -171,6 +172,26 @@ class CustomerRunViewsTest {
         assertThat((Map<String, Object>) view.body.get("review")).containsEntry("status", "pending");
         assertThat(view.body.toString()).doesNotContain("bucket").doesNotContain("storageKey");
         verify(this.store, never()).find(eq(CustomerRunsTest.TENANT + 1), anyLong());
+    }
+
+    /** ZT-M21: a sensitive pipeline's made files are listed in the view without a download link (the API refuses them). */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aSensitivePipelinesFilesAreListedWithoutALink() {
+        this.exists(RUN, "Completed");
+        String token = this.token(this.views.create(String.valueOf(RUN), null));
+        TenantContext.clear();
+        when(this.steps.stepsOfRun(RUN)).thenReturn(Collections.emptyList());
+        when(this.steps.pinnedDefinition(RUN)).thenReturn(Optional.empty());
+        when(this.steps.outputsOfRun(RUN)).thenReturn(Collections.singletonList(CustomerRunsTest.output(77L, "signed.pdf", "pdf",
+            "01JRESULT00000000000000000")));
+        SensitiveFiles sensitive = mock(SensitiveFiles.class);
+        when(sensitive.sensitiveRun(RUN)).thenReturn(true);
+        this.views.useSensitiveFiles(sensitive);
+        List<Map<String, Object>> made = (List<Map<String, Object>>) this.views.view(token).body.get("files");
+        assertThat(made).hasSize(1);
+        assertThat(made.get(0)).containsEntry("name", "signed.pdf").containsEntry("download", null).containsEntry("sensitive", true)
+            .containsEntry("refusal", SensitiveFiles.API_REFUSAL);
     }
 
     @Test

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import process.pipeline.DatasetStore;
 import process.pipeline.FileAccessLog;
 import process.pipeline.RunOutput;
+import process.pipeline.SensitiveFiles;
 import process.pipeline.StepStore;
 import process.pipeline.backing.BucketStore;
 import process.security.TenantContext;
@@ -101,6 +102,33 @@ class CustomerFileReadsTest {
     private void client(String... scopes) {
         TenantContext.set(TENANT, TenantContext.API_CLIENT, null, "client:cl_test");
         TenantContext.setApiClient("cl_test", new LinkedHashSet<>(Arrays.asList(scopes)));
+    }
+
+    /**
+     * ZT-M21 (owner 2026-10-26): a file a sensitive pipeline made is listed to an API client (meta: sensitive, not
+     * downloadable) and refused -- the signed link and a link made before -- with one plain sentence, until a files:sensitive
+     * scope is offered; an upload, and a pipeline that is not sensitive, are unchanged.
+     */
+    @Test
+    void aSensitivePipelinesMadeFileIsListedAndRefusedToAnApiClient() throws Exception {
+        CustomerAnswer before = this.reads.link(MADE);
+        String token = before.location.substring(before.location.indexOf("token=") + 6);
+        SensitiveFiles sensitive = mock(SensitiveFiles.class);
+        when(sensitive.sensitiveRun(RUN)).thenReturn(true);
+        this.reads.useSensitiveFiles(sensitive);
+        CustomerAnswer meta = this.reads.meta(MADE);
+        assertThat(meta.status).isEqualTo(200);
+        assertThat(meta.body).containsEntry("name", "result.csv").containsEntry("sensitive", true).containsEntry("downloadable", false);
+        CustomerAnswer link = this.reads.link(MADE);
+        assertThat(link.status).isEqualTo(403);
+        assertThat(link.body.toString()).contains(SensitiveFiles.API_REFUSAL).contains("sensitive-files");
+        CustomerFileReads.Content content = this.reads.content(MADE, token);
+        assertThat(content.status).isEqualTo(403);
+        assertThat(content.body).isNull();
+        assertThat(String.valueOf(content.problem.get("detail"))).isEqualTo(SensitiveFiles.API_REFUSAL);
+        assertThat(this.reads.meta(UPLOAD).body).doesNotContainKey("sensitive");
+        when(sensitive.sensitiveRun(RUN)).thenReturn(false);
+        assertThat(this.reads.link(MADE).status).isEqualTo(302);
     }
 
     @Test

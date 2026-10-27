@@ -26,6 +26,7 @@ import process.pipeline.PipelineDefinition;
 import process.pipeline.PipelineDefinitionStore;
 import process.pipeline.RunOwnership;
 import process.pipeline.StepStore;
+import process.pipeline.SensitiveFiles;
 import process.pipeline.StepTasks;
 import process.pipeline.backing.BucketStore;
 import process.pipeline.data.RowSource;
@@ -261,6 +262,19 @@ public class RunItems {
     @Autowired(required = false)
     public void useLinks(ItemLinks links) {
         this.links = links;
+    }
+
+    /** ZT-M21: a sensitive pipeline's item files and zips need Download sensitive files; absent in hand-built tests (not checked). */
+    private SensitiveFiles sensitiveFiles;
+
+    @Autowired(required = false)
+    public void useSensitiveFiles(SensitiveFiles sensitiveFiles) {
+        this.sensitiveFiles = sensitiveFiles;
+    }
+
+    /** Why this person may not have this run's files (a sensitive pipeline's, without the permission); empty when they may. */
+    private Optional<String> fileRefusal(long jobQueueId) {
+        return this.sensitiveFiles == null ? Optional.empty() : this.sensitiveFiles.refusalForCaller(jobQueueId);
     }
 
     // ---------------------------------------------------------------------------------------------------------- access
@@ -1052,6 +1066,10 @@ public class RunItems {
         }
         data.put("bytes", bytes);
         data.put("files", this.filesView(this.filesOf(row, request.stepKey, request.search, page * size, size), this.stepsOf(row.jobQueueId)));
+        // ZT-M21: listed (name, size, type) whoever reads them; whether this person may have them, and why not.
+        Optional<String> refusal = this.fileRefusal(request.jobQueueId);
+        data.put("downloadable", !refusal.isPresent());
+        refusal.ifPresent(why -> data.put("refusal", why));
         return Answer.ok(String.format("%d file(s).", total), data);
     }
 
@@ -1081,6 +1099,11 @@ public class RunItems {
             return Answer.refused(404, "File not found for this item.");
         }
         ItemRow.FileRow f = file.get();
+        Optional<String> sensitive = this.fileRefusal(jobQueueId);
+        if (sensitive.isPresent()) {
+            this.accessLog.log(run, ItemAccessLog.ITEM_FILE, action, f.fileName, false, 403, sensitive.get());
+            return Answer.refused(403, sensitive.get());
+        }
         String type = contentTypeOf(f.fileName, f.format);
         StreamingResponseBody body;
         try {
@@ -1199,6 +1222,11 @@ public class RunItems {
         if (count == 0) {
             return Answer.refused(404, "This item has no files to download.");
         }
+        Optional<String> sensitive = this.fileRefusal(jobQueueId);
+        if (sensitive.isPresent()) {
+            this.accessLog.log(owned.get().run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.LINK, row.label, false, 403, sensitive.get());
+            return Answer.refused(403, sensitive.get());
+        }
         Long userId = TenantContext.getAppUserId();
         String[] issued = this.links.issue(owned.get().run.getTenantId(), userId == null ? 0 : userId, jobQueueId, row.itemRef, stepKey);
         this.accessLog.log(owned.get().run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.LINK, row.label, true, 200, null);
@@ -1230,6 +1258,12 @@ public class RunItems {
             return Answer.refused(404, RUN_NOT_FOUND);
         }
         JobQueue run = owned.get().run;
+        // ZT-M21: checked again when the zip is opened -- a permission taken away since the link was made holds.
+        Optional<String> sensitive = this.fileRefusal(jobQueueId);
+        if (sensitive.isPresent() && (!link.itemRef.startsWith(MANY) || this.filesInZip(run.getJobQueueId(), link) > 0)) {
+            this.accessLog.log(run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.DOWNLOAD, null, false, 403, sensitive.get());
+            return Answer.refused(403, sensitive.get());
+        }
         if (link.itemRef.startsWith(MANY)) {
             return this.zipOfMany(run, owned.get(), link);
         }
@@ -1303,6 +1337,13 @@ public class RunItems {
         for (ItemRow row : selected.items) {
             files += this.countFilesOf(row, stepKey, null);
         }
+        // ZT-M21: a sensitive pipeline's items with files are the permission's; without files the zip is their item.json, masked.
+        Optional<String> sensitive = files > 0 ? this.fileRefusal(selected.owned.run.getJobQueueId()) : Optional.<String>empty();
+        if (sensitive.isPresent()) {
+            this.accessLog.log(selected.owned.run, ItemAccessLog.ITEM_ZIP, ItemAccessLog.LINK, String.format("%d items", selected.items.size()), false,
+                403, sensitive.get());
+            return Answer.refused(403, sensitive.get());
+        }
         // ZT-I21: an item with no files of its own (a row of a table pipeline) still has its folder -- its item.json, masked.
         Long userId = TenantContext.getAppUserId();
         String refs = selected.items.stream().map(r -> r.itemRef).collect(Collectors.joining(","));
@@ -1319,6 +1360,19 @@ public class RunItems {
     }
 
     /** The zip a link to several items opens: a folder per item -- its files, and item.json with its status and values (masked). */
+    /** The files a many-items zip link would hold (its items' current files at its step). */
+    private int filesInZip(long jobQueueId, ItemLinks.Link link) {
+        List<ItemRow> all = this.store.current(jobQueueId);
+        int files = 0;
+        for (String ref : link.itemRef.substring(MANY.length()).split(",")) {
+            ItemRow row = byRef(all, ref.trim());
+            if (row != null) {
+                files += this.countFilesOf(row, link.stepKey, null);
+            }
+        }
+        return files;
+    }
+
     private Answer zipOfMany(JobQueue run, RunOwnership.Owned owned, ItemLinks.Link link) {
         List<ItemRow> all = this.store.current(run.getJobQueueId());
         List<ItemRow> chosen = new ArrayList<>();

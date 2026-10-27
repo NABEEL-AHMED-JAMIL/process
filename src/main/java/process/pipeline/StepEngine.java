@@ -2408,6 +2408,11 @@ public class StepEngine {
         }
 
         @Override
+        public boolean sensitive() {
+            return SensitiveFiles.sensitive(this.execution.definition);
+        }
+
+        @Override
         public String modelProfile() {
             return this.asked().profile;
         }

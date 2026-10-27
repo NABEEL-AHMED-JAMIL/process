@@ -70,6 +70,14 @@ public interface StepContext {
     }
 
     /**
+     * ZT-M21: whether the pipeline this run runs is marked sensitive (settings.sensitivity) -- a report it makes is then a
+     * sensitive file (Report Studio's library asks Download sensitive files for it). False outside a run.
+     */
+    default boolean sensitive() {
+        return false;
+    }
+
+    /**
      * The model this run asks this step to run on (MIG-242, for the engine since the console review of 2026-10-07): an
      * ai-service model option id from the run's "Run with a different AI model...", else the schedule's setting; null for
      * the step's default. Only an AI step reads it; ai-service decides whether the option may be used.

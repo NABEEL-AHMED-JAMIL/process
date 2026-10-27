@@ -162,6 +162,8 @@ final class StreamTry implements StreamContext {
     Long jobId;
     /** The run's pipeline's name; null when it has none. */
     String pipelineName;
+    /** ZT-M21: whether the run's pipeline is marked sensitive. */
+    boolean sensitive;
     long runId = 2;
     List<RunDocuments.Document> documents = new ArrayList<>();
     long tenant = 1;
@@ -205,4 +207,9 @@ final class StreamTry implements StreamContext {
     @Override public void log(String message) { this.lines.add("INFO " + message); }
 
     @Override public void warn(String message) { this.lines.add("WARN " + message); }
+
+    @Override
+    public boolean sensitive() {
+        return this.sensitive;
+    }
 }

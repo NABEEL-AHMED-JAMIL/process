@@ -104,7 +104,12 @@ public enum PageKey {
     // (/pipeline.json/steps/reads). Identity-service's SOURCES has held the key since MIG-229 (integration-service's
     // /dataSource.json, gated at the gateway); Core names only its own path here, and identity's PageKey names it too.
     SOURCES("sources", "Sources", "Integration", "/integration/sources",
-        "/pipeline.json/steps/reads");
+        "/pipeline.json/steps/reads"),
+    // ZT-M21 (owner 2026-10-26): "Download sensitive files" -- the files a pipeline marked sensitive keeps (Save File and its
+    // per-row files, an item's files and zips, a report's PDF, a run's outputs) are its real output and are never masked, so
+    // downloading, viewing or previewing one is this permission's. A capability, not a screen: its prefix is served by
+    // nothing; Core, media and ai ask the page gate for /sensitiveFiles.json/download. Identity-service's PageKey says the same.
+    SENSITIVE_FILES("sensitive-files", "Download sensitive files", "Pipelines", "/runs/latest", "/sensitiveFiles.json");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is

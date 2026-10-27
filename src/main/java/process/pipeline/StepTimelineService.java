@@ -146,6 +146,14 @@ public class StepTimelineService {
         this.items = items;
     }
 
+    /** ZT-M21: a sensitive pipeline's kept files need Download sensitive files; absent in hand-built tests (not checked). */
+    private SensitiveFiles sensitiveFiles;
+
+    @Autowired(required = false)
+    public void useSensitiveFiles(SensitiveFiles sensitiveFiles) {
+        this.sensitiveFiles = sensitiveFiles;
+    }
+
     /** MIG-345: retrying a failed run (from its failed step, or from the start), and the attempts someone asked for. */
     private RunRetries retries;
     private RunAttemptStore attempts;
@@ -307,6 +315,11 @@ public class StepTimelineService {
         }
         try {
             if (dataset.storageKey.contains("/files/")) {
+                // ZT-M21: a file a sensitive pipeline kept is its real output, never masked -- the bytes are the permission's.
+                Optional<String> refusal = this.sensitiveFiles == null ? Optional.empty() : this.sensitiveFiles.refusalForCaller(dataset.jobQueueId);
+                if (refusal.isPresent()) {
+                    return Download.refused(403, refusal.get()).of(run.get());
+                }
                 return this.keptFile(dataset, wanted).of(run.get());
             }
             if ("pdf".equals(wanted)) {
@@ -350,6 +363,9 @@ public class StepTimelineService {
         }
         Optional<JobQueue> run = Optional.of(owned.get().run);
         Instant now = Instant.now();
+        // ZT-M21: a sensitive pipeline's kept files are listed (name, size, type) and say whether this person may have them.
+        boolean sensitive = this.sensitiveFiles != null && this.sensitiveFiles.sensitiveRun(run.get().getJobQueueId());
+        Optional<String> refused = sensitive ? this.sensitiveFiles.personRefusal() : Optional.empty();
         // MIG-345: an attempt's files include those its reused steps made in the attempt whose outputs they are.
         Set<Long> reusedSources = new HashSet<>();
         if (attempt != null) {
@@ -377,6 +393,11 @@ public class StepTimelineService {
                     out.put("runDatasetId", row.runDatasetId);
                     out.put("expiresAt", row.expiresAt == null ? null : BusinessTime.wallClockOf(row.expiresAt));
                     out.put("expired", row.expiresAt != null && !row.expiresAt.isAfter(now));
+                    if (sensitive) {
+                        out.put("sensitive", true);
+                        out.put("downloadable", !refused.isPresent());
+                        refused.ifPresent(why -> out.put("refusal", why));
+                    }
                 } else {
                     out.put("bucket", row.bucketAlias);
                     out.put("key", row.objectKey);
@@ -388,6 +409,7 @@ public class StepTimelineService {
         manifest.put("jobId", run.get().getJobId());
         manifest.put("attempt", attempt);
         manifest.put("outputs", outputs);
+        manifest.put("sensitive", sensitive);
         this.putReview(manifest, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d file(s).", outputs.size()), manifest);
     }
