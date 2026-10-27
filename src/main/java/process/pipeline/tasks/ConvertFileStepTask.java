@@ -164,6 +164,7 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
                 }
             }
         }
+        FileRows.warnSeveral(context, Configs.text(config, "keyColumn", FileRows.KEY), targets);
         if (targets.size() > maxFiles) {
             throw new IllegalStateException(String.format("The run names %,d files; this step converts at most %d (maxFiles).",
                 targets.size(), maxFiles));
@@ -246,7 +247,7 @@ public class ConvertFileStepTask extends RegisteredTask implements StreamingStep
     private MediaFiles.Converted convert(StreamContext context, FileRows.Target target, int number, String tag, String format, long maxBytes, Path scratch,
         Path converted) throws Exception {
         if (target.key.isEmpty()) {
-            throw new IllegalArgumentException("The row names no file.");
+            throw new IllegalArgumentException(target.missing());
         }
         if (target.extension().isEmpty()) {
             throw new IllegalArgumentException(String.format("'%s' has no extension, so its format is not known.", target.fileName()));

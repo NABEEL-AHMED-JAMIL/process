@@ -4,6 +4,7 @@ import process.pipeline.StepContext;
 import process.pipeline.data.Values;
 import process.pipeline.registry.JsonSchema;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,8 +13,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Which file each row names, for the steps that take one file a row (transcribe_audio, convert_file), and the names a
- * step writes one file a row under (save_file, upload_bucket with "One file per row").
+ * Which file each row names, for the steps that take one file a row (transcribe_audio, convert_file, split_pages; and the
+ * images of measure_image, measure_mask and ai_prompt), and the names a step writes one file a row under (save_file,
+ * upload_bucket with "One file per row"). MIG-426: a form's file field feeds them as it is ({@link #refOf}).
  *
  * <p>A file is a key in one of the run's workspace's own storage connections, by its alias -- as read_s3, ai_prompt's
  * images and the inbox name files: the step's {@code bucket}, else the row's {@code bucket} column, else the run's own
@@ -45,8 +47,8 @@ final class FileRows {
                 .description("The workspace's storage connection the " + what + " are in, by its alias. Empty: the row's bucket "
                     + "column, else the run's own (the inbox it was started from)."))
             .property("keyColumn", JsonSchema.string().maxLength(255).format("column").title("File key column")
-                .description("The column holding each row's file key. Empty: the key column (Read S3's list), else the files the "
-                    + "run was started for (an inbox), one row each."));
+                .description("The column holding each row's file key, or a form's file field as it is (read where the form stored it). "
+                    + "Empty: the key column (Read S3's list), else the files the run was started for (an inbox), one row each."));
     }
 
     /** One row's file: where it is, and the row it came from (with bucket, key, file_name and file_stem). */
@@ -54,11 +56,26 @@ final class FileRows {
         final String bucket;
         final String key;
         final Map<String, Object> row;
+        /** MIG-426: why the row names no file, in words, when its value said more than nothing (a form's empty file answer). */
+        final String problem;
+        /** MIG-426: how many more files the row's value names past the one read. */
+        final int more;
 
         Target(String bucket, String key, Map<String, Object> row) {
+            this(bucket, key, row, null, 0);
+        }
+
+        Target(String bucket, String key, Map<String, Object> row, String problem, int more) {
             this.bucket = bucket;
             this.key = key;
             this.row = row;
+            this.problem = problem;
+            this.more = more;
+        }
+
+        /** Why this row names no file: its own problem, or that it names none. */
+        String missing() {
+            return this.problem != null ? this.problem : "The row names no file.";
         }
 
         String fileName() {
@@ -106,20 +123,138 @@ final class FileRows {
         return out;
     }
 
-    /** The input row's file; an exception (the row's failure) when it names none. */
+    /**
+     * The input row's file; an exception (the row's failure) when it names none. MIG-426: the column may be a form's file field
+     * as it is -- its upload, or the list of them, or either as JSON text ({@link #refOf}) -- read from where the form stored it
+     * and named as it was uploaded.
+     */
     static Target of(StepContext context, Map<String, Object> config, String keyColumn, Map<String, Object> row) {
-        Object value = row.get(keyColumn);
-        String key = value == null ? "" : value.toString().trim();
-        String bucket = Configs.text(config, "bucket", null);
+        Ref ref = refOf(row.get(keyColumn), keyColumn);
+        String key = ref.key;
+        String bucket = ref.bucket != null ? ref.bucket : Configs.text(config, "bucket", null);
         if (bucket == null) {
             Object own = row.get(BUCKET);
             bucket = own == null || own.toString().trim().isEmpty() ? context.inputBucket() : own.toString().trim();
         }
-        Map<String, Object> named = withNames(new LinkedHashMap<>(row), key);
-        if (key.isEmpty()) {
-            return new Target(bucket, "", named);
+        Map<String, Object> named = new LinkedHashMap<>(row);
+        if (ref.name != null) {
+            withNames(named, ref.name);
         }
-        return new Target(bucket, key, named);
+        named = withNames(named, key);
+        if (key.isEmpty()) {
+            return new Target(bucket, "", named, ref.problem, ref.more);
+        }
+        return new Target(bucket, key, named, null, ref.more);
+    }
+
+    /**
+     * MIG-426: a warning on the run when rows' values name several files (a form's field with three photos) -- a step that
+     * takes one file a row reads each row's first.
+     */
+    static void warnSeveral(StepContext context, String column, List<Target> targets) {
+        int rows = 0;
+        for (Target target : targets) {
+            rows += target.more > 0 ? 1 : 0;
+        }
+        warnSeveral(context, column, rows);
+    }
+
+    /** {@link #warnSeveral(StepContext, String, List)} for rows read whole: how many of them name more than one file. */
+    static void warnSeveralIn(StepContext context, String column, List<Map<String, Object>> rows) {
+        int several = 0;
+        for (Map<String, Object> row : rows) {
+            several += refOf(row.get(column), column).more > 0 ? 1 : 0;
+        }
+        warnSeveral(context, column, several);
+    }
+
+    private static void warnSeveral(StepContext context, String column, int rows) {
+        if (rows > 0) {
+            context.warn(String.format("%,d row(s) hold more than one file in %s; this step reads each row's first (one file a row).", rows,
+                column));
+        }
+    }
+
+    /**
+     * MIG-426: the file a row's value names. A key as text; or a form's file or signature field as the submission holds it
+     * -- an upload {key, bucket, name, ...}, a list of them, or either written as JSON text -- whose first upload it is, in the
+     * bucket the form stored it in (the workspace's own, by its alias) and with the name it was uploaded as. An answer with no
+     * upload, or one naming no key, is no file and says so ({@link Ref#problem}); a step reading one file a row reads the
+     * first of several ({@link Ref#more} counts the rest).
+     */
+    static Ref refOf(Object value, String column) {
+        Object read = value;
+        if (value instanceof String) {
+            String text = ((String) value).trim();
+            if (!(text.startsWith("[") || text.startsWith("{"))) {
+                return new Ref(text, null, null, null, 0);
+            }
+            try {
+                read = Values.JSON.readValue(text, Object.class);
+            } catch (IOException notJson) {
+                return new Ref(text, null, null, null, 0);
+            }
+        }
+        if (read == null) {
+            return new Ref("", null, null, null, 0);
+        }
+        String what = column == null || column.isEmpty() ? "value" : column;
+        int more = 0;
+        if (read instanceof List) {
+            List<?> list = (List<?>) read;
+            if (list.isEmpty()) {
+                return new Ref("", null, null, String.format("The row's %s holds no file.", what), 0);
+            }
+            more = list.size() - 1;
+            read = list.get(0);
+            if (!(read instanceof Map)) {
+                return read == null ? new Ref("", null, null, String.format("The row's %s holds no file.", what), more)
+                    : new Ref(read.toString().trim(), null, null, null, more);
+            }
+        }
+        if (!(read instanceof Map)) {
+            return new Ref(read.toString().trim(), null, null, null, 0);
+        }
+        Map<?, ?> upload = (Map<?, ?>) read;
+        String key = textOf(upload.get(KEY));
+        if (key == null) {
+            return new Ref("", null, null, String.format("The row's %s names no stored file (no key).", what), more);
+        }
+        return new Ref(key, textOf(upload.get(BUCKET)), textOf(upload.get("name")), null, more);
+    }
+
+    private static String textOf(Object value) {
+        String text = value == null ? null : value.toString().trim();
+        return text == null || text.isEmpty() ? null : text;
+    }
+
+    /** MIG-426: a file a row's value names -- its key ("" for none), its bucket and name when the value says, and why none. */
+    static final class Ref {
+        final String key;
+        /** The bucket the value names (a form's upload); null when it names none and the step's own is used. */
+        final String bucket;
+        /** The name it was uploaded as; null when the value names none. */
+        final String name;
+        /** Why the value names no file, in words; null when it names one, or is simply empty. */
+        final String problem;
+        /** How many more files the value names past the first. */
+        final int more;
+
+        Ref(String key, String bucket, String name, String problem, int more) {
+            this.key = key;
+            this.bucket = bucket;
+            this.name = name;
+            this.problem = problem;
+            this.more = more;
+        }
+
+        /** The key, or an exception naming why there is none: the value's own problem, else {@code none}. */
+        String keyOr(String none) {
+            if (this.key.isEmpty()) {
+                throw new IllegalStateException(this.problem != null ? this.problem : none);
+            }
+            return this.key;
+        }
     }
 
     /** The row with file_name and file_stem of its key, unless it has them already. */

@@ -69,7 +69,8 @@ public class MeasureImageStepTask extends RegisteredTask {
             .required("image", JsonSchema.object()
                 .required("bucket", JsonSchema.string().minLength(1).format("bucket").title("Bucket"))
                 .required("keyColumn", JsonSchema.string().minLength(1).format("column").title("Image key column")
-                    .description("The column holding each row's photo key in that bucket (png or jpg)."))
+                    .description("The column holding each row's photo key in that bucket (png or jpg), or a form's photo field as it is (read where "
+                        + "the form stored it)."))
                 .title("Image").description("Each row's photo, with a ruler (1 cm ticks) beside the object."))
             .property("target", JsonSchema.string().enumOf(NEW_STEP_TARGET, SAVED_BEFORE_TARGETS).title("What to measure")
                 .defaultValue(NEW_STEP_TARGET)
@@ -135,6 +136,7 @@ public class MeasureImageStepTask extends RegisteredTask {
         columns.addAll(Arrays.asList(names));
         Limits.requireShape(input.size(), columns.size(), "The measured rows");
 
+        FileRows.warnSeveralIn(context, Configs.text(image, "keyColumn", ""), input.getRows());
         List<Map<String, Object>> rows = new ArrayList<>(input.size());
         int measured = 0;
         int noScale = 0;
@@ -179,16 +181,16 @@ public class MeasureImageStepTask extends RegisteredTask {
 
     /** The row's photo from the bucket; a row without a png or jpg key is an error for the row. */
     private byte[] photo(StepContext context, Map<String, Object> image, Map<String, Object> row) throws Exception {
-        Object key = row.get(Configs.text(image, "keyColumn", ""));
-        String objectKey = key == null ? "" : key.toString().trim();
-        if (objectKey.isEmpty()) {
-            throw new IllegalStateException("The row has no image key.");
-        }
+        String column = Configs.text(image, "keyColumn", "");
+        // MIG-426: a form's photo field as it is -- its upload, read from where the form stored it -- or a key.
+        FileRows.Ref ref = FileRows.refOf(row.get(column), column);
+        String objectKey = ref.keyOr("The row has no image key.");
         int dot = objectKey.lastIndexOf('.');
         if (dot < 0 || !IMAGE_TYPES.contains(objectKey.substring(dot + 1).toLowerCase(Locale.ROOT))) {
             throw new IllegalStateException("\"" + objectKey + "\" is not a png or jpg image.");
         }
-        return this.buckets.read(context.tenantId(), Configs.text(image, "bucket", ""), objectKey, AiPromptStepTask.MAX_IMAGE_BYTES);
+        return this.buckets.read(context.tenantId(), ref.bucket != null ? ref.bucket : Configs.text(image, "bucket", ""), objectKey,
+            AiPromptStepTask.MAX_IMAGE_BYTES);
     }
 
     /**

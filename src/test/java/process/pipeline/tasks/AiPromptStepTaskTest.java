@@ -89,6 +89,27 @@ class AiPromptStepTaskTest {
         verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("2"), eq(41L), anyMap(), anyList(), isNull(), isNull());
     }
 
+    /**
+     * MIG-426: a form's photo field -- the uploads list the submission holds, here as its JSON text -- is the row's image, read
+     * from where the form stored it; it used to fail the row with the list's JSON "is not an image".
+     */
+    @Test
+    void aFormsPhotoFieldIsTheRowsImage() throws Exception {
+        this.buckets.objects.put("riverside-forms/intake/forms/form-7/uploads/p1-photo.png", "png-bytes".getBytes(StandardCharsets.UTF_8));
+        this.answer("{\"stage\":\"2\",\"length_cm\":3.1}");
+        String photo = "[{\"key\": \"intake/forms/form-7/uploads/p1-photo.png\", \"name\": \"knee.png\", \"bucket\": \"riverside-forms\", "
+            + "\"contentType\": \"image/png\"}]";
+        TaskContext context = TaskContext.of(config("promptId", 41, "image", config("bucket", "wounds", "keyColumn", "photo")),
+            Arrays.asList(row("patient_id", "P-1", "photo", photo)));
+
+        Dataset out = this.task.run(context).getOutput();
+
+        assertThat(out.getRows().get(0)).containsEntry("photo", photo);
+        assertThat(this.sentImages).hasSize(1);
+        assertThat(this.sentImages.get(0).get(0).mediaType).isEqualTo("image/png");
+        assertThat(this.sentImages.get(0).get(0).base64).isEqualTo(Base64.getEncoder().encodeToString("png-bytes".getBytes(StandardCharsets.UTF_8)));
+    }
+
     /** Review 2026-10-07: "Run with a different AI model..." reaches an engine AI step -- the option and the job's source task. */
     @Test
     void theModelTheRunAsksForIsSentWithTheJobsSourceTask() throws Exception {

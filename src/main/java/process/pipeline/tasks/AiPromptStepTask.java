@@ -77,7 +77,8 @@ public class AiPromptStepTask extends RegisteredTask {
             .property("image", JsonSchema.object()
                 .required("bucket", JsonSchema.string().minLength(1).format("bucket").title("Bucket"))
                 .required("keyColumn", JsonSchema.string().minLength(1).format("column").title("Image key column")
-                    .description("The column holding each row's image key in that bucket (png, jpg, webp or gif)."))
+                    .description("The column holding each row's image key in that bucket (png, jpg, webp or gif), or a form's photo field as it "
+                        + "is (read where the form stored it)."))
                 .title("Image").description("Send each row's image to a vision model with the prompt."))
             .property("outputColumn", JsonSchema.string().minLength(1).maxLength(128).title("Answer column").defaultValue(DEFAULT_OUTPUT))
             .property("fields", JsonSchema.array(JsonSchema.object()
@@ -182,6 +183,9 @@ public class AiPromptStepTask extends RegisteredTask {
             tags[i] = context.rowTag(input.getRows().get(i), i);
         }
         long[] took = new long[input.size()];
+        if (image != null) {
+            FileRows.warnSeveralIn(context, Configs.text(image, "keyColumn", ""), input.getRows());
+        }
         // MIG-418: the rows' calls, Calls at once at a time, answered in row order; a failure stops new calls only under fail.
         List<AtOnce.Outcome<AiPort.StepResult>> outcomes = AtOnce.run(context.tenantId(), input.size(), atOnce, "fail".equals(onError), i -> {
             long began = System.nanoTime();
@@ -311,17 +315,17 @@ public class AiPromptStepTask extends RegisteredTask {
 
     /** The row's image from the bucket, as the model reads it; a row without one is an error for the row. */
     private AiPort.Image imageOf(StepContext context, Map<String, Object> image, Map<String, Object> row) throws Exception {
-        Object key = row.get(Configs.text(image, "keyColumn", ""));
-        String objectKey = key == null ? "" : key.toString().trim();
-        if (objectKey.isEmpty()) {
-            throw new IllegalStateException("The row has no image key.");
-        }
+        String column = Configs.text(image, "keyColumn", "");
+        // MIG-426: a form's photo field as it is -- its upload, read from where the form stored it -- or a key.
+        FileRows.Ref ref = FileRows.refOf(row.get(column), column);
+        String objectKey = ref.keyOr("The row has no image key.");
         int dot = objectKey.lastIndexOf('.');
         String type = dot < 0 ? null : IMAGE_TYPES.get(objectKey.substring(dot + 1).toLowerCase(Locale.ROOT));
         if (type == null) {
             throw new IllegalStateException("\"" + objectKey + "\" is not an image (png, jpg, webp or gif).");
         }
-        byte[] bytes = this.buckets.read(context.tenantId(), Configs.text(image, "bucket", ""), objectKey, MAX_IMAGE_BYTES);
+        byte[] bytes = this.buckets.read(context.tenantId(), ref.bucket != null ? ref.bucket : Configs.text(image, "bucket", ""), objectKey,
+            MAX_IMAGE_BYTES);
         return new AiPort.Image(type, Base64.getEncoder().encodeToString(bytes));
     }
 

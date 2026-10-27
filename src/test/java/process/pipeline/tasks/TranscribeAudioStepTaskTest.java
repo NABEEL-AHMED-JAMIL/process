@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -80,6 +81,27 @@ class TranscribeAudioStepTaskTest {
 
         assertThat(t.declared).containsExactly("id", "path", "file_name", "file_stem", "transcript", "language", "duration_seconds", "segments");
         assertThat((String) t.rows.get(0).get("segments")).isEqualTo("[{\"startMs\":0,\"endMs\":1500,\"text\":\"text of a.mp3\"}]");
+    }
+
+    /**
+     * MIG-426: a form's recording field (its uploads, as the submission holds them) names each row's file: read from where the
+     * form stored it, named as it was uploaded.
+     */
+    @Test
+    void aFormsRecordingFieldNamesTheRowsFile() throws Exception {
+        this.buckets.put(MINE, "riverside-forms/intake/forms/form-9/uploads/u1-note.m4a", audio("x"));
+        Map<String, Object> upload = new LinkedHashMap<>();
+        upload.put("key", "intake/forms/form-9/uploads/u1-note.m4a");
+        upload.put("bucket", "riverside-forms");
+        upload.put("name", "voice note.m4a");
+        StreamTry t = this.run(config("keyColumn", "recording"), Dataset.of(Arrays.asList(row("id", 7, "recording", Arrays.asList(upload)))));
+
+        this.task.stream(t);
+
+        assertThat(t.rows).hasSize(1);
+        assertThat(t.rows.get(0)).containsEntry("transcript", "text of u1-note.m4a").containsEntry("file_name", "voice note.m4a")
+            .containsEntry("file_stem", "voice note");
+        assertThat(this.media.calls).containsExactly("transcribe 2980 pipeline#91#step#a1#r1 u1-note.m4a");
     }
 
     @Test

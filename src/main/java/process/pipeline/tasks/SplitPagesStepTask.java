@@ -132,6 +132,7 @@ public class SplitPagesStepTask extends RegisteredTask implements StreamingStepT
                 }
             }
         }
+        FileRows.warnSeveral(context, Configs.text(config, "keyColumn", FileRows.KEY), targets);
         if (targets.size() > maxFiles) {
             throw new IllegalStateException(String.format("The run names %,d files; this step splits at most %d (maxFiles).", targets.size(),
                 maxFiles));
@@ -156,7 +157,7 @@ public class SplitPagesStepTask extends RegisteredTask implements StreamingStepT
             Path spool = scratch.resolve("document-" + (i + 1) + ".pdf");
             try {
                 if (target.key.isEmpty()) {
-                    throw new IllegalArgumentException("The row names no file.");
+                    throw new IllegalArgumentException(target.missing());
                 }
                 if (!"pdf".equals(target.extension())) {
                     throw new IllegalArgumentException(String.format("'%s' is not a PDF.", target.fileName()));

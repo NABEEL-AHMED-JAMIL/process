@@ -152,6 +152,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
                 }
             }
         }
+        FileRows.warnSeveral(context, Configs.text(config, "keyColumn", FileRows.KEY), targets);
         if (targets.size() > maxFiles) {
             throw new IllegalStateException(String.format("The run names %,d files; this step transcribes at most %d (maxFiles).",
                 targets.size(), maxFiles));
@@ -249,7 +250,7 @@ public class TranscribeAudioStepTask extends RegisteredTask implements Streaming
     private MediaFiles.Transcript transcribe(StreamContext context, FileRows.Target target, int number, String tag, boolean timestamps, long maxBytes,
         Path scratch) throws Exception {
         if (target.key.isEmpty()) {
-            throw new IllegalArgumentException("The row names no file.");
+            throw new IllegalArgumentException(target.missing());
         }
         if (!TYPES.contains(target.extension())) {
             throw new IllegalArgumentException(String.format("'%s' is not a recording the transcriber reads (%s).", target.fileName(),

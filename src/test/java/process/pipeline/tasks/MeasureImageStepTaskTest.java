@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -86,6 +87,59 @@ class MeasureImageStepTaskTest {
         assertThat(out.getColumns()).containsExactly("image_key", "has_ruler", "scale", "wound_length", "wound_width", "wound_area", "how");
         assertThat((Double) out.getRows().get(0).get("wound_length")).isCloseTo(5.0, within(0.5));
         assertThat((Double) out.getRows().get(0).get("wound_width")).isCloseTo(3.0, within(0.3));
+    }
+
+    /**
+     * MIG-426: a form's photo field (a list of uploads, as the submission's JSON holds it, or as its text) feeds the step as it
+     * is -- each row's photo is read from where the form stored it -- where only the hidden "photo_key" column used to: the
+     * field itself failed with "[{...}]" is not a png or jpg image.
+     */
+    @Test
+    void aFormsPhotoFieldIsReadAsTheFileItNames() throws Exception {
+        SyntheticPhotos photo = SyntheticPhotos.photo(800, 600, 30).ellipse(5.0, 3.0, 500, 220, 35).ruler(40, 500, 10).noise(12);
+        this.buckets.objects.put("riverside-forms/intake/forms/form-7/uploads/p1-photo.jpg", photo.png());
+        String asText = "[{\"key\": \"intake/forms/form-7/uploads/p1-photo.jpg\", \"name\": \"knee.jpg\", \"size\": 2055, "
+            + "\"bucket\": \"riverside-forms\", \"uploadId\": 1038, \"contentType\": \"image/jpeg\"}]";
+        Map<String, Object> upload = new LinkedHashMap<>();
+        upload.put("key", "intake/forms/form-7/uploads/p1-photo.jpg");
+        upload.put("bucket", "riverside-forms");
+        upload.put("name", "knee.jpg");
+        List<Map<String, Object>> rows = Arrays.asList(row("case_id", "A", "photo", asText), row("case_id", "B", "photo", Arrays.asList(upload)),
+            row("case_id", "C", "photo", upload));
+
+        Dataset out = this.task.run(TaskContext.of(config("image", config("bucket", "wounds", "keyColumn", "photo"), "onError", "fail"), rows))
+            .getOutput();
+
+        assertThat(out.getRows()).hasSize(3).allSatisfy(r -> assertThat((Double) r.get("length_cm")).isCloseTo(5.0, within(0.5)));
+        assertThat(out.getRows().get(0).get("photo")).as("the row keeps its field as it was").isEqualTo(asText);
+    }
+
+    /** MIG-426: a field holding several photos is measured by its first, and the run is warned that the rest are not. */
+    @Test
+    void aFieldWithSeveralPhotosIsMeasuredByItsFirstAndSaysSo() throws Exception {
+        SyntheticPhotos photo = SyntheticPhotos.photo(800, 600, 30).ellipse(5.0, 3.0, 500, 220, 35).ruler(40, 500, 10).noise(12);
+        this.buckets.objects.put("forms/a.jpg", photo.png());
+        String two = "[{\"key\": \"a.jpg\", \"bucket\": \"forms\"}, {\"key\": \"b.jpg\", \"bucket\": \"forms\"}]";
+        TaskContext context = TaskContext.of(config("image", config("bucket", "wounds", "keyColumn", "photo"), "onError", "fail"),
+            Arrays.asList(row("photo", two)));
+
+        Dataset out = this.task.run(context).getOutput();
+
+        assertThat((Double) out.getRows().get(0).get("length_cm")).isCloseTo(5.0, within(0.5));
+        assertThat(context.lines).contains("WARN 1 row(s) hold more than one file in photo; this step reads each row's first (one file a row).");
+    }
+
+    /** MIG-426: a form's file field with no file, or a JSON value that names none, says so in words -- never its JSON. */
+    @Test
+    void aFormsFileFieldWithoutAFileSaysSo() throws Exception {
+        List<Map<String, Object>> rows = Arrays.asList(row("photo", "[]"), row("photo", "[{\"name\": \"knee.jpg\"}]"),
+            row("photo", Arrays.asList()));
+
+        Dataset out = this.task.run(TaskContext.of(config("image", config("bucket", "wounds", "keyColumn", "photo")), rows)).getOutput();
+
+        assertThat(out.getRows().get(0).get("measure_note")).isEqualTo("not measured: The row's photo holds no file.");
+        assertThat(out.getRows().get(1).get("measure_note")).isEqualTo("not measured: The row's photo names no stored file (no key).");
+        assertThat(out.getRows().get(2).get("measure_note")).isEqualTo("not measured: The row's photo holds no file.");
     }
 
     /** By default a photo that cannot be measured keeps its row, empty, with the reason in the note. */

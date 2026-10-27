@@ -61,7 +61,8 @@ public class MeasureMaskStepTask extends RegisteredTask {
             .required("mask", JsonSchema.object()
                 .required("bucket", JsonSchema.string().minLength(1).format("bucket").title("Bucket"))
                 .required("keyColumn", JsonSchema.string().minLength(1).format("column").title("Mask key column")
-                    .description("The column holding each row's mask key in that bucket (png or jpg)."))
+                    .description("The column holding each row's mask key in that bucket (png or jpg), or a form's file field as it is (read where "
+                        + "the form stored it)."))
                 .title("Mask").description("Each row's mask: the photo's size, the marked pixels light on a dark background."))
             .property("threshold", JsonSchema.integer().minimum(1).maximum(255).title("Marked from brightness").defaultValue(128)
                 .description("A pixel at least this bright (0-255, the mean of red, green and blue) is marked."))
@@ -115,6 +116,7 @@ public class MeasureMaskStepTask extends RegisteredTask {
         columns.addAll(names);
         Limits.requireShape(input.size(), columns.size(), "The measured rows");
 
+        FileRows.warnSeveralIn(context, Configs.text(mask, "keyColumn", ""), input.getRows());
         List<Map<String, Object>> rows = new ArrayList<>(input.size());
         int marked = 0;
         int empty = 0;
@@ -165,15 +167,15 @@ public class MeasureMaskStepTask extends RegisteredTask {
 
     /** The row's mask from the bucket; a row without a png or jpg key is an error for the row. */
     private byte[] mask(StepContext context, Map<String, Object> mask, Map<String, Object> row) throws Exception {
-        Object key = row.get(Configs.text(mask, "keyColumn", ""));
-        String objectKey = key == null ? "" : key.toString().trim();
-        if (objectKey.isEmpty()) {
-            throw new IllegalStateException("The row has no mask key.");
-        }
+        String column = Configs.text(mask, "keyColumn", "");
+        // MIG-426: a form's file field as it is -- its upload, read from where the form stored it -- or a key.
+        FileRows.Ref ref = FileRows.refOf(row.get(column), column);
+        String objectKey = ref.keyOr("The row has no mask key.");
         int dot = objectKey.lastIndexOf('.');
         if (dot < 0 || !IMAGE_TYPES.contains(objectKey.substring(dot + 1).toLowerCase(Locale.ROOT))) {
             throw new IllegalStateException("\"" + objectKey + "\" is not a png or jpg image.");
         }
-        return this.buckets.read(context.tenantId(), Configs.text(mask, "bucket", ""), objectKey, AiPromptStepTask.MAX_IMAGE_BYTES);
+        return this.buckets.read(context.tenantId(), ref.bucket != null ? ref.bucket : Configs.text(mask, "bucket", ""), objectKey,
+            AiPromptStepTask.MAX_IMAGE_BYTES);
     }
 }
