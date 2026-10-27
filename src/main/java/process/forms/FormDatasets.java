@@ -9,7 +9,8 @@ import java.util.stream.Collectors;
  * A form as an Analytics dataset (MIG-279). Each submission is one JSON file under datasets/forms/form-N/ in the
  * workspace's bucket (its inbox's connection); the dataset is that folder's *.json, which Analytics reads with
  * union_by_name -- so a field added later is a new column, and older rows keep theirs (never dropped). A row is the
- * submission's own columns, then one column per answer: tables as JSON text, files by name, a signature as "Signed".
+ * submission's own columns, then one column per answer: tables as JSON text, files by name, a signature as "Signed",
+ * checkboxes as a list of the options ticked.
  * A status change rewrites the row in place.
  */
 public final class FormDatasets {
@@ -67,6 +68,9 @@ public final class FormDatasets {
     static Object flat(String type, Object value) {
         if (value instanceof Map && ((Map<?, ?>) value).containsKey("uploadId")) {
             return FormFields.SIGNATURE.equals(type) ? "Signed" : ((Map<?, ?>) value).get("name");
+        }
+        if (FormFields.CHECKBOXES.equals(type) && value instanceof List) {
+            return value;   // 2026-10-26: a list column (Analytics reads the JSON array as a list)
         }
         if (value instanceof List) {
             return FormSubmissionService.csvAnswer(value);

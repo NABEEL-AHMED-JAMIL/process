@@ -770,7 +770,7 @@ public class FormSubmissionService {
         return out.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    /** An answer in one cell: yes/no in words, files by name, a signature as signed, a table's rows as JSON. */
+    /** An answer in one cell: yes/no in words, files by name, a signature as signed, checkboxes joined by "; ", a table's rows as JSON. */
     static String csvAnswer(Object answer) {
         if (answer == null) {
             return "";
@@ -787,6 +787,12 @@ public class FormSubmissionService {
                 List<String> names = new ArrayList<>();
                 items.forEach(i -> names.add(String.valueOf(((Map<?, ?>) i).get("name"))));
                 return String.join("; ", names);
+            }
+            if (!items.isEmpty() && items.stream().noneMatch(i -> i instanceof Map || i instanceof List)) {
+                // 2026-10-26: checkboxes -- the options ticked, joined.
+                List<String> ticked = new ArrayList<>();
+                items.forEach(i -> ticked.add(String.valueOf(i)));
+                return String.join("; ", ticked);
             }
             try {
                 return CSV_JSON.writeValueAsString(answer);

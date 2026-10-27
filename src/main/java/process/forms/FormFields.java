@@ -23,10 +23,13 @@ import java.util.regex.Pattern;
  * column a pipeline reads -- unique in the form and none of the names the submission file uses itself), a label, a type
  * ({@link #TYPES}), required or not, help text (at most 500), a placeholder (one line of plain text, at most 120, kept only
  * for {@link #PLACEHOLDER_TYPES}; both are display text and never markup), and for a choice its options (1 to 50,
- * distinct). At most 50 fields.
+ * distinct). At most 50 fields. 2026-10-26: any field may name the section it is grouped under (one line, at most 80); a
+ * checkboxes field ticks every option that applies -- its options as a choice's, and optionally minSelected and maxSelected.
  *
  * <p>An answer: text at most 500 characters, long text at most 5000, a number (a JSON number or text that is one), a
- * date (yyyy-MM-dd), one of a choice's options, yes/no (true or false), an e-mail address. A required field must be
+ * date (yyyy-MM-dd), one of a choice's options, yes/no (true or false), an e-mail address; for checkboxes the list of the
+ * options ticked (each once, in the options' order and spelling; one option sent as text is a list of one), at least
+ * minSelected and at most maxSelected of them. A required field must be
  * answered -- blank text is no answer; yes/no is answered by either. An answer to no field of the form is refused.
  *
  * <p>MIG-277. A table: 1 to 20 columns (each a field of a plain type, no rules of its own) and up to maxRows rows (1 to
@@ -52,8 +55,10 @@ public final class FormFields {
     public static final String FILE = "file";
     public static final String SIGNATURE = "signature";
     public static final String LOOKUP = "lookup";
+    /** 2026-10-26: tick every option that applies (a list of the chosen options). */
+    public static final String CHECKBOXES = "checkboxes";
     public static final List<String> TYPES = Collections.unmodifiableList(Arrays.asList(TEXT, LONG_TEXT, NUMBER, DATE, CHOICE, YES_NO,
-        EMAIL, TABLE, FILE, SIGNATURE, LOOKUP));
+        EMAIL, TABLE, FILE, SIGNATURE, LOOKUP, CHECKBOXES));
     /** The types a table's column may have. */
     public static final List<String> COLUMN_TYPES = Collections.unmodifiableList(Arrays.asList(TEXT, NUMBER, DATE, CHOICE, YES_NO, EMAIL));
     /** The types whose answer is an upload. */
@@ -76,6 +81,7 @@ public final class FormFields {
     static final int MAX_LABEL = 120;
     static final int MAX_HELP = 500;
     static final int MAX_PLACEHOLDER = 120;
+    static final int MAX_SECTION = 80;
     /** The types whose empty control shows a placeholder: a text box, a number, a date, a list to choose from. */
     public static final List<String> PLACEHOLDER_TYPES = Collections.unmodifiableList(Arrays.asList(TEXT, LONG_TEXT, NUMBER, DATE, CHOICE,
         EMAIL, LOOKUP));
@@ -230,14 +236,39 @@ public final class FormFields {
             if (placeholder != null && CONTROL.matcher(placeholder).find()) {
                 throw new Refused(name + ": its placeholder is one line of text, with no line breaks or tabs.");
             }
+            String section = trimmed(field.getSection());
+            if (section != null && section.length() > MAX_SECTION) {
+                throw new Refused(String.format("%s: its section is longer than %d characters.", name, MAX_SECTION));
+            }
+            if (section != null && CONTROL.matcher(section).find()) {
+                throw new Refused(name + ": its section is one line of text, with no line breaks or tabs.");
+            }
             List<String> options = null;
-            if (CHOICE.equals(type)) {
+            if (CHOICE.equals(type) || CHECKBOXES.equals(type)) {
                 options = options(name, field.getOptions());
             }
             FormField valid = new FormField(key, label, type, field.isRequired(), help, options);
             // Kept only where an empty control shows it, so a yes/no, table, file or signature saves exactly as before.
             valid.setPlaceholder(PLACEHOLDER_TYPES.contains(type) ? placeholder : null);
+            valid.setSection(section);
             switch (type) {
+                case CHECKBOXES: {
+                    int count = options.size();
+                    Integer least = field.getMinSelected();
+                    Integer most = field.getMaxSelected();
+                    if (least != null && (least < 0 || least > count)) {
+                        throw new Refused(String.format("%s: minSelected is from 0 to %d (its options).", name, count));
+                    }
+                    if (most != null && (most < 1 || most > count)) {
+                        throw new Refused(String.format("%s: maxSelected is from 1 to %d (its options).", name, count));
+                    }
+                    if (least != null && most != null && least > most) {
+                        throw new Refused(String.format("%s: minSelected (%d) is more than maxSelected (%d).", name, least, most));
+                    }
+                    valid.setMinSelected(least == null || least == 0 ? null : least);
+                    valid.setMaxSelected(most);
+                    break;
+                }
                 case TABLE:
                     valid.setColumns(columns(name, field.getColumns()));
                     valid.setMaxRows(bounded(name, "maxRows", field.getMaxRows(), 1, MAX_ROWS, DEFAULT_ROWS));
@@ -357,6 +388,9 @@ public final class FormFields {
         if (!presence && (TABLE.equals(target.getType()) || UPLOAD_TYPES.contains(target.getType()))) {
             throw new Refused(String.format("%s: a %s field can only be tested for filled or empty.", name, target.getType()));
         }
+        if (CHECKBOXES.equals(target.getType()) && ("gt".equals(op) || "lt".equals(op))) {
+            throw new Refused(String.format("%s: a checkboxes field is tested for an option ticked (eq, ne, in) or for filled or empty.", name));
+        }
         Object value = presence ? null : given.getValue();
         if (!presence && (value == null || value instanceof String && ((String) value).trim().isEmpty())) {
             throw new Refused(String.format("%s: say what '%s' is compared with.", name, on));
@@ -371,6 +405,21 @@ public final class FormFields {
     public static boolean holds(FormField.Rule rule, Map<String, Object> kept) {
         Object answer = kept.get(rule.getField());
         boolean empty = isBlank(answer) || answer instanceof List && ((List<?>) answer).isEmpty();
+        if (!empty && answer instanceof List && !"filled".equals(rule.getOp()) && !"empty".equals(rule.getOp())) {
+            // Checkboxes: eq is "this option is ticked", ne "it is not", in "one of these is".
+            List<?> ticked = (List<?>) answer;
+            Object value = rule.getValue();
+            switch (rule.getOp()) {
+                case "eq":
+                    return ticked.stream().anyMatch(t -> same(t, value));
+                case "ne":
+                    return ticked.stream().noneMatch(t -> same(t, value));
+                case "in":
+                    return value instanceof List && ticked.stream().anyMatch(t -> ((List<?>) value).stream().anyMatch(v -> same(t, v)));
+                default:
+                    return false;
+            }
+        }
         switch (rule.getOp()) {
             case "filled":
                 return !empty;
@@ -532,6 +581,8 @@ public final class FormFields {
                 }
                 return signature.answer();
             }
+            case CHECKBOXES:
+                return ticked(field, value);
             case LOOKUP: {
                 String chosen = text(value, MAX_TEXT);
                 for (String option : context.lookupValues(field)) {
@@ -544,6 +595,48 @@ public final class FormFields {
             default:
                 return scalar(field, value);
         }
+    }
+
+    /** The options ticked, each once, in the options' order and their own spelling; held to the field's least and most. */
+    private static List<String> ticked(FormField field, Object value) {
+        List<?> given = value instanceof List ? (List<?>) value : Collections.singletonList(value);
+        List<String> options = field.getOptions() == null ? Collections.<String>emptyList() : field.getOptions();
+        Set<String> chosen = new HashSet<>();
+        for (Object item : given) {
+            if (isBlank(item)) {
+                continue;
+            }
+            if (!(item instanceof String) && !(item instanceof Number) && !(item instanceof Boolean)) {
+                throw new IllegalArgumentException("tick options from the list.");
+            }
+            String text = String.valueOf(item).trim();
+            String match = null;
+            for (String option : options) {
+                if (option.equalsIgnoreCase(text)) {
+                    match = option;
+                }
+            }
+            if (match == null) {
+                throw new IllegalArgumentException(String.format("'%s' is not an option; tick from %s.", text, String.join(", ", options)));
+            }
+            chosen.add(match);
+        }
+        List<String> kept = new ArrayList<>();
+        for (String option : options) {
+            if (chosen.contains(option)) {
+                kept.add(option);
+            }
+        }
+        if (kept.isEmpty()) {
+            return kept;
+        }
+        if (field.getMinSelected() != null && kept.size() < field.getMinSelected()) {
+            throw new IllegalArgumentException(String.format("tick at least %d (this has %d).", field.getMinSelected(), kept.size()));
+        }
+        if (field.getMaxSelected() != null && kept.size() > field.getMaxSelected()) {
+            throw new IllegalArgumentException(String.format("tick at most %d (this has %d).", field.getMaxSelected(), kept.size()));
+        }
+        return kept;
     }
 
     /** A table's rows: blank rows dropped, each cell checked as its column's type. */

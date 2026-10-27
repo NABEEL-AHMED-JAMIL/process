@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * One field of a form (Wave 5 Forms lite; MIG-277): its key (the answer's name, and the column a pipeline reads), its
- * label, help text and placeholder, its type ({@link FormFields#TYPES}), whether it must be answered, and what its type needs -- a
+ * label, help text and placeholder, the section it is grouped under, its type ({@link FormFields#TYPES}), whether it must be answered, and what its type needs -- a
  * choice's options, a table's columns and row limit, a file's accepted types, size and count, a lookup's source. Any
  * field may be shown only when an earlier answer says so (showWhen) and required only when one does (requiredWhen).
  * {@link FormFields} decides what a valid one is.
@@ -35,6 +35,11 @@ public class FormField {
     /** MIG-271: a file field whose files also go to Document Intelligence, one document each; absent (null) is no. */
     private Boolean toDocuments;
     private Lookup lookup;
+    /** 2026-10-26: the title of the group this field starts or belongs to; a field whose section differs from the one above starts a new group. */
+    private String section;
+    /** 2026-10-26: a checkboxes field's least and most options ticked (each optional; the least applies once anything is ticked or it is required). */
+    private Integer minSelected;
+    private Integer maxSelected;
 
     /** A condition on an earlier field's answer: eq, ne, in, gt, lt, filled, empty. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -165,4 +170,16 @@ public class FormField {
     public Lookup getLookup() { return this.lookup; }
 
     public void setLookup(Lookup lookup) { this.lookup = lookup; }
+
+    public String getSection() { return this.section; }
+
+    public void setSection(String section) { this.section = section; }
+
+    public Integer getMinSelected() { return this.minSelected; }
+
+    public void setMinSelected(Integer minSelected) { this.minSelected = minSelected; }
+
+    public Integer getMaxSelected() { return this.maxSelected; }
+
+    public void setMaxSelected(Integer maxSelected) { this.maxSelected = maxSelected; }
 }
