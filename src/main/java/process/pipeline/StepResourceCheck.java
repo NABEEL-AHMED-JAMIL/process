@@ -12,6 +12,7 @@ import process.pipeline.backing.IntegrationNames;
 import process.pipeline.backing.ReportStudio;
 import process.pipeline.backing.ReportTemplates;
 import process.pipeline.registry.TaskSpec;
+import process.pipeline.tasks.CallApiStepTask;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -406,8 +407,13 @@ public class StepResourceCheck {
                         continue;
                     }
                     Object given = n.config.get("variables");
+                    // MIG-426: what a Call API step sends by itself (a file's, a report's) is given too.
+                    Set<String> itself = CallApiStepTask.sentByItself(n.config);
                     for (String needed : request.needsVariables) {
                         Object value = given instanceof Map ? ((Map<?, ?>) given).get(needed) : null;
+                        if (itself.contains(needed)) {
+                            continue;
+                        }
                         if (value == null || String.valueOf(value).trim().isEmpty()) {
                             problems.add(new DefinitionProblem("steps[" + n.step + "].config.variables." + needed, String.format("the API request %d "
                                 + "\"%s\" uses {{%s}}, which its environment does not set: give it a value here (or {{column}} from the rows)",

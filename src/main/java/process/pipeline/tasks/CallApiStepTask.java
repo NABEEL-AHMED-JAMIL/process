@@ -476,6 +476,33 @@ public class CallApiStepTask extends RegisteredTask {
         return new Sent(part, result);
     }
 
+    /**
+     * MIG-426: the request variables Call API sends by itself with these settings, so the request needs no Variables entry for
+     * them -- a file's {{file_bucket}}, {{file_key}}, {{file_name}} and {{file_format}} with "A file from an earlier step", a
+     * report's {{report_label}}, {{report_version}}, {{report_signed}} and each chosen format's ({{report_pdf}},
+     * {{report_html}}, {{report_md}}) with "A report from an earlier step". The save-time check (StepResourceCheck) reads it.
+     */
+    public static Set<String> sentByItself(Map<String, Object> config) {
+        Set<String> sent = new LinkedHashSet<>();
+        if (config == null) {
+            return sent;
+        }
+        if (config.get("file") instanceof Map) {
+            sent.addAll(FILE_VALUES);
+        }
+        if (config.get("report") instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> report = (Map<String, Object>) config.get("report");
+            sent.addAll(Arrays.asList("report_label", "report_version", "report_signed"));
+            for (String format : Configs.texts(report, "formats")) {
+                if (REPORT_FORMATS.contains(format)) {
+                    sent.add("report_" + format);
+                }
+            }
+        }
+        return sent;
+    }
+
     /** Whether a variable's template sends a row or rows as JSON: it names {{row}} or {{rows_json}}, and they are this step's. */
     static boolean sendsJson(String template, Map<String, Object> values) {
         Matcher m = JSON_PLACEHOLDER.matcher(template == null ? "" : template);

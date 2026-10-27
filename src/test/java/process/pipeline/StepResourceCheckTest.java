@@ -108,6 +108,32 @@ class StepResourceCheckTest {
     }
 
     /**
+     * MIG-426: what Call API itself sends a request -- a file's {{file_bucket}}, {{file_key}}, {{file_name}} and {{file_format}}
+     * with "A file from an earlier step", a report's {{report_label}}, {{report_version}}, {{report_signed}} and each chosen
+     * format's {{report_pdf}}, {{report_html}}, {{report_md}} with "A report from an earlier step" -- is never a variable the
+     * step must give; a format not chosen, or a step without the setting, still is.
+     */
+    @Test
+    void whatCallApiSendsItselfIsGiven() throws Exception {
+        this.riverside();
+        IntegrationNames.Names names = new IntegrationNames.Names();
+        IntegrationNames.RequestName echo = new IntegrationNames.RequestName();
+        echo.name = "Echo a report";
+        echo.needsVariables = Arrays.asList("report_label", "report_version", "report_signed", "report_md", "report_pdf", "file_key");
+        names.requests.put(1093L, echo);
+        when(this.integration.describe(eq(RIVERSIDE), anyCollection(), anyCollection())).thenReturn(names);
+
+        assertThat(this.problems(Definitions.of(step("send", "call_api", config("requestId", 1093, "mode", "once",
+            "report", config("step", "report", "formats", Arrays.asList("md", "pdf")), "file", config("step", "report")))))).isEmpty();
+        assertThat(this.problems(Definitions.of(step("send", "call_api", config("requestId", 1093, "mode", "once",
+            "report", config("step", "report", "formats", Arrays.asList("md")))))))
+            .containsExactly("steps[0].config.variables.report_pdf: the API request 1093 \"Echo a report\" uses {{report_pdf}}, which its "
+                    + "environment does not set: give it a value here (or {{column}} from the rows)",
+                "steps[0].config.variables.file_key: the API request 1093 \"Echo a report\" uses {{file_key}}, which its "
+                    + "environment does not set: give it a value here (or {{column}} from the rows)");
+    }
+
+    /**
      * ZT-S4: Validate warns -- never refuses -- of a required prompt variable the AI step does not map in Variables: by name
      * when the rows it reads (a sample step) have no such column, as "needs a column" when the rows are not known; a mapped
      * one, an optional one, or a column the sample has: no warning.
