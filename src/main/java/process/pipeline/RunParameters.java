@@ -64,8 +64,12 @@ public final class RunParameters {
     public static final int MAX_DESCRIPTION = 500;
 
     static final Pattern NAME = Pattern.compile("^[a-z][a-z0-9_]{0,39}$");
-    /** {{param.name}}, {{run.date}}, {{run.windowStart}}, {{run.windowEnd}}: what {@link #fill} replaces; nothing else. */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*((?:param\\.[a-z][a-z0-9_]{0,39})|run\\.date|run\\.windowStart|run\\.windowEnd)\\s*}}");
+    /**
+     * {{param.name}}, {{run.date}}, {{run.windowStart}}, {{run.windowEnd}}, and (2026-10-26) the run's latest approval,
+     * {{approval.by}}, {{approval.at}}, {{approval.comment}}: what {@link #fill} replaces; nothing else.
+     */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*((?:param\\.[a-z][a-z0-9_]{0,39})|run\\.date|run\\.windowStart|run\\.windowEnd"
+        + "|approval\\.by|approval\\.at|approval\\.comment)\\s*}}");
     private static final DateTimeFormatter WINDOW = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT);
     private static final DateTimeFormatter WALL = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT);
     private static final ObjectMapper JSON = new ObjectMapper();

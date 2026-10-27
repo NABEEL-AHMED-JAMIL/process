@@ -60,6 +60,7 @@ import process.util.OpenSearchAuditLogClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,6 +106,8 @@ class RunApprovalPostgresTest {
     private static long nextRun = 797100;
 
     private static final Map<String, AtomicInteger> RAN = new ConcurrentHashMap<>();
+    /** Each step's settings as it was given them (its placeholders filled), by step key. */
+    private static final Map<String, Map<String, Object>> SEEN = new ConcurrentHashMap<>();
 
     private ThreadPoolExecutor runThreads;
     private final AtomicLong submitted = new AtomicLong();
@@ -125,6 +128,7 @@ class RunApprovalPostgresTest {
 
         @Override public StepResult run(StepContext context) {
             RAN.computeIfAbsent(context.stepKey(), k -> new AtomicInteger()).incrementAndGet();
+            SEEN.put(context.stepKey(), new LinkedHashMap<>(context.config()));
             return StepResult.of(context.input());
         }
     }
@@ -152,7 +156,8 @@ class RunApprovalPostgresTest {
             + "{\"id\":2,\"amount\":120},{\"id\":3,\"amount\":400}]}},{\"key\":\"shape\",\"task\":\"select\",\"config\":{\"columns\":"
             + "[\"id\",\"amount\"]}},{\"key\":\"approve\",\"task\":\"approval\",\"config\":{\"title\":\"Send {{rows}} orders?\","
             + "\"fields\":{\"Largest\":\"{{amount}}\"},\"expiresAfterHours\":4}},{\"key\":\"check\",\"task\":\"gate\",\"config\":{\"pass\":" + pass
-            + "}},{\"key\":\"after\",\"task\":\"counted\"}]}";
+            + "}},{\"key\":\"after\",\"task\":\"counted\",\"config\":{\"by\":\"{{approval.by}}\",\"at\":\"{{approval.at}}\","
+            + "\"note\":\"{{approval.comment}}\"}}]}";
     }
 
     @BeforeAll
@@ -365,6 +370,9 @@ class RunApprovalPostgresTest {
         assertThat(this.request(run, 1)).containsEntry("status", "APPROVED").containsEntry("decided_by_user_id", REVIEWER)
             .containsEntry("comment", "totals match").containsEntry("workflow_instance_id", 901L);
         assertThat(ran("after")).isEqualTo(afterBefore + 1);
+        // Patient intake (2026-10-26): the steps after an Approval step name its decision -- who, when, their words.
+        assertThat(SEEN.get("after")).containsEntry("by", "Ana Ruiz").containsEntry("note", "totals match");
+        assertThat((String) SEEN.get("after").get("at")).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[-+]\\d{2}:\\d{2}");
         assertThat(login.queryForObject("SELECT records_out FROM step_execution WHERE job_queue_id = ? AND step_key = 'after'", Long.class, run))
             .as("the steps after it read what the steps before it kept").isEqualTo(3L);
         List<String> audit = login.queryForList("SELECT log_detail FROM job_audit_logs WHERE job_queue_id = ? ORDER BY job_audit_log_id",

@@ -51,12 +51,14 @@ import java.sql.SQLNonTransientConnectionException;
 import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -720,10 +722,51 @@ public class StepEngine {
             return found;
         }
 
-        /** MIG-347: {{param.*}} and {{run.*}} by placeholder name; empty when the run's parameters do not stand. */
+        /**
+         * MIG-347: {{param.*}} and {{run.*}} by placeholder name; empty when the run's parameters do not stand. 2026-10-26
+         * (patient intake): and the run's latest approved Approval step -- {{approval.by}} (the decider's name),
+         * {{approval.at}} (when, business time with its offset), {{approval.comment}} (their words, empty when none) -- so the
+         * steps after it can say who approved what they make. Read from run_approval, so a retry after it says the same.
+         */
         Map<String, Object> placeholders() {
             RunValuesResolver.Outcome found = this.values();
-            return found.values == null ? Collections.<String, Object>emptyMap() : found.values.placeholders();
+            Map<String, Object> base = found.values == null ? Collections.<String, Object>emptyMap() : found.values.placeholders();
+            Map<String, Object> approved = this.approvalValues();
+            if (approved.isEmpty()) {
+                return base;
+            }
+            Map<String, Object> out = new LinkedHashMap<>(base);
+            out.putAll(approved);
+            return out;
+        }
+
+        private Map<String, Object> approvalValues() {
+            if (approvals == null) {
+                return Collections.emptyMap();
+            }
+            List<RunApprovalStore.Approval> made;
+            try {
+                made = approvals.ofRun(this.run.getJobQueueId());
+            } catch (RuntimeException unread) {
+                logger.info("Run {}: its approvals were not read for its placeholders: {}", this.run.getJobQueueId(), unread.getMessage());
+                return Collections.emptyMap();
+            }
+            RunApprovalStore.Approval latest = null;
+            for (RunApprovalStore.Approval a : made == null ? Collections.<RunApprovalStore.Approval>emptyList() : made) {
+                if (RunApprovalStore.APPROVED.equals(a.status) && a.decidedAt != null && (latest == null || a.decidedAt.isAfter(latest.decidedAt))) {
+                    latest = a;
+                }
+            }
+            if (latest == null) {
+                return Collections.emptyMap();
+            }
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("approval.by", latest.decidedByName != null ? latest.decidedByName
+                : latest.decidedByUserId != null ? "User " + latest.decidedByUserId : "");
+            out.put("approval.at", DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT)
+                .format(latest.decidedAt.atZone(BusinessTime.ZONE)));
+            out.put("approval.comment", latest.comment == null ? "" : latest.comment);
+            return out;
         }
 
         /**
