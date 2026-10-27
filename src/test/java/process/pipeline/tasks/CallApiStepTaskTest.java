@@ -80,6 +80,25 @@ class CallApiStepTaskTest {
             && r.get("api_error") == null && "c-1".equals(r.get("referral_id")));
     }
 
+    /**
+     * ZT-S5 (showcase walk-in, 2026-10-26): a Call API with no rows to send -- an earlier read found nothing, so the rows have
+     * only the other side's columns -- made no call but failed on "Columns sent names mrn, which the rows have not". With
+     * nothing to send there is nothing to check: no call, no rows, the step done; a named column is still checked on rows.
+     */
+    @Test
+    void noRowsToSendIsNoCallNotAColumnProblem() throws Exception {
+        TaskContext context = new TaskContext(config("requestId", 12, "variables", config("payload", "{{row}}"),
+            "columns", Collections.singletonList(config("column", "mrn", "as", "patient.mrn"))),
+            new Dataset(Arrays.asList("wanted", "plan_code"), new ArrayList<>()));
+
+        Dataset out = this.task.run(context).getOutput();
+
+        assertThat(this.api.calls).isEmpty();
+        assertThat(out.getRows()).isEmpty();
+        assertThatThrownBy(() -> this.task.run(new TaskContext(context.config, Dataset.of(Collections.singletonList(row("wanted", true))))))
+            .hasMessageContaining("Columns sent names mrn, which the rows have not");
+    }
+
     @Test
     void anAnswerThatIsNotOkFailsTheStepByDefault() {
         this.api.answer = v -> "P-2".equals(v.get("patient")) ? new Object[] {422, "{\"error\":\"duplicate\"}"} : new Object[] {201, "{}"};

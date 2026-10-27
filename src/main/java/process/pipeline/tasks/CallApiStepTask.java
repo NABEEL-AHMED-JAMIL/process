@@ -244,7 +244,8 @@ public class CallApiStepTask extends RegisteredTask {
             sources = input.getRows();
             inputColumns = input.getColumns();
         }
-        for (Map<String, Object> column : sent) {
+        // ZT-S5: no rows to send is no call -- nothing to check the columns against (an empty read has only the other side's).
+        for (Map<String, Object> column : once || !sources.isEmpty() ? sent : Collections.<Map<String, Object>>emptyList()) {
             String name = Configs.text(column, "column", "");
             if (!inputColumns.isEmpty() && !inputColumns.contains(name)) {
                 throw new IllegalStateException(String.format("Columns sent names %s, which the rows have not (they have %s).", name,
