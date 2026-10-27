@@ -323,6 +323,69 @@ public class SourceJobLifecycleDefectTest {
         assertThat(stored.getNextRunAt()).isEqualTo(skippedTo);
     }
 
+    /**
+     * ZT-S6 (perf cycle, 2026-10-27): un-pausing a schedule through Save (Inactive -> Active, the timetable unchanged) moves it on
+     * to its next real slot, as the status toggle does. next_run_at stood still while the job was paused, so the resumed job
+     * fired at once and every slot of the pause was recorded as Missed, "catching up after downtime". A slot still ahead is kept.
+     */
+    @Test
+    void resumingAPausedScheduleThroughSaveMovesItToItsNextSlot() throws Exception {
+        SchedulerDto posted = dailyAtTwo();
+        posted.setStartDate(LocalDate.now().minusDays(10));
+        Scheduler stored = new Scheduler();
+        stored.setSchedulerId(9001L);
+        stored.setJobId(JOB_ID);
+        stored.setStartDate(posted.getStartDate());
+        stored.setStartTime(posted.getStartTime());
+        stored.setFrequency(posted.getFrequency());
+        stored.setIntervalValue(posted.getIntervalValue());
+        stored.setNextRunAt(LocalDateTime.now().minusDays(7).withHour(2).withMinute(0).withSecond(0).withNano(0));
+        this.updateCollaboratorsResolve(stored);
+        SourceJob paused = existingAutoJob();
+        paused.setJobStatus(Status.Inactive);
+        when(this.sourceJobRepository.findById(JOB_ID)).thenReturn(Optional.of(paused));
+
+        SourceJobDto sourceJobDto = creationDto();
+        sourceJobDto.setJobId(JOB_ID);
+        sourceJobDto.setJobStatus(Status.Active);
+        sourceJobDto.setExecution(Execution.Auto);
+        sourceJobDto.setSchedulers(new LinkedHashSet<>(Collections.singletonList(posted)));
+        this.service.updateSourceJob(sourceJobDto);
+
+        assertThat(stored.getNextRunAt()).isAfter(LocalDateTime.now()).isBefore(LocalDateTime.now().plusDays(1).plusMinutes(1));
+        assertThat(stored.getNextRunAt().toLocalTime()).isEqualTo(LocalTime.of(2, 0));
+    }
+
+    @Test
+    void savingAnActiveScheduleOrOneWhoseSlotIsAheadLeavesItsNextRun() throws Exception {
+        SchedulerDto posted = dailyAtTwo();
+        Scheduler stored = new Scheduler();
+        stored.setSchedulerId(9001L);
+        stored.setJobId(JOB_ID);
+        stored.setStartDate(posted.getStartDate());
+        stored.setStartTime(posted.getStartTime());
+        stored.setFrequency(posted.getFrequency());
+        stored.setIntervalValue(posted.getIntervalValue());
+        LocalDateTime overdue = LocalDateTime.now().minusHours(3);
+        stored.setNextRunAt(overdue);
+        this.updateCollaboratorsResolve(stored);   // the job was Active and Auto already: a real catch-up stays the scheduler's
+
+        SourceJobDto sourceJobDto = creationDto();
+        sourceJobDto.setJobId(JOB_ID);
+        sourceJobDto.setJobStatus(Status.Active);
+        sourceJobDto.setSchedulers(new LinkedHashSet<>(Collections.singletonList(posted)));
+        this.service.updateSourceJob(sourceJobDto);
+        assertThat(stored.getNextRunAt()).isEqualTo(overdue);
+
+        LocalDateTime skippedTo = LocalDateTime.now().plusDays(2).withHour(2).withMinute(0).withSecond(0).withNano(0);
+        stored.setNextRunAt(skippedTo);
+        SourceJob paused = existingAutoJob();
+        paused.setJobStatus(Status.Inactive);
+        when(this.sourceJobRepository.findById(JOB_ID)).thenReturn(Optional.of(paused));
+        this.service.updateSourceJob(sourceJobDto);
+        assertThat(stored.getNextRunAt()).as("a skipped slot still ahead").isEqualTo(skippedTo);
+    }
+
     @Test
     void aChangedTimetableIsStillReseeded() throws Exception {
         Scheduler stored = new Scheduler();

@@ -791,19 +791,50 @@ class StepEngineTest {
         assertThat(this.statuses()).containsExactly(entry("read", "Skip"), entry("keep", "Skip"));
     }
 
-    /** A step that says nothing of retry takes its task's registry default: Read API is tried three times, 10 s apart. */
+    /**
+     * A step that says nothing of retry takes its task's registry default -- Read API is tried three times, 10 s apart -- for
+     * an error that passes (a 503: the other side away for a moment). ZT-S7 (perf cycle, 2026-10-27): one that cannot change
+     * on its own (a 500, a refusal) fails at once; before, every such step waited through all three tries, 20 s each time.
+     */
     @Test
-    void aStepWithoutItsOwnRetryTakesItsTasksDefault() {
+    void aStepWithoutItsOwnRetryTakesItsTasksDefaultForAnErrorThatPasses() {
         this.all.api.outcome = "FAILED";
+        this.all.api.failStatus = 503;
         PipelineDefinition.Step once = step("once", "read_api", config("requestId", 4));
         once.setRetry(PipelineDefinition.Retry.of(1, 0));
         once.setOnError("continue");
         this.runs(Definitions.of(step("fetch", "read_api", config("requestId", 4)), once));
 
-        assertThat(this.steps.row(RUN_ID, 1, "fetch").tries).isEqualTo(3);
-        assertThat(this.waited).containsExactly(Duration.ofSeconds(10), Duration.ofSeconds(10));
-        assertThat(this.all.api.calls).hasSize(3);
-        assertThat(this.worker.last()).startsWith("Failed: Step 1 <fetch> failed: The API request failed (HTTP 500)");
+        // The registry's three tries 10 s apart, then -- Read API being safe to repeat -- the owner's 5, 15 and 45 s for an
+        // error that says to try again; the step after it, which set its own single try, is skipped with the run.
+        assertThat(this.steps.row(RUN_ID, 1, "fetch").tries).isEqualTo(6);
+        assertThat(this.waited).containsExactly(Duration.ofSeconds(10), Duration.ofSeconds(10), Duration.ofSeconds(5), Duration.ofSeconds(15),
+            Duration.ofSeconds(45));
+        assertThat(this.all.api.calls).hasSize(6);
+        assertThat(this.worker.last()).startsWith("Failed: Step 1 <fetch> failed: The API request failed (HTTP 503)");
+    }
+
+    @Test
+    void anErrorThatCannotChangeOnItsOwnIsNotTriedAgainByTheDefault() {
+        this.all.api.outcome = "FAILED";
+        this.runs(Definitions.of(step("fetch", "read_api", config("requestId", 4))));
+
+        assertThat(this.steps.row(RUN_ID, 1, "fetch").tries).isEqualTo(1);
+        assertThat(this.waited).isEmpty();
+        assertThat(this.all.api.calls).hasSize(1);
+        assertThat(this.steps.row(RUN_ID, 1, "fetch").statusMessage).startsWith("Failed after 1 try: The API request failed (HTTP 500)");
+        assertThat(this.steps.logText(RUN_ID, 1, "fetch")).anyMatch(l -> l.contains("Not tried again: it is not an error that passes on its own."));
+    }
+
+    @Test
+    void aStepsOwnRetryStillTriesEveryError() {
+        this.all.api.outcome = "FAILED";
+        PipelineDefinition.Step mine = step("fetch", "read_api", config("requestId", 4));
+        mine.setRetry(PipelineDefinition.Retry.of(2, 3));
+        this.runs(Definitions.of(mine));
+
+        assertThat(this.steps.row(RUN_ID, 1, "fetch").tries).isEqualTo(2);
+        assertThat(this.waited).containsExactly(Duration.ofSeconds(3));
     }
 
     // ---- Owner 2026-10-21: errors that say to try again -----------------------------------------------------------

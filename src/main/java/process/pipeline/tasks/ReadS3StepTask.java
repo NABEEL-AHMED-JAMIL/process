@@ -1,7 +1,9 @@
 package process.pipeline.tasks;
 
 import org.springframework.stereotype.Component;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import process.pipeline.StepContext;
 import process.pipeline.StreamContext;
 import process.pipeline.StreamingStepTask;
@@ -275,6 +277,15 @@ public class ReadS3StepTask extends RegisteredTask implements StreamingStepTask 
      * a JSON object, or every object on the in-memory path, is read whole). Each row keeps its {@code _source_key}; maxRows
      * stops the read.
      */
+    /**
+     * ZT-S8 (perf cycle, 2026-10-27): an object that cannot be read as its format names itself -- bucket, key and format, and the
+     * parser's own words (its line) -- where the step's error said only "(line 159) invalid char ..." of one object among many.
+     */
+    static IllegalStateException unreadable(String bucket, String key, String format, Exception cause) {
+        String why = cause.getMessage() == null || cause.getMessage().isBlank() ? cause.getClass().getSimpleName() : cause.getMessage().trim();
+        return new IllegalStateException(String.format("%s/%s could not be read as %s: %s", bucket, key, format, why), cause);
+    }
+
     private StepResult read(StreamContext context, Map<String, Object> config, String bucket, String prefix, String format,
         BucketStore.Listing listing) throws Exception {
         Integer maxRows = Configs.integer(config, "maxRows", null);
@@ -310,7 +321,11 @@ public class ReadS3StepTask extends RegisteredTask implements StreamingStepTask 
                 Limits.requireBytes(bytes, String.format("The objects under %s/%s", bucket, prefix));
                 byte[] content = this.buckets.read(context.tenantId(), bucket, object.key, Limits.MAX_FILE_BYTES);
                 RowCollector one = new RowCollector(object.key, null);
-                FileFormats.read(content, objectFormat, FileConfigs.options(config), one);
+                try {
+                    FileFormats.read(content, objectFormat, FileConfigs.options(config), one);
+                } catch (IOException | UncheckedIOException | IllegalArgumentException unreadable) {
+                    throw unreadable(bucket, object.key, objectFormat, unreadable);
+                }
                 for (Map<String, Object> row : one.toDataset().getRows()) {
                     if (out.size() >= wanted) {
                         break;
@@ -320,6 +335,8 @@ public class ReadS3StepTask extends RegisteredTask implements StreamingStepTask 
             } else {
                 try (InputStream in = this.buckets.open(context.tenantId(), bucket, object.key, context.maxFileBytes())) {
                     FileFormats.readStream(in, objectFormat, FileConfigs.options(config), tagged, maxRows, context.maxRows(), object.key);
+                } catch (IOException | UncheckedIOException | IllegalArgumentException unreadable) {
+                    throw unreadable(bucket, object.key, objectFormat, unreadable);
                 }
             }
             files++;

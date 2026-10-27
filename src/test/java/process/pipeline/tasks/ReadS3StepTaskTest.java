@@ -13,6 +13,7 @@ import process.pipeline.data.FileFormatsStreamTest;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static process.pipeline.Definitions.config;
 import static process.pipeline.Definitions.row;
 
@@ -64,6 +65,23 @@ class ReadS3StepTaskTest {
         StreamTry few = new StreamTry(config("bucket", "lake", "prefix", "big/", "format", "auto", "maxRows", 7), new Dataset(Collections.emptyList(),
             Collections.emptyList()), 64L << 20, dir, 1000);
         assertThat(this.task.stream(few).getRecordsOut()).isEqualTo(7L);
+    }
+
+    /**
+     * ZT-S8 (perf cycle, 2026-10-27): an object under the prefix that is not what the format says -- a PDF read as CSV -- fails
+     * the step naming that object (bucket/key) and the format, with the parser's line; before, only "(line 159) invalid char".
+     */
+    @Test
+    void anObjectThatCannotBeReadIsNamedWithItsLine(@TempDir Path dir) throws Exception {
+        this.buckets.objects.put("lake/mixed/a.csv", "id,amount\n1,10\n".getBytes(StandardCharsets.UTF_8));
+        this.buckets.objects.put("lake/mixed/scan.csv", "id,note\n1,\"ok\"x,2\n".getBytes(StandardCharsets.UTF_8));
+        TaskContext context = TaskContext.of(config("bucket", "lake", "prefix", "mixed/", "format", "csv"), Collections.emptyList());
+        assertThatThrownBy(() -> this.task.run(context)).hasMessageStartingWith("lake/mixed/scan.csv could not be read as csv: ")
+            .hasMessageContaining("line 2");
+
+        StreamTry read = new StreamTry(config("bucket", "lake", "prefix", "mixed/", "format", "csv"), new Dataset(Collections.emptyList(),
+            Collections.emptyList()), 64L << 20, dir, 1000);
+        assertThatThrownBy(() -> this.task.stream(read)).hasMessageStartingWith("lake/mixed/scan.csv could not be read as csv: ");
     }
 
     @Test

@@ -533,6 +533,8 @@ public class SourceJobServiceImpl implements SourceJobService {
             return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", sourceJobDto.getJobId()));
         }
         if (sourceJob.isPresent()) {
+            // ZT-S6: whether the schedule could fire before this save (Active and Auto), for the resume below.
+            boolean couldFire = Status.Active.equals(sourceJob.get().getJobStatus()) && Execution.Auto.equals(sourceJob.get().getExecution());
             sourceJob.get().setJobName(sourceJobDto.getJobName());
 
             Optional<SourceTask> sourceTask = this.sourceTaskRepository.findByTaskDetailIdAndTaskStatus(
@@ -614,6 +616,19 @@ public class SourceJobServiceImpl implements SourceJobService {
                         }
                         this.applySchedulerFields(target, schedulerDto, sourceJob.get().getJobId());
                         this.schedulerRepository.save(target);
+                    });
+            }
+            // ZT-S6 (perf cycle, 2026-10-27): a save that resumes the schedule (Inactive -> Active, or Manual -> Auto) moves it on to
+            // its next real slot, as toggleSourceJobStatus does: next_run_at stood still while the job could not fire, so the
+            // resumed job fired at once and every slot of the pause was written down as Missed, "catching up after downtime".
+            // A slot still ahead (a skip, a timetable this save re-seeded) is left as it is.
+            boolean canFire = Status.Active.equals(sourceJob.get().getJobStatus()) && Execution.Auto.equals(sourceJob.get().getExecution());
+            if (canFire && !couldFire) {
+                this.schedulerRepository.findSchedulerByJobId(sourceJob.get().getJobId())
+                    .filter(scheduler -> scheduler.getNextRunAt() == null || !scheduler.getNextRunAt().isAfter(BusinessTime.now()))
+                    .ifPresent(scheduler -> {
+                        ProcessTimeUtil.applyInitialSchedule(scheduler);
+                        this.schedulerRepository.save(scheduler);
                     });
             }
             this.notifications.jobLifecycleChanged(sourceJob.get().getTenantId(), new JobLifecycleChanged().setJobId(sourceJob.get().getJobId()).setChange(JobLifecycleChanged.Change.updated));

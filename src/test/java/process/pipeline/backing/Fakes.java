@@ -34,6 +34,8 @@ public final class Fakes {
         public final List<ApiCall> calls = new ArrayList<>();
         public Function<Map<String, String>, String> answer = variables -> "{}";
         public String outcome = "OK";
+        /** The HTTP status of an answer that is not OK (500 unless a test says otherwise: 503 is one that passes). */
+        public int failStatus = 500;
         public String unavailable;
 
         @Override
@@ -46,7 +48,7 @@ public final class Fakes {
             this.calls.add(call);
             ApiRunResult result = new ApiRunResult();
             result.outcome = this.outcome;
-            result.statusCode = "OK".equals(this.outcome) ? 200 : 500;
+            result.statusCode = "OK".equals(this.outcome) ? 200 : this.failStatus;
             result.message = "OK".equals(this.outcome) ? null : "upstream said no";
             result.body = Values.JSON.readTree(this.answer.apply(call.variables));
             return result;

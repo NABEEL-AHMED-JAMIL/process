@@ -1824,6 +1824,10 @@ public class StepEngine {
             // that says to (PassingErrors: a service or storage away for a moment), after 5, 15 and 45 seconds.
             boolean authorSetRetry = step.getRetry() != null && step.getRetry().getMaxAttempts() != null;
             boolean passingRetries = !authorSetRetry && task.map(found -> found.spec().repeatSafe()).orElse(false);
+            // ZT-S7 (perf cycle, 2026-10-27): the registry's default tries are for errors that pass (owner 2026-10-21, "default
+            // transient retry"); one that cannot change on its own -- no file or document to start from, an unresolved variable,
+            // a missing column, no object at the key -- fails at once instead of waiting through every try.
+            boolean onlyPassing = !authorSetRetry;
             int planned = maxTries;
             Tried tried = new Tried();
             for (int t = 1; t <= maxTries; t++) {
@@ -1858,6 +1862,7 @@ public class StepEngine {
                     // MIG-214: the bounded try pool is full of tries that timed out and are still unwinding.
                     tried.error = "no thread was free for this try: earlier tries that timed out are still unwinding";
                     tried.timedOut = false;
+                    tried.passing = true;
                     future = null;
                 }
                 if (future != null) {
@@ -1883,9 +1888,10 @@ public class StepEngine {
                             tried.reads = recorder.reads();
                             return tried;
                         }
-                        // The work succeeded but its output could not be kept: a failed try.
+                        // The work succeeded but its output could not be kept: a failed try, that may pass.
                         tried.result = null;
                         tried.error = uncommitted;
+                        tried.passing = true;
                     } catch (TimeoutException ex) {
                         future.cancel(true);
                         tried.error = String.format("timed out after %d s", timeout);
@@ -1908,6 +1914,11 @@ public class StepEngine {
                 }
                 if (streams) {
                     ((StreamTry) context).discard();
+                }
+                if (onlyPassing && t < maxTries && !tried.passing) {
+                    log.line("ERROR", String.format("Try %d of %d failed: %s. Not tried again: it is not an error that passes on its own.",
+                        t, maxTries, tried.error));
+                    return tried;
                 }
                 int wait = delay;
                 if (t == maxTries && passingRetries && tried.passing && maxTries - planned < PassingErrors.WAITS_SECONDS.length) {
