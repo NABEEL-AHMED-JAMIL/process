@@ -32,6 +32,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI prompt (MIG-245): runs a saved prompt once per input row through ai-service, with the prompt's variables filled from
@@ -282,9 +284,11 @@ public class AiPromptStepTask extends RegisteredTask {
         return String.format("Prompt variable '%s' has no value: map it in Variables or add a column named %s", name, name);
     }
 
+    private static final Pattern UNSENT = Pattern.compile("Prompt variable '([^']+)' has no value");
+
     /** The variable a row was not sent for ({@link #noValue}'s message), or null for any other failure. */
     static String unsentFor(String message) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Prompt variable '([^']+)' has no value").matcher(message == null ? "" : message);
+        Matcher m = UNSENT.matcher(message == null ? "" : message);
         return m.find() ? m.group(1) : null;
     }
 
