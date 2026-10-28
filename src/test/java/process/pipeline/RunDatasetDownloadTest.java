@@ -122,6 +122,13 @@ class RunDatasetDownloadTest {
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
     }
 
+    private static byte[] bytes(StepTimelineService.Download download) throws Exception {
+        assertThat(download.refusal).as(download.refusal == null ? "" : download.refusal.getMessage()).isNull();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        download.body.writeTo(out);
+        return out.toByteArray();
+    }
+
     // ---- download ----------------------------------------------------------------------------------------------------
 
     @Test
@@ -165,6 +172,29 @@ class RunDatasetDownloadTest {
         assertThat(this.service.download(report, "csv").refusal.getMessage()).isEqualTo("A PDF report downloads as the PDF it is.");
         assertThat(this.service.download(this.file, "pdf").status).isEqualTo(400);
         assertThat(this.service.download(this.output, "pdf").refusal.getMessage()).contains("csv, json or jsonl");
+    }
+
+    /** Owner 2026-10-28 (run 3151): a kept image (pdf_pages) downloads as the png it is, never as rows. */
+    @Test
+    void aKeptImageDownloadsAsThePngItIsAndOnlyAsThat() throws Exception {
+        String imageKey = DatasetStore.fileKeyOf(RUN, 1, "keep", "scan-page-01.png");
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
+        this.datasets.writeFile(imageKey, png);
+        long image = this.steps.dataset(this.keep, "scan-page-01.png", imageKey, 1, "[\"page\"]", Instant.now().plus(Duration.ofHours(24)));
+        this.steps.output(this.keep, RunOutput.file("scan-page-01.png", "png", 1, png.length), image, Instant.now().plus(Duration.ofHours(24)));
+
+        StepTimelineService.Download asked = this.service.download(image, "png");
+        assertThat(asked.status).isEqualTo(200);
+        assertThat(asked.fileName).isEqualTo("scan-page-01.png");
+        assertThat(asked.contentType).isEqualTo("image/png");
+        assertThat(bytes(asked)).isEqualTo(png);
+        assertThat(this.service.download(image, null).contentType).isEqualTo("image/png");
+        assertThat(this.service.download(image, "csv").refusal.getMessage()).isEqualTo("This file downloads as the png it is.");
+        // A csv kept file is rows: as csv, json or jsonl, never as an image; and rows never as an image either.
+        assertThat(this.service.download(this.file, "png").refusal.getMessage())
+            .isEqualTo("This file downloads as the csv it is, or as csv, json or jsonl; got 'png'.");
+        assertThat(this.service.download(this.output, "png").refusal.getMessage()).contains("csv, json or jsonl").contains("png");
+        assertThat(this.service.download(this.output, "../x").status).isEqualTo(400);
     }
 
     @Test

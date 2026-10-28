@@ -293,7 +293,9 @@ public class StepTimelineService {
             return Download.refused(403, ManagedSessionOnly.REFUSAL);
         }
         String wanted = format == null || format.trim().isEmpty() ? null : format.trim().toLowerCase(Locale.ROOT);
-        if (wanted != null && !FileFormats.WRITABLE.contains(wanted) && !"pdf".equals(wanted)) {
+        // Owner 2026-10-28 (run 3151): a kept file also downloads as the format it is -- a pdf_pages image as its png, a
+        // convert_file txt as its txt -- which keptFile checks against the file; rows only as csv, json or jsonl (below).
+        if (wanted != null && !wanted.matches("[a-z0-9]{1,10}")) {
             return Download.refused(400, String.format("A dataset downloads as csv, json or jsonl; got '%s'.", format));
         }
         Optional<StepStore.DatasetFile> found = runDatasetId == null ? Optional.empty() : this.steps.datasetById(runDatasetId);
@@ -324,6 +326,9 @@ public class StepTimelineService {
             }
             if ("pdf".equals(wanted)) {
                 return Download.refused(400, "A dataset downloads as csv, json or jsonl; only a report is a PDF.").of(run.get());
+            }
+            if (wanted != null && !FileFormats.WRITABLE.contains(wanted)) {
+                return Download.refused(400, String.format("A dataset downloads as csv, json or jsonl; got '%s'.", format)).of(run.get());
             }
             // MIG-344: a dataset streams from the store to the download, a batch at a time -- a streamed step's output may be
             // far bigger than memory. Opened here, so a dataset that is gone still answers 410 before anything is sent.
@@ -607,6 +612,9 @@ public class StepTimelineService {
         }
         if (!FileFormats.READABLE.contains(own)) {
             return Download.refused(400, String.format("This file downloads as the %s it is.", own));
+        }
+        if (!FileFormats.WRITABLE.contains(wanted)) {
+            return Download.refused(400, String.format("This file downloads as the %s it is, or as csv, json or jsonl; got '%s'.", own, wanted));
         }
         RowCollector collector = new RowCollector("The file", null);
         FileFormats.read(content, own, new FileFormats.ReadOptions(), collector);
