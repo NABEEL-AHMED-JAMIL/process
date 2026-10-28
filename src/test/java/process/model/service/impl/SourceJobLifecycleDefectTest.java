@@ -22,11 +22,14 @@ import process.model.pojo.SourceJob;
 import process.model.pojo.SourceTask;
 import process.security.TenantContext;
 import process.security.TenantFilterHelper;
+import process.util.BusinessTime;
 import process.util.OpenSearchAuditLogClient;
 import process.util.UserNameResolver;
 
 import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -111,6 +114,7 @@ public class SourceJobLifecycleDefectTest {
     @AfterEach
     void clearContext() {
         TenantContext.clear();
+        BusinessTime.useSystemClock();
     }
 
     // ---- fixtures ---------------------------------------------------------------------------
@@ -327,11 +331,29 @@ public class SourceJobLifecycleDefectTest {
      * ZT-S6 (perf cycle, 2026-10-27): un-pausing a schedule through Save (Inactive -> Active, the timetable unchanged) moves it on
      * to its next real slot, as the status toggle does. next_run_at stood still while the job was paused, so the resumed job
      * fired at once and every slot of the pause was recorded as Missed, "catching up after downtime". A slot still ahead is kept.
+     *
+     * Read at a fixed business clock (owner 2026-10-27): the service decides by BusinessTime.now() (Chicago wall clock), and
+     * this test read LocalDateTime.now() (the JVM's zone), so it failed at the hours when the two put 02:00 on different
+     * sides of "now". One minute after the 02:00 slot the next one is tomorrow's; one minute before (below) it is today's.
      */
     @Test
     void resumingAPausedScheduleThroughSaveMovesItToItsNextSlot() throws Exception {
+        // 07:01Z on 27 Oct 2026 is 02:01 CDT in Chicago: today's slot has just gone.
+        assertThat(this.resumedAt("2026-10-27T07:01:00Z")).isEqualTo(LocalDateTime.of(2026, 10, 28, 2, 0));
+    }
+
+    @Test
+    void resumingAPausedScheduleAMinuteBeforeItsSlotKeepsTodaysSlot() throws Exception {
+        // 06:59Z is 01:59 CDT: today's 02:00 is still ahead.
+        assertThat(this.resumedAt("2026-10-27T06:59:00Z")).isEqualTo(LocalDateTime.of(2026, 10, 27, 2, 0));
+    }
+
+    /** Resumes a paused daily-at-02:00 schedule through Save with the business clock at {@code instant}; its next run after. */
+    private LocalDateTime resumedAt(String instant) throws Exception {
+        BusinessTime.useClock(Clock.fixed(Instant.parse(instant), BusinessTime.ZONE));
+        LocalDateTime now = BusinessTime.now();
         SchedulerDto posted = dailyAtTwo();
-        posted.setStartDate(LocalDate.now().minusDays(10));
+        posted.setStartDate(BusinessTime.today().minusDays(10));
         Scheduler stored = new Scheduler();
         stored.setSchedulerId(9001L);
         stored.setJobId(JOB_ID);
@@ -339,7 +361,7 @@ public class SourceJobLifecycleDefectTest {
         stored.setStartTime(posted.getStartTime());
         stored.setFrequency(posted.getFrequency());
         stored.setIntervalValue(posted.getIntervalValue());
-        stored.setNextRunAt(LocalDateTime.now().minusDays(7).withHour(2).withMinute(0).withSecond(0).withNano(0));
+        stored.setNextRunAt(now.minusDays(7).withHour(2).withMinute(0).withSecond(0).withNano(0));
         this.updateCollaboratorsResolve(stored);
         SourceJob paused = existingAutoJob();
         paused.setJobStatus(Status.Inactive);
@@ -352,8 +374,9 @@ public class SourceJobLifecycleDefectTest {
         sourceJobDto.setSchedulers(new LinkedHashSet<>(Collections.singletonList(posted)));
         this.service.updateSourceJob(sourceJobDto);
 
-        assertThat(stored.getNextRunAt()).isAfter(LocalDateTime.now()).isBefore(LocalDateTime.now().plusDays(1).plusMinutes(1));
+        assertThat(stored.getNextRunAt()).isAfter(now).isBefore(now.plusDays(1).plusMinutes(1));
         assertThat(stored.getNextRunAt().toLocalTime()).isEqualTo(LocalTime.of(2, 0));
+        return stored.getNextRunAt();
     }
 
     @Test
