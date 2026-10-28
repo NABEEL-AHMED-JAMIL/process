@@ -1,7 +1,11 @@
 package process.pipeline.items;
 
+import process.util.ListSort;
+
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -97,7 +101,16 @@ public interface RunItemStore {
         /** The runs started in this window; null: no bound. */
         public Instant from;
         public Instant to;
+        /** Owner 2026-10-27: a column of {@link #ACROSS_SORTS} and its direction; null: newest run first, as before. */
+        public ListSort.Choice sort;
     }
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): what a schedule's items across its runs sort by -- the Schedule items
+     * table's Run, Item, When (the run's start, else when it was queued) and Status (failed, sub-items failed, check by hand,
+     * running, done). Each store writes its own order for them; ties go by the item row's id.
+     */
+    List<String> ACROSS_SORTS = Collections.unmodifiableList(Arrays.asList("run", "label", "startedAt", "status"));
 
     /** An item's row in one run, with the run's facts. */
     final class AcrossRow {

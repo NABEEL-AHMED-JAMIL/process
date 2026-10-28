@@ -455,4 +455,61 @@ class MonitoringPostgresTest {
         Map<String, Object> bFacets = (Map<String, Object>) b.get("facets");
         assertThat((List<?>) bFacets.get("workspaces")).as("a facet leaves its own filter out").hasSize(2);
     }
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): sorted, the 60 failed runs read in two pages of 50 hold each run once,
+     * in the sort's order (ties on Ended by the run), and a workspace's people may not sort by workspace.
+     */
+    @Test
+    void failedRunsSortedByAColumnPageWithoutRepeatsOrGaps() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        List<Long> made = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            // Every third run ends with the one before it, so Ended ties and the run decides.
+            made.add(run(i % 2 == 0 ? JOB_A : JOB_B, "Failed", now.minusSeconds(600 - (i - i % 3 / 2) * 5L), "Step 1 <x> failed: boom " + i + "."));
+        }
+        FailedRuns failed = new FailedRuns(app, this.identity);
+        TenantContext.set(null, "PLATFORM_ADMIN", PLATFORM, "p");
+        for (String dir : new String[] {"asc", "desc"}) {
+            List<Long> seen = new ArrayList<>();
+            List<Instant> ended = new ArrayList<>();
+            for (int page = 0; page < 2; page++) {
+                FailedRuns.Query q = new FailedRuns.Query();
+                q.sort = "ended";
+                q.dir = dir;
+                q.page = page;
+                Map<String, Object> answer = failed.search(q, true);
+                assertThat(answer.get("sort")).isEqualTo("ended");
+                assertThat(answer.get("dir")).isEqualTo(dir);
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> items = (List<Map<String, Object>>) answer.get("items");
+                assertThat(items).hasSize(page == 0 ? 50 : 10);
+                for (Map<String, Object> item : items) {
+                    seen.add((Long) item.get("runId"));
+                    ended.add(Instant.parse((String) item.get("endedAt")));
+                }
+            }
+            assertThat(seen).as("no repeat, no gap (%s)", dir).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(made);
+            for (int i = 1; i < seen.size(); i++) {
+                int byEnded = ended.get(i - 1).compareTo(ended.get(i));
+                int byRun = Long.compare(seen.get(i - 1), seen.get(i));
+                if ("asc".equals(dir)) {
+                    assertThat(byEnded < 0 || (byEnded == 0 && byRun < 0)).as("ascending at %d", i).isTrue();
+                } else {
+                    assertThat(byEnded > 0 || (byEnded == 0 && byRun > 0)).as("descending at %d", i).isTrue();
+                }
+            }
+        }
+        FailedRuns.Query byWorkspace = new FailedRuns.Query();
+        byWorkspace.sort = "workspace";
+        byWorkspace.dir = "desc";
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> first = (List<Map<String, Object>>) failed.search(byWorkspace, true).get("items");
+        assertThat(first.get(0).get("workspace")).isEqualTo("Workspace B");
+        assertThat(first.get(49).get("workspace")).isEqualTo("Workspace A");
+
+        TenantContext.set(A, "TENANT_ADMIN", ADMIN_A, "a");
+        Assertions.assertThatThrownBy(() -> failed.search(byWorkspace, false)).isInstanceOf(AlertRules.Refused.class)
+            .hasMessage("sort must be one of: run, pipeline, kind, ended.");
+    }
 }

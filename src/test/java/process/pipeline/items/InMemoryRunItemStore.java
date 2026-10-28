@@ -1,5 +1,7 @@
 package process.pipeline.items;
 
+import process.util.ListSort;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -257,9 +259,24 @@ public class InMemoryRunItemStore implements RunItemStore {
             a.withValues = run.withValues;
             out.add(a);
         }
-        out.sort(Comparator.comparing((AcrossRow a) -> a.runStarted == null ? Instant.EPOCH : a.runStarted).reversed()
+        out.sort(q.sort != null ? acrossOrder(q.sort) : Comparator.comparing((AcrossRow a) -> a.runStarted == null ? Instant.EPOCH : a.runStarted).reversed()
             .thenComparing(a -> -a.item.jobQueueId));
         return out.subList(0, Math.min(limit, out.size()));
+    }
+
+    /** JdbcRunItemStore.ACROSS_ORDER, in Java: the column, then the item row's id, both in the sort's direction. */
+    private static Comparator<AcrossRow> acrossOrder(ListSort.Choice sort) {
+        Comparator<AcrossRow> tie = Comparator.comparing((AcrossRow a) -> a.item.runItemId == null ? 0L : a.item.runItemId);
+        switch (sort.column) {
+            case "run":
+                return ListSort.comparator((AcrossRow a) -> Long.valueOf(a.item.jobQueueId), sort.dir, tie);
+            case "label":
+                return ListSort.comparator((AcrossRow a) -> a.item.label == null ? null : a.item.label.toLowerCase(), sort.dir, tie);
+            case "startedAt":
+                return ListSort.comparator((AcrossRow a) -> a.runStarted, sort.dir, tie);
+            default:
+                return ListSort.comparator((AcrossRow a) -> Integer.valueOf(RunItems.statusRank(a.item)), sort.dir, tie);
+        }
     }
 
     @Override

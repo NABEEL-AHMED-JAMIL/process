@@ -12,6 +12,7 @@ import process.model.dto.MessageQSearchDto;
 import process.model.dto.QueueMessageStatusDto;
 import process.model.dto.ResponseDto;
 import process.model.service.MessageQService;
+import process.util.ListSort;
 import process.util.ProcessUtil;
 import process.util.RequestRefused;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,6 +46,9 @@ public class MessageQRestApi {
         @RequestBody MessageQSearchDto messageQSearch) {
         try {
             return new ResponseEntity<>(this.messageQService.fetchLogs(messageQSearch), HttpStatus.OK);
+        } catch (ListSort.Refused refused) {
+            // Owner 2026-10-27: a sort it does not take is a 400 naming the ones it does (GlobalExceptionHandler).
+            throw refused;
         } catch (Exception ex) {
             logger.error("An error occurred while fetchLogs ", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

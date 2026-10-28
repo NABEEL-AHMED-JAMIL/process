@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import process.model.dto.SourceJobDto;
 import process.model.service.SourceJobService;
 import process.model.service.SourceJobBulkService;
+import process.util.ListSort;
 import process.util.ProcessUtil;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.RestController;
@@ -216,10 +217,20 @@ public class SourceJobRestApi {
     public ResponseEntity<?> fetchSourceJobQueueListWithJobId(
         @RequestParam(value = "jobId") Long jobId,
         @RequestParam(value = "limit", required = false) Integer limit,
-        @RequestParam(value = "beforeId", required = false) Long beforeId) {
+        @RequestParam(value = "beforeId", required = false) Long beforeId,
+        @RequestParam(value = "sort", required = false) String sort,
+        @RequestParam(value = "dir", required = false) String dir,
+        @RequestParam(value = "offset", required = false) Integer offset) {
         try {
             // The newest 500 runs when no limit is given, 1000 at most: a minute job makes 525,000 a year (scale review P0 #1).
-            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId), HttpStatus.OK);
+            if (sort == null && dir == null && offset == null) {
+                return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId), HttpStatus.OK);
+            }
+            // Owner 2026-10-27: a column's order (RunListSort), paged by offset.
+            return new ResponseEntity<>(this.sourceJobService.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId, sort, dir, offset),
+                HttpStatus.OK);
+        } catch (ListSort.Refused refused) {
+            throw refused;
         } catch (Exception ex) {
             logger.error("An error occurred while fetchSourceJobQueueListWithJobId.", ex);
             return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, ProcessUtil.INTERNAL_ERROR_500), HttpStatus.INTERNAL_SERVER_ERROR);

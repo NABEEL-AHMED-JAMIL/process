@@ -7,6 +7,7 @@ import process.identity.WorkspaceNames;
 import org.slf4j.Logger;
 import process.util.BusinessTime;
 import process.util.CronSchedule;
+import process.util.ListSort;
 import process.util.UserNameResolver;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1001,6 +1002,57 @@ public class SourceJobServiceImpl implements SourceJobService {
         payload.put("jobQueues", jobQueues);
         payload.put("hasMore", hasMore);
         payload.put("limit", window);
+        return new ResponseDto(SUCCESS, String.format("SourceJobQueue found with %d.", jobId), payload);
+    }
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): the job's runs in a column's order (RunListSort), a window at a time by
+     * offset. The same gates as the newest-first read above -- the caller's job, not deleted -- and the same window sizes;
+     * one row past the window says whether there is more. No sort and no offset is that read, unchanged.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId, String sort, String dir, Integer offset)
+        throws Exception {
+        ListSort.Choice choice = RunListSort.parse(sort, dir);
+        if (choice == null && offset == null) {
+            return this.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId);
+        }
+        if (choice == null) {
+            throw new ListSort.Refused("offset pages a sorted list: send sort with it, or page the newest runs with beforeId.");
+        }
+        if (beforeId != null) {
+            throw new ListSort.Refused("beforeId pages the newest-first order: with a sort, page with offset.");
+        }
+        if (offset < 0) {
+            throw new ListSort.Refused("offset is 0 or more.");
+        }
+        this.tenantFilterHelper.enableIfNeeded(this.entityManager);
+        Optional<SourceJob> sourceJobOpt = this.sourceJobRepository.findById(jobId);
+        if (!sourceJobOpt.isPresent() || !this.isOwnedByCaller(sourceJobOpt.get())
+            || Status.Delete.equals(sourceJobOpt.get().getJobStatus())) {
+            return new ResponseDto(ERROR, String.format("SourceJob not found with %d.", jobId));
+        }
+        int window = runHistoryWindow(limit);
+        @SuppressWarnings("unchecked")
+        List<JobQueue> rows = this.entityManager.createNativeQuery(RunListSort.jobHistory(choice), JobQueue.class)
+            .setParameter("jobId", jobId)
+            .setParameter("limit", window + 1)
+            .setParameter("offset", offset)
+            .getResultList();
+        boolean hasMore = rows.size() > window;
+        List<SourceJobQueueDto> jobQueues = rows.stream()
+            .limit(window)
+            .map(this::getSourceJobQueueDto)
+            .collect(Collectors.toList());
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("jobQueues", jobQueues);
+        payload.put("hasMore", hasMore);
+        payload.put("limit", window);
+        payload.put("offset", offset);
+        payload.put("nextOffset", hasMore ? offset + window : null);
+        payload.put("sort", choice.column);
+        payload.put("dir", choice.dirWord());
         return new ResponseDto(SUCCESS, String.format("SourceJobQueue found with %d.", jobId), payload);
     }
 

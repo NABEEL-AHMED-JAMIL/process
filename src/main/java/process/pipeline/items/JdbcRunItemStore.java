@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import process.model.service.impl.RunFacets;
+import process.util.ListSort;
 
 import java.sql.Array;
 import java.sql.ResultSet;
@@ -36,6 +37,23 @@ public class JdbcRunItemStore implements RunItemStore {
     static final String COLUMNS = "run_item_id, job_queue_id, attempt, item_key, item_ref, parent_key, label, position, status, "
         + "failed_step_index, failed_step_key, reason, steps, child_count, child_failed, file_count, current, started_at, ended_at, duration_ms, "
         + "fields, fields_ds, flag, pipeline_version";
+
+    /**
+     * Owner 2026-10-27: {@link RunItemStore#ACROSS_SORTS}' SQL over acrossRuns' i (run_item) and q (job_queue). The When cell is
+     * the run's start, else its queue time (never empty). No index: the read is one schedule's items (q.job_id), and its own
+     * newest-first order is the same top-N sort over them.
+     */
+    static final Map<String, ListSort.Column> ACROSS_ORDER;
+
+    static {
+        Map<String, ListSort.Column> order = new LinkedHashMap<>();
+        order.put("run", ListSort.Column.of("i.job_queue_id"));
+        order.put("label", ListSort.Column.of("lower(i.label)"));
+        order.put("startedAt", ListSort.Column.of("COALESCE(q.start_time, q.date_created)"));
+        order.put("status", ListSort.Column.of("(CASE WHEN i.status = 'failed' THEN 0 WHEN i.child_failed > 0 THEN 1 "
+            + "WHEN i.flag = 'check' THEN 2 WHEN i.status = 'running' THEN 3 ELSE 4 END)"));
+        ACROSS_ORDER = Collections.unmodifiableMap(order);
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -284,7 +302,8 @@ public class JdbcRunItemStore implements RunItemStore {
             sql.append(" AND COALESCE(q.start_time, q.date_created) < ?");
             args.add(Timestamp.from(q.to));
         }
-        sql.append(" ORDER BY COALESCE(q.start_time, q.date_created) DESC, i.job_queue_id DESC, i.position LIMIT ?");
+        sql.append(q.sort == null ? " ORDER BY COALESCE(q.start_time, q.date_created) DESC, i.job_queue_id DESC, i.position LIMIT ?"
+            : " ORDER BY " + ListSort.orderBy(q.sort, ACROSS_ORDER, "i.run_item_id") + " LIMIT ?");
         args.add(Math.max(1, limit));
         return this.jdbc.query(sql.toString(), (rs, n) -> {
             AcrossRow a = new AcrossRow();

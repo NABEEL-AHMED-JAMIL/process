@@ -83,6 +83,22 @@ public interface SourceJobService {
      */
     ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId) throws Exception;
 
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): a job's runs sorted by a column of RunListSort ({@code sort}, {@code dir}),
+     * {@code limit} at a time from {@code offset} -- offset paging, the beforeId cursor walks the newest-first order only. No
+     * sort is exactly the three-argument read. The payload adds {@code offset}, {@code nextOffset} (null on the last window),
+     * {@code sort} and {@code dir}.
+     *
+     * @throws process.util.ListSort.Refused an unknown column or direction, or a beforeId sent with a sort (HTTP 400)
+     */
+    default ResponseDto fetchSourceJobQueueListWithJobId(Long jobId, Integer limit, Long beforeId, String sort, String dir, Integer offset)
+        throws Exception {
+        if ((sort == null || sort.trim().isEmpty()) && offset == null) {
+            return this.fetchSourceJobQueueListWithJobId(jobId, limit, beforeId);
+        }
+        throw new UnsupportedOperationException("This job service does not sort run history.");
+    }
+
     /** Every listed job, as the console has always read it. */
     default ResponseDto listSourceJob() throws Exception {
         return this.listSourceJob(null, null, null);

@@ -26,6 +26,12 @@ public class MessageQSearchDto {
     private Set<Long> taskDetailIds;
     /** UX review 2026-10-13 (B3): only the runs started this way -- RunTriggers' keys (manual, file, document, retry, api, schedule). */
     private Set<String> triggers;
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): the rows' order, a column of RunListSort (run, queued, started, ended,
+     * duration, status) and asc/desc; none is newest first, as before. The counts are not affected.
+     */
+    private String sort;
+    private String dir;
 
     public MessageQSearchDto() {}
 
@@ -113,5 +119,21 @@ public class MessageQSearchDto {
     @Override
     public String toString() {
         return new Gson().toJson(this);
+    }
+
+    public String getSort() {
+        return sort;
+    }
+
+    public void setSort(String sort) {
+        this.sort = sort;
+    }
+
+    public String getDir() {
+        return dir;
+    }
+
+    public void setDir(String dir) {
+        this.dir = dir;
     }
 }

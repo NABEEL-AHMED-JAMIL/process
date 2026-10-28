@@ -2,6 +2,7 @@ package process.model.service.impl;
 
 import java.util.TreeSet;
 import java.util.Collection;
+import process.util.ListSort;
 import process.util.RequestRefused;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -656,7 +657,11 @@ public class QueryService {
         }
         int window = queueWindow(messageQSearch.getLimit());
         int page = messageQSearch.getPage() == null || messageQSearch.getPage() < 0 ? 0 : messageQSearch.getPage();
-        return query + String.format("\norder by job_queue_id desc limit %d offset %d", window + 1, (long) page * window);
+        // Owner 2026-10-27: a column's order when one is asked for -- the SQL is RunListSort's, the request only picks it.
+        // The range is read on the day index either way; a sort is a top-N of the range's rows, as newest-first is.
+        ListSort.Choice sort = RunListSort.parse(messageQSearch.getSort(), messageQSearch.getDir());
+        String order = sort == null ? "job_queue_id desc" : RunListSort.orderBy(sort);
+        return query + String.format("\norder by %s limit %d offset %d", order, window + 1, (long) page * window);
     }
 
     /**

@@ -29,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -577,5 +579,77 @@ class BackfillPostgresTest {
 
     private String status(long id) {
         return login.queryForObject("SELECT status FROM backfill WHERE backfill_id = ?", String.class, id);
+    }
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): a backfill's periods sorted by Date, State, Run or Tries, both ways, read in
+     * pages of 100: every period once, in the column's order (problems first for State; a period with no run last both
+     * ways), ties by the period's start in the sort's direction. An unknown column is a 400 naming the four.
+     */
+    @Test
+    void thePeriodsSortByEachColumnAcrossPagesWithoutRepeatsOrGaps() {
+        long id = this.start(A, "TENANT_ADMIN", ADMIN_A, request(JOB_A, "2026-05-01", "2026-08-28"));
+        login.update("UPDATE backfill_slot s SET state = x.state, tries = x.tries, job_queue_id = x.run FROM (SELECT slot_start, "
+            + "CASE n % 4 WHEN 0 THEN 'FAILED' WHEN 1 THEN 'COMPLETED' WHEN 2 THEN 'PENDING' ELSE 'SKIPPED' END AS state, "
+            + "CAST(n % 3 AS smallint) AS tries, CASE WHEN n % 4 IN (0, 1) THEN 5000000 + (n * 37) % 50 END AS run "
+            + "FROM (SELECT slot_start, row_number() OVER (ORDER BY slot_start) AS n FROM backfill_slot WHERE backfill_id = ?) r) x "
+            + "WHERE s.backfill_id = ? AND s.slot_start = x.slot_start", id, id);
+        List<Map<String, Object>> all = login.queryForList("SELECT slot_start, state, job_queue_id, tries FROM backfill_slot "
+            + "WHERE backfill_id = ?", id);
+        assertThat(all).hasSize(120);
+        List<String> states = Arrays.asList("FAILED", "CANCELLED", "QUEUED", "PENDING", "SKIPPED", "COMPLETED");
+        Map<String, Function<Map<String, Object>, Comparable<?>>> keys = new LinkedHashMap<>();
+        keys.put("date", r -> ((Timestamp) r.get("slot_start")).toInstant());
+        keys.put("state", r -> states.indexOf((String) r.get("state")));
+        keys.put("run", r -> r.get("job_queue_id") == null ? null : ((Number) r.get("job_queue_id")).longValue());
+        keys.put("tries", r -> ((Number) r.get("tries")).intValue());
+        as(A, "TENANT_ADMIN", ADMIN_A);
+        for (Map.Entry<String, Function<Map<String, Object>, Comparable<?>>> column : keys.entrySet()) {
+            for (String dir : new String[] {"asc", "desc"}) {
+                int sign = "asc".equals(dir) ? 1 : -1;
+                List<Map<String, Object>> expected = new ArrayList<>(all);
+                expected.sort((x, y) -> {
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    Comparable a = column.getValue().apply(x);
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    Comparable b = column.getValue().apply(y);
+                    if (a == null || b == null) {
+                        int nulls = a == null ? (b == null ? 0 : 1) : -1;
+                        if (nulls != 0) {
+                            return nulls;
+                        }
+                    } else {
+                        @SuppressWarnings("unchecked")
+                        int by = a.compareTo(b) * sign;
+                        if (by != 0) {
+                            return by;
+                        }
+                    }
+                    return ((Timestamp) x.get("slot_start")).compareTo((Timestamp) y.get("slot_start")) * sign;
+                });
+                List<String> want = new ArrayList<>();
+                expected.forEach(r -> want.add(((Timestamp) r.get("slot_start")).toInstant().toString()));
+                List<String> got = new ArrayList<>();
+                for (int page = 1; page <= 2; page++) {
+                    Map<String, Object> detail = this.backfills.detail(id, null, page, false, column.getKey(), dir);
+                    assertThat(detail.get("periodsSort")).isEqualTo(column.getKey());
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> periods = (List<Map<String, Object>>) detail.get("periods");
+                    assertThat(periods).hasSize(page == 1 ? 100 : 20);
+                    periods.forEach(p -> got.add((String) p.get("start")));
+                }
+                assertThat(got).as("%s %s", column.getKey(), dir).doesNotHaveDuplicates().containsExactlyElementsOf(want);
+            }
+        }
+        // No sort: the periods' own order, oldest first, and no sort named in the answer.
+        Map<String, Object> plain = this.backfills.detail(id, null, 1, false);
+        assertThat(plain).doesNotContainKey("periodsSort");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> first = (List<Map<String, Object>>) plain.get("periods");
+        assertThat(first.get(0).get("date")).isEqualTo("2026-05-01");
+        assertThatThrownBy(() -> this.backfills.detail(id, null, 1, false, "note", "asc")).isInstanceOf(Backfills.Refused.class)
+            .hasMessage("sort must be one of: date, state, run, tries.")
+            .satisfies(e -> assertThat(((Backfills.Refused) e).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> this.backfills.detail(id, null, 1, false, "date", "up")).hasMessage("dir must be asc or desc.");
     }
 }

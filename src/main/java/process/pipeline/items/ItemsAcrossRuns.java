@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import process.util.ListSort;
 import process.model.enums.Status;
 import process.model.pojo.SourceJob;
 import process.model.repository.SourceJobRepository;
@@ -109,6 +110,17 @@ public class ItemsAcrossRuns {
         public Integer page;
         public Integer size;
         public List<String> fields;
+        /** Owner 2026-10-27 ("add a sort on each table"): run, label, startedAt or status (JdbcRunItemStore.ACROSS_SORTS), asc or desc. */
+        public String sort;
+        public String dir;
+
+        public String getSort() { return sort; }
+
+        public void setSort(String sort) { this.sort = sort; }
+
+        public String getDir() { return dir; }
+
+        public void setDir(String dir) { this.dir = dir; }
 
         public Long getJobId() { return jobId; }
 
@@ -184,6 +196,12 @@ public class ItemsAcrossRuns {
         SourceJob job = found.get();
         boolean all = seesAll(job);
         RunItemStore.AcrossQuery query = new RunItemStore.AcrossQuery();
+        try {
+            // Owner 2026-10-27: sorted in SQL before the newest-CAP cut, so the candidates are the first CAP in that order.
+            query.sort = ListSort.parse(request.sort, request.dir, RunItemStore.ACROSS_SORTS);
+        } catch (ListSort.Refused unknown) {
+            return RunItems.Answer.refused(400, unknown.getMessage());
+        }
         RunItems.Search search = null;
         if (request.key != null && !request.key.trim().isEmpty()) {
             query.key = request.key.trim();

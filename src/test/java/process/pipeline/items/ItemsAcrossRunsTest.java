@@ -311,4 +311,30 @@ class ItemsAcrossRunsTest {
         assertThat(this.across.list(search("call-a.m4a")).status).isEqualTo(403);
         assertThat(this.across.compare(JOB, "k", NEW, OLD, null).status).isEqualTo(403);
     }
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): sorted by Run, the oldest run's item comes first ascending and last
+     * descending, one per page of one with no repeat; an unknown column is a 400 naming the four the list sorts by.
+     */
+    @Test
+    void theItemsAcrossRunsSortByAColumnAndAnUnknownOneIsRefused() {
+        TenantContext.set(TENANT, "TENANT_ADMIN", 1025L, "manager@zanium.test");
+        for (String dir : new String[] {"asc", "desc"}) {
+            List<Long> order = new ArrayList<>();
+            for (int page = 0; page < 2; page++) {
+                ItemsAcrossRuns.Request r = search(null);
+                r.sort = "run";
+                r.dir = dir;
+                r.page = page;
+                r.size = 1;
+                this.data(this.across.list(r)).path("items").forEach(i -> order.add(i.path("jobQueueId").asLong()));
+            }
+            assertThat(order).as(dir).containsExactlyElementsOf("asc".equals(dir) ? Arrays.asList(OLD, NEW) : Arrays.asList(NEW, OLD));
+        }
+        ItemsAcrossRuns.Request unknown = search(null);
+        unknown.sort = "pipelineVersion";
+        RunItems.Answer refused = this.across.list(unknown);
+        assertThat(refused.status).isEqualTo(400);
+        assertThat(refused.body.getMessage()).isEqualTo("sort must be one of: run, label, startedAt, status.");
+    }
 }

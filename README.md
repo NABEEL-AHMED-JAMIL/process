@@ -425,6 +425,26 @@ so the first pass after the mute tells the ones still open. The rules list adds 
 **Workspace figures** (`POST /internal/core/tenantFacts`): `runsThisMonth`, `failedRunsThisMonth` (Chicago's month) and
 `openAlerts` per workspace beside the six counts, for Platform › Workspaces (`WorkspaceActivity`).
 
+## Sorted lists (owner 2026-10-27, V236)
+
+The console's paged run lists sort by a column on the server. Each takes `sort` and `dir` (`asc` | `desc`); the column is
+one of a fixed allow-list written in code (`process.util.ListSort`), anything else is a **400** naming the allowed columns
+("sort must be one of: ..."), and no `sort` is the list's own order, exactly as before. Empty values sort last both ways;
+ties go by the row's id in the sort's direction.
+
+| Route | Where the two go | Columns | Paging with a sort |
+|---|---|---|---|
+| `GET sourceJob.json/fetchSourceJobQueueListWithJobId` | query | `run`, `queued`, `started`, `ended`, `duration`, `status` | `offset` (+ `limit`); the answer adds `offset`, `nextOffset`, `sort`, `dir`. `beforeId` stays the newest-first cursor and is refused with a sort |
+| `POST message.json/fetchLogs` (Runs › Latest) | body | the same six | `page` × `limit`, as before |
+| `POST sourceJob.json/runItems` | body | `position`, `label`, `status`, `time` | `page` / `size`, as before (sub-items with `parent` too) |
+| `POST sourceJob.json/itemRuns` | body | `run`, `label`, `startedAt`, `status` | `page` / `size`; sorted in SQL before the newest-2,000 cut |
+| `GET sourceJob.json/backfills/detail` | query | `date`, `state`, `run`, `tries` | `page` (100 periods), as before |
+| `POST message.json/failedRuns` | body | `run`, `pipeline`, `kind`, `ended` (+ `workspace` for a platform administrator) | `page` (50), as before; over the scanned window (at most 2,000) |
+
+Status columns sort problems first (failed, then in progress, waiting, done). V236 adds job_queue's per-job indexes for a
+schedule's history by Queued (both ways) and Started, Ended and Duration (newest / longest first); the other sorts read one
+schedule's, one run's or one window's rows, as their newest-first order already does.
+
 ## Diagrams
 
 | | |

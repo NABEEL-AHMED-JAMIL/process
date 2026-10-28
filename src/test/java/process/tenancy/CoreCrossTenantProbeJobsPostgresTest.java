@@ -137,7 +137,10 @@ class CoreCrossTenantProbeJobsPostgresTest {
                 assertThat(fx.probe("GET sourceJob.json/fetchSourceJobDetailWithSourceJobId", caller,
                     () -> fx.sourceJobs.fetchSourceJobDetailWithSourceJobId(theirs))).contains(REFUSED);
                 assertThat(fx.probe("GET sourceJob.json/fetchSourceJobQueueListWithJobId", caller,
-                    () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs, 5, null))).contains(REFUSED);
+                    () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs, 5, null, null, null, null))).contains(REFUSED);
+                // Owner 2026-10-27: the sorted read (offset paging) is gated as the newest-first one.
+                assertThat(fx.probe("GET sourceJob.json/fetchSourceJobQueueListWithJobId(sorted)", caller,
+                    () -> fx.sourceJobs.fetchSourceJobQueueListWithJobId(theirs, 5, null, "started", "desc", 0))).contains(REFUSED);
                 assertThat(fx.probe("GET sourceJob.json/outputFields", caller, () -> fx.sourceJobs.outputFields(theirs))).contains(REFUSED);
                 assertThat(fx.probe("PUT sourceJob.json/updateSourceJob", caller,
                     () -> fx.sourceJobs.updateSourceJob(job(theirs, "Renamed By Acme", A_TASK)))).contains(REFUSED);

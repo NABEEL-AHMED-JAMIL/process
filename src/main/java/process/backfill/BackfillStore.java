@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Component;
+import process.util.ListSort;
 
 import java.math.BigDecimal;
 import java.sql.Array;
@@ -319,8 +320,31 @@ public class BackfillStore {
         return out;
     }
 
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): what a backfill's periods sort by -- Date or Hour (the period's start),
+     * State (failed, cancelled, queued, pending, skipped, completed: problems first), Run (its run's id; a period not run yet
+     * last) and Tries. Ties go by the period's start, its key. No index: a backfill has at most
+     * {@value BackfillPeriods#MAX_PERIODS} periods, read through its primary key.
+     */
+    public static final Map<String, ListSort.Column> SLOT_SORTS;
+
+    static {
+        Map<String, ListSort.Column> sorts = new LinkedHashMap<>();
+        sorts.put("date", ListSort.Column.of("s.slot_start"));
+        sorts.put("state", ListSort.Column.of("(CASE s.state WHEN 'FAILED' THEN 0 WHEN 'CANCELLED' THEN 1 WHEN 'QUEUED' THEN 2 "
+            + "WHEN 'PENDING' THEN 3 WHEN 'SKIPPED' THEN 4 WHEN 'COMPLETED' THEN 5 ELSE 6 END)"));
+        sorts.put("run", ListSort.Column.nullable("s.job_queue_id"));
+        sorts.put("tries", ListSort.Column.of("s.tries"));
+        SLOT_SORTS = Collections.unmodifiableMap(sorts);
+    }
+
     /** A page of a backfill's periods, oldest first, with each one's run; {@code state} null for every state. */
     public List<Slot> slots(long backfillId, String state, int limit, int offset) {
+        return this.slots(backfillId, state, limit, offset, null);
+    }
+
+    /** As slots(), in a column's order of {@link #SLOT_SORTS} (null: oldest first). */
+    public List<Slot> slots(long backfillId, String state, int limit, int offset, ListSort.Choice sort) {
         List<Object> args = new ArrayList<>();
         args.add(backfillId);
         String filter = "";
@@ -332,7 +356,8 @@ public class BackfillStore {
         args.add(offset);
         return this.jdbc.query("SELECT s.*, q.job_status AS run_status, q.start_time AS run_started_at, q.end_time AS run_ended_at "
             + "FROM backfill_slot s LEFT JOIN job_queue q ON q.job_queue_id = s.job_queue_id WHERE s.backfill_id = ?" + filter
-            + " ORDER BY s.slot_start LIMIT ? OFFSET ?", BackfillStore::slot, args.toArray());
+            + " ORDER BY " + (sort == null ? "s.slot_start" : ListSort.orderBy(sort, SLOT_SORTS, "s.slot_start")) + " LIMIT ? OFFSET ?",
+            BackfillStore::slot, args.toArray());
     }
 
     /** The backfill a run is part of and its period: {backfillId, date, step, state}; empty for a run of none. */

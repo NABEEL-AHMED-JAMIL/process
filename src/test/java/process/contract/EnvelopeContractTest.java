@@ -13,6 +13,7 @@ import process.media.UnreadableFileException;
 import process.security.TenantIsolationException;
 import process.security.TokenRevocations;
 import process.model.dto.ResponseDto;
+import process.util.ListSort;
 import process.util.RequestRefused;
 
 import java.util.Collections;
@@ -52,9 +53,14 @@ class EnvelopeContractTest extends EnvelopeContract {
     /** MIG-71: a write that lost a race to one of Core's unique rules is a 409 in words -- RaceRefusals' own tests pin it. */
     @Override
     protected Map<Class<? extends Throwable>, String> pinnedElsewhere() {
-        return Collections.singletonMap(DataIntegrityViolationException.class,
+        Map<Class<? extends Throwable>, String> pinned = new LinkedHashMap<>();
+        pinned.put(DataIntegrityViolationException.class,
             "409 CONFLICT with the rule's sentence when RaceRefusals recognises the constraint, else the fixed 500; "
                 + "pinned by RaceRefusalsTest and the MIG-71 Postgres tests");
+        // Owner 2026-10-27 ("add a sort on each table"): the owner asked for a 400 here, not the 200 refusal.
+        pinned.put(ListSort.Refused.class, "400 BAD_REQUEST + ERROR naming the list's allowed sort columns (\"sort must be one of: "
+            + "...\") or \"dir must be asc or desc.\"; pinned by RunListSortTest's MockMvc cases");
+        return pinned;
     }
 
     /** Declared by process, never at the edge: each is caught where it happens and turned into words. */

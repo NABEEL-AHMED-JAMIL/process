@@ -148,7 +148,7 @@ class CoreCrossTenantProbeBackfillPostgresTest {
             .doesNotContain("\"backfillId\":" + bBackfill);
         assertThat(fx.probe("GET sourceJob.json/backfills(B's job)", ADMIN_OF_A, () -> api.list(B_JOB, null, 1, 25))).contains(SUCCEEDED)
             .contains("\"total\":0");
-        assertThat(fx.probe("GET sourceJob.json/backfills/detail", ADMIN_OF_A, () -> api.detail(bBackfill, null, 1))).contains(REFUSED)
+        assertThat(fx.probe("GET sourceJob.json/backfills/detail", ADMIN_OF_A, () -> api.detail(bBackfill, null, 1, null, null))).contains(REFUSED)
             .contains("No such backfill.");
         assertThat(fx.probe("POST sourceJob.json/backfills/pause", ADMIN_OF_A, () -> api.pause(theirs()))).contains(REFUSED);
         assertThat(fx.probe("POST sourceJob.json/backfills/resume", ADMIN_OF_A, () -> api.resume(theirs()))).contains(REFUSED);

@@ -5,18 +5,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import process.identity.IdentityPort;
 import process.security.JobOwnership;
+import process.util.ListSort;
 
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -69,6 +72,43 @@ public class FailedRuns {
         public List<String> days = new ArrayList<>();
         public String signature;
         public Integer page;
+        /** Owner 2026-10-27 ("add a sort on each table"): a column of {@link #sorts} and asc/desc; none is newest first. */
+        public String sort;
+        public String dir;
+    }
+
+    /**
+     * Owner 2026-10-27: the Runs list's sortable columns -- Run, Pipeline, Kind (its label, as shown), Ended, and for a platform
+     * administrator Workspace (its name). The rows are the scanned window's (at most {@value #MAX_SCAN}, the facets' and
+     * patterns' too), so the sort is over every row the filters leave, before the page is cut; ties go by the run, newest
+     * first when descending. In Java: the window is already in memory, and no index would serve a sort of it.
+     */
+    static List<String> sorts(boolean platform) {
+        List<String> out = new ArrayList<>(Arrays.asList("run", "pipeline", "kind", "ended"));
+        if (platform) {
+            out.add("workspace");
+        }
+        return out;
+    }
+
+    static Comparator<Row> order(ListSort.Choice sort, Map<Long, String> workspaceNames) {
+        Comparator<Row> tie = Comparator.comparingLong((Row r) -> r.runId);
+        switch (sort.column) {
+            case "run":
+                return ListSort.comparator((Row r) -> Long.valueOf(r.runId), sort.dir, tie);
+            case "pipeline":
+                return ListSort.comparator((Row r) -> lower(r.taskName), sort.dir, tie);
+            case "kind":
+                return ListSort.comparator((Row r) -> r.kind == null ? null : lower(ErrorSignatures.label(r.kind)), sort.dir, tie);
+            case "workspace":
+                return ListSort.comparator((Row r) -> lower(workspaceNames.get(r.tenantId)), sort.dir, tie);
+            default:
+                return ListSort.comparator((Row r) -> r.ended, sort.dir, tie);
+        }
+    }
+
+    private static String lower(String text) {
+        return text == null || text.trim().isEmpty() ? null : text.trim().toLowerCase(Locale.ROOT);
     }
 
     /** One failed run. */
@@ -103,6 +143,12 @@ public class FailedRuns {
     }
 
     public Map<String, Object> search(Query q, boolean platform) {
+        ListSort.Choice sort;
+        try {
+            sort = ListSort.parse(q.sort, q.dir, sorts(platform));
+        } catch (ListSort.Refused unknown) {
+            throw new AlertRules.Refused(HttpStatus.BAD_REQUEST, unknown.getMessage());
+        }
         Instant to;
         Instant from;
         try {
@@ -226,6 +272,9 @@ public class FailedRuns {
         groupList.forEach(g -> g.put("schedules", groupPipelines.get((String) g.get("signature")).size()));
         groupList.sort(Comparator.comparing((Map<String, Object> g) -> (Integer) g.get("count")).reversed());
 
+        if (sort != null) {
+            kept.sort(order(sort, workspaceNames));
+        }
         int page = q.page == null || q.page < 0 ? 0 : q.page;
         List<Map<String, Object>> items = new ArrayList<>();
         for (int i = page * PAGE; i < Math.min(kept.size(), (page + 1) * PAGE); i++) {
@@ -239,6 +288,10 @@ public class FailedRuns {
         out.put("truncated", truncated);
         out.put("page", page);
         out.put("pageSize", PAGE);
+        if (sort != null) {
+            out.put("sort", sort.column);
+            out.put("dir", sort.dirWord());
+        }
         out.put("platform", platform);
         out.put("facets", facets);
         out.put("groups", groupList.size() > 100 ? groupList.subList(0, 100) : groupList);

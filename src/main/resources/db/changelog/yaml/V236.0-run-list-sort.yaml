@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: 236.0-run-list-sort
+      author: nabeel.amd93
+      description: "Owner 2026-10-27 (add a sort on each table): job_queue per-job indexes for a schedule's run history sorted by Queued, Started, Ended or Duration; expand-only"
+      # As V200: built CONCURRENTLY outside a transaction (job_queue takes inserts every dispatch cycle), and an INVALID
+      # index a failed concurrent build left behind is dropped first, which IF NOT EXISTS would otherwise take for done.
+      runInTransaction: false
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >
+              DO $$
+              DECLARE
+                idx text;
+              BEGIN
+                FOREACH idx IN ARRAY ARRAY['idx_job_queue_job_queued', 'idx_job_queue_job_started', 'idx_job_queue_job_ended',
+                    'idx_job_queue_job_duration'] LOOP
+                  IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+                      WHERE c.relname = idx AND NOT i.indisvalid) THEN
+                    EXECUTE format('DROP INDEX public.%I', idx);
+                  END IF;
+                END LOOP;
+              END $$;
+        - sqlFile:
+            path: ../changelog-sets/V236.0-run-list-sort/V236__run_list_sort.sql
+            relativeToChangelogFile: true
+            splitStatements: true
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V236.0-run-list-sort/V236__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: true

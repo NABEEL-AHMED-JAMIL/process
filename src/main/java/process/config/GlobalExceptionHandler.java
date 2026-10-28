@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import process.util.ProcessUtil;
+import process.util.ListSort;
 import process.util.RequestRefused;
 
 /**
@@ -41,6 +42,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ResponseDto> handleRefusal(RequestRefused refused) {
         logger.info("Request refused: {}", refused.getMessage());
         return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, refused.getMessage()), HttpStatus.OK);
+    }
+
+    /** Owner 2026-10-27: a list sorted by a column it does not sort by -- 400, naming the columns it does (ListSort). */
+    @ExceptionHandler(ListSort.Refused.class)
+    public ResponseEntity<ResponseDto> handleSortRefused(ListSort.Refused refused) {
+        logger.info("Sort refused: {}", refused.getMessage());
+        return new ResponseEntity<>(new ResponseDto(ProcessUtil.ERROR_MESSAGE, refused.getMessage()), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

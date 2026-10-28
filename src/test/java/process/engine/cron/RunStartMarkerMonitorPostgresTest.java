@@ -111,7 +111,7 @@ class RunStartMarkerMonitorPostgresTest {
     }
 
     /**
-     * Cheap: with sequential scans priced out, the plan reads job_queue through its day index and the audit log
+     * Cheap: with sequential scans priced out, the plan reads job_queue through an index (its day index) and the audit log
      * through its run index -- no new index, no table scan as either table grows.
      */
     @Test
@@ -122,8 +122,10 @@ class RunStartMarkerMonitorPostgresTest {
             String plan = String.join("\n", sql.queryForList("explain " + RunStartMarkerMonitor.QUERY, String.class,
                 RunStartMarkerMonitor.queryArguments(NOW.minusSeconds(24 * 3600), NOW)));
 
-            assertThat(plan).contains("idx_job_queue_date_created_day").contains("idx_job_audit_logs_job_queue_id")
-                .doesNotContain("Seq Scan");
+            // Owner 2026-10-27 (V236): on this handful of rows the planner may read the ended range through the per-job
+            // (job_id, end_time) sort index instead of the day index; either is an index read, which is what this pins.
+            assertThat(plan).containsAnyOf("idx_job_queue_date_created_day", "idx_job_queue_job_ended")
+                .contains("idx_job_audit_logs_job_queue_id").doesNotContain("Seq Scan");
         } finally {
             sql.execute("set enable_seqscan = on");
         }

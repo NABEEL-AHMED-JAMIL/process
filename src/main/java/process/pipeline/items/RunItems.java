@@ -33,6 +33,7 @@ import process.pipeline.data.RowSource;
 import process.pipeline.data.Values;
 import process.pipeline.review.RunReaders;
 import process.security.ManagedSessionOnly;
+import process.util.ListSort;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -44,6 +45,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -84,6 +86,47 @@ public class RunItems {
 
     private static final Logger logger = LoggerFactory.getLogger(RunItems.class);
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /**
+     * Owner 2026-10-27 ("add a sort on each table"): the Items table's sortable columns -- # (the item's position), Item (its
+     * name, ignoring case), Status (as the console's chip reads it: failed, then sub-items failed, check by hand, running,
+     * done) and Time (how long it took; none yet goes last). A level of a run's items is read whole and paged here, so the
+     * sort is over every item the filter and search leave, before the page is cut. Ties keep the item order.
+     */
+    static final List<String> SORTS = Collections.unmodifiableList(Arrays.asList("position", "label", "status", "time"));
+
+    static int statusRank(ItemRow row) {
+        if (ItemRow.FAILED.equals(row.status)) {
+            return 0;
+        }
+        if (row.childFailed > 0) {
+            return 1;
+        }
+        if (ItemRow.CHECK.equals(row.flag)) {
+            return 2;
+        }
+        return ItemRow.RUNNING.equals(row.status) ? 3 : 4;
+    }
+
+    private static String labelKey(ItemRow row) {
+        return row.label == null || row.label.trim().isEmpty() ? null : row.label.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** The items' order for a sort of {@link #SORTS}: the column (empty last both ways), then item order the same way. */
+    static Comparator<ItemRow> itemOrder(ListSort.Choice choice) {
+        Comparator<ItemRow> tie = Comparator.comparingInt((ItemRow row) -> row.position)
+            .thenComparing(row -> row.itemKey == null ? "" : row.itemKey);
+        switch (choice.column) {
+            case "position":
+                return ListSort.comparator((ItemRow row) -> Integer.valueOf(row.position), choice.dir, tie);
+            case "label":
+                return ListSort.comparator(RunItems::labelKey, choice.dir, tie);
+            case "status":
+                return ListSort.comparator((ItemRow row) -> Integer.valueOf(statusRank(row)), choice.dir, tie);
+            default:
+                return ListSort.comparator((ItemRow row) -> row.durationMs, choice.dir, tie);
+        }
+    }
 
     public static final String RUN_NOT_FOUND = "Run not found with jobQueueId.";
     public static final String ITEM_NOT_FOUND = "Item not found in this run.";
@@ -142,6 +185,17 @@ public class RunItems {
         /** MIG-421: only these items (a selection, a Task inbox link), and not these ("Select all N matching" but some). */
         public List<String> refs;
         public List<String> except;
+        /** Owner 2026-10-27 ("add a sort on each table"): position, label, status or time ({@link #SORTS}), asc or desc; none is item order. */
+        public String sort;
+        public String dir;
+
+        public String getSort() { return sort; }
+
+        public void setSort(String sort) { this.sort = sort; }
+
+        public String getDir() { return dir; }
+
+        public void setDir(String dir) { this.dir = dir; }
 
         public List<String> getRefs() { return refs; }
 
@@ -371,6 +425,12 @@ public class RunItems {
         if (refused != null) {
             return refused;
         }
+        ListSort.Choice order;
+        try {
+            order = request == null ? null : ListSort.parse(request.sort, request.dir, SORTS);
+        } catch (ListSort.Refused unknown) {
+            return Answer.refused(400, unknown.getMessage());
+        }
         Optional<RunOwnership.Owned> owned = this.readable(request == null ? null : request.jobQueueId);
         if (!owned.isPresent()) {
             return Answer.refused(404, RUN_NOT_FOUND);
@@ -421,6 +481,11 @@ public class RunItems {
         data.put("masked", new ArrayList<>(masks.maskedNames(available)));
         String status = request.status == null ? "all" : request.status.trim().toLowerCase(Locale.ROOT);
         List<ItemRow> filtered = this.filter(level, status, request.search, request.refs, request.except, rows, masks);
+        if (order != null) {
+            filtered.sort(itemOrder(order));
+            data.put("sort", order.column);
+            data.put("dir", order.dirWord());
+        }
         int size = Math.max(1, Math.min(MAX_PAGE, request.size == null ? 50 : request.size));
         int page = Math.max(0, request.page == null ? 0 : request.page);
         int from = Math.min(filtered.size(), page * size);

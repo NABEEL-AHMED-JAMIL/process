@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import process.util.ListSort;
 import process.billing.BillingPort;
 import process.billing.WorkspaceZones;
 import process.engine.ProducerBulkEngine;
@@ -525,6 +526,20 @@ public class Backfills {
 
     /** One backfill, a page of its periods with their runs, and (administrators) what its runs were billed so far. */
     public Map<String, Object> detail(Long backfillId, String slotState, Integer page, boolean api) {
+        return this.detail(backfillId, slotState, page, api, null, null);
+    }
+
+    /**
+     * As detail(), the periods in a column's order (owner 2026-10-27, "add a sort on each table"): BackfillStore.SLOT_SORTS --
+     * date, state, run, tries -- asc or desc; none is the periods' own order, oldest first. Pages stay {@value #SLOTS_PAGE}.
+     */
+    public Map<String, Object> detail(Long backfillId, String slotState, Integer page, boolean api, String sort, String dir) {
+        ListSort.Choice order;
+        try {
+            order = ListSort.parse(sort, dir, BackfillStore.SLOT_SORTS.keySet());
+        } catch (ListSort.Refused unknown) {
+            throw invalid(unknown.getMessage());
+        }
         BackfillStore.Backfill b = this.visible(backfillId, api);
         Map<String, Object> out = this.describe(b, !api && readsCosts());
         String state = slotState == null || slotState.trim().isEmpty() ? null : slotState.trim().toUpperCase(Locale.ROOT);
@@ -533,12 +548,16 @@ public class Backfills {
         }
         int number = page == null ? 1 : Math.max(1, page);
         List<Map<String, Object>> periods = new ArrayList<>();
-        for (BackfillStore.Slot s : this.store.slots(b.id, state, SLOTS_PAGE, (number - 1) * SLOTS_PAGE)) {
+        for (BackfillStore.Slot s : this.store.slots(b.id, state, SLOTS_PAGE, (number - 1) * SLOTS_PAGE, order)) {
             periods.add(slot(s));
         }
         out.put("periods", periods);
         out.put("periodsPage", number);
         out.put("periodsLimit", SLOTS_PAGE);
+        if (order != null) {
+            out.put("periodsSort", order.column);
+            out.put("periodsDir", order.dirWord());
+        }
         if (!api && readsCosts()) {
             out.put("billed", this.billed(b));
         }

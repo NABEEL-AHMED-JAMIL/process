@@ -24,7 +24,7 @@ import process.util.ProcessUtil;
  * MIG-355: Runs › Failed, under prefixes the gateway already sends to Core and the page access Core already enforces:
  *
  * <ul>
- *   <li>POST message.json/failedRuns {from, to, tenantIds, taskDetailIds, jobIds, tasks, kinds, days, signature, page} --
+ *   <li>POST message.json/failedRuns {from, to, tenantIds, taskDetailIds, jobIds, tasks, kinds, days, signature, page, sort, dir} --
  *       the window's failed and timed-out runs with their facets and error patterns (FailedRuns). A tenant user needs the
  *       Queue page (message.json is its group); a platform administrator sees every workspace's, with a workspace facet.</li>
  *   <li>POST sourceJob.json/bulkRetry {jobQueueIds, from, bulkId, dryRun} -- a workspace administrator retries many failed
@@ -70,6 +70,9 @@ public class FailedRunsRestApi {
                 q.signature = text(body.get("signature"));
                 Object page = body.get("page");
                 q.page = page instanceof Number ? ((Number) page).intValue() : null;
+                // Owner 2026-10-27: the list's order (FailedRuns.sorts); none is newest first.
+                q.sort = text(body.get("sort"));
+                q.dir = text(body.get("dir"));
             }
             Map<String, Object> found = this.failedRuns.search(q, platform);
             return new ResponseDto(ProcessUtil.SUCCESS, found.get("total") + " failed run(s).", found);

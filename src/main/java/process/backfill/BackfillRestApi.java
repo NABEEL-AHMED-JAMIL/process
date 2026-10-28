@@ -33,7 +33,7 @@ import java.util.function.Supplier;
  *   which already have a completed run, the values, the cost estimate (administrators), and what start would refuse.</li>
  *   <li>POST /sourceJob.json/backfills/start (the same body): starts it.</li>
  *   <li>GET /sourceJob.json/backfills?jobId&amp;status&amp;page&amp;limit: the workspace's backfills, newest first, with progress.</li>
- *   <li>GET /sourceJob.json/backfills/detail?backfillId&amp;state&amp;page: one, with a page of its periods and their runs, and
+ *   <li>GET /sourceJob.json/backfills/detail?backfillId&amp;state&amp;page&amp;sort&amp;dir: one, with a page of its periods and their runs, and
  *   (administrators) its estimate and what its runs were billed so far.</li>
  *   <li>POST /sourceJob.json/backfills/pause, /resume, /cancel, /retryFailed {backfillId}.</li>
  *   <li>GET /sourceJob.json/backfills/ofRun?jobQueueId: the backfill a run is part of, for the run's page (null for none).</li>
@@ -82,8 +82,9 @@ public class BackfillRestApi {
 
     @GetMapping("/sourceJob.json/backfills/detail")
     public ResponseEntity<ResponseDto> detail(@RequestParam Long backfillId, @RequestParam(required = false) String state,
-        @RequestParam(required = false) Integer page) {
-        return answer(() -> new ResponseDto(ProcessUtil.SUCCESS, "Backfill read.", this.backfills.detail(backfillId, state, page, false)));
+        @RequestParam(required = false) Integer page, @RequestParam(required = false) String sort, @RequestParam(required = false) String dir) {
+        // Owner 2026-10-27: the periods in a column's order (BackfillStore.SLOT_SORTS); an unknown one is a 400 naming them.
+        return answer(() -> new ResponseDto(ProcessUtil.SUCCESS, "Backfill read.", this.backfills.detail(backfillId, state, page, false, sort, dir)));
     }
 
     @PostMapping("/sourceJob.json/backfills/pause")
