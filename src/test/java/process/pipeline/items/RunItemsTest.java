@@ -217,6 +217,115 @@ class RunItemsTest {
         assertThat(this.items.detail(RUN, "99", null).status).isEqualTo(404);
     }
 
+    private void file(String step, String name) {
+        ItemRow.FileRow file = new ItemRow.FileRow();
+        file.jobQueueId = RUN;
+        file.attempt = 1;
+        file.itemKey = "referrals/r-1.pdf";
+        file.stepIndex = "report".equals(step) ? 2 : 3;
+        file.stepKey = step;
+        file.role = "output";
+        file.fileName = name;
+        file.format = name.substring(name.lastIndexOf('.') + 1);
+        this.store.addFiles(Collections.singletonList(file));
+    }
+
+    /**
+     * ZT-I35 (live run 2950, "RPT-0086"): an item's report PDF says which Report Studio report it is -- id, number, version and
+     * pages -- in the item's detail and its files, for its preview, its approval and Verify; a plain PDF and a JSON file say
+     * nothing of the kind, and a report the run kept with no number yet is not named.
+     */
+    @Test
+    void anItemsReportPdfSaysWhichReportItIsAndAPlainFileDoesNot() throws Exception {
+        this.as("TENANT_ADMIN", 1015L);
+        this.file("report", "Patient_intake_S-1151_v1.pdf");
+        this.file("json", "intake-S-1151.json");
+        this.file("notes", "notes.pdf");
+        RunItemStore.KeptReport kept = new RunItemStore.KeptReport();
+        kept.jobQueueId = RUN;
+        kept.stepKey = "report";
+        kept.itemTag = "t1";
+        kept.itemKey = "referrals/r-1.pdf";
+        kept.dataHash = "h1";
+        kept.reportId = "01M5Y3GYFKZRAV9KKQ74D413D6";
+        kept.reportLabel = "RPT-0086";
+        kept.reportVersion = 1;
+        kept.fileName = "Patient_intake_S-1151_v1.pdf";
+        kept.pages = 4;
+        kept.madeAttempt = 1;
+        this.store.keepReport(kept);
+        RunItems.FilesRequest request = new RunItems.FilesRequest();
+        request.jobQueueId = RUN;
+        request.ref = "1";
+        Map<String, JsonNode> byName = new LinkedHashMap<>();
+        for (JsonNode f : this.data(this.items.files(request)).path("files")) {
+            byName.put(f.path("name").asText(), f);
+        }
+        JsonNode report = byName.get("Patient_intake_S-1151_v1.pdf").path("report");
+        assertThat(report.path("reportId").asText()).isEqualTo("01M5Y3GYFKZRAV9KKQ74D413D6");
+        assertThat(report.path("number").asText()).isEqualTo("RPT-0086");
+        assertThat(report.path("version").asInt()).isEqualTo(1);
+        assertThat(report.path("pages").asInt()).isEqualTo(4);
+        assertThat(byName.get("intake-S-1151.json").has("report")).as("a JSON file is no report").isFalse();
+        assertThat(byName.get("notes.pdf").has("report")).as("a PDF no report step kept").isFalse();
+        JsonNode inDetail = this.data(this.items.detail(RUN, "1", null)).path("files");
+        assertThat(inDetail.findValues("report")).extracting(r -> r.path("number").asText()).containsExactly("RPT-0086");
+
+        kept.reportLabel = null;
+        assertThat(this.data(this.items.files(request)).path("files").findValues("report")).as("no number yet: not named").isEmpty();
+    }
+
+    /** ZT-I35 (live run 2950): a step's one file is named in the item's cell -- its name and type -- and two or more are counted. */
+    @Test
+    void aStepsOneFileIsNamedInTheItemsCellAndMoreAreCounted() throws Exception {
+        this.as("TENANT_ADMIN", 1015L);
+        ItemRow row = new ItemRow();
+        row.jobQueueId = RUN;
+        row.attempt = 1;
+        row.itemKey = "referrals/r-3.pdf";
+        row.itemRef = "3";
+        row.label = "r-3.pdf";
+        row.position = 3;
+        row.status = "done";
+        String[][] made = {{"2", "report", "1"}, {"3", "json", "1"}, {"4", "pages", "2"}};
+        for (String[] m : made) {
+            ItemRow.StepEntry entry = new ItemRow.StepEntry();
+            entry.i = Integer.parseInt(m[0]);
+            entry.key = m[1];
+            entry.status = "done";
+            entry.files = Integer.valueOf(m[2]);
+            row.steps.add(entry);
+        }
+        this.store.save(Collections.singletonList(row));
+        String[][] files = {{"report", "Patient_intake_S-1151_v1.pdf"}, {"json", "intake-S-1151.json"}, {"pages", "page-01.png"},
+            {"pages", "page-02.png"}};
+        for (String[] f : files) {
+            ItemRow.FileRow file = new ItemRow.FileRow();
+            file.jobQueueId = RUN;
+            file.attempt = 1;
+            file.itemKey = "referrals/r-3.pdf";
+            file.stepKey = f[0];
+            file.role = "output";
+            file.fileName = f[1];
+            this.store.addFiles(Collections.singletonList(file));
+        }
+        RunItems.ListRequest list = new RunItems.ListRequest();
+        list.jobQueueId = RUN;
+        JsonNode item = null;
+        for (JsonNode i : this.data(this.items.list(list)).path("items")) {
+            if ("3".equals(i.path("ref").asText())) {
+                item = i;
+            }
+        }
+        assertThat(item).isNotNull();
+        JsonNode cells = item.path("cells");
+        assertThat(cells.path("report").path("file").path("name").asText()).isEqualTo("Patient_intake_S-1151_v1.pdf");
+        assertThat(cells.path("report").path("file").path("format").asText()).isEqualTo("pdf");
+        assertThat(cells.path("json").path("file").path("name").asText()).isEqualTo("intake-S-1151.json");
+        assertThat(cells.path("pages").has("file")).as("two files are counted, not named").isFalse();
+        assertThat(cells.path("pages").path("files").asInt()).isEqualTo(2);
+    }
+
     @Test
     void aZipLinkIsThePersonsTheRunsAndTheItemsAloneAndExpires() throws Exception {
         this.as("TENANT_ADMIN", 1015L);

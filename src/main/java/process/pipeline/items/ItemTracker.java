@@ -924,7 +924,9 @@ public final class ItemTracker {
                 entry.sharedBy = Math.max(1, sharedBy);
                 entry.ds = ds;
                 entry.note = String.format("Shared by %d item%s", entry.sharedBy, entry.sharedBy == 1 ? "" : "s");
-            } else if (mine.isEmpty() && !(row.parentKey == null && this.hasChildEntry(row, o.index))) {
+            } else if (mine.isEmpty() && made == 0 && reusedFrom == 0 && !(row.parentKey == null && this.hasChildEntry(row, o.index))) {
+                // Not in the step's rows, and the step made it nothing. ZT-I35: one that made (or reused) a file for the item did
+                // its work though its own rows do not name it (Generate report's rows are its reports): done, with its file.
                 if (out != null && !this.followable(out)) {
                     // The step's rows no longer name items (an aggregate's): its output is every item's.
                     entry.status = ItemRow.StepEntry.SHARED;

@@ -263,6 +263,20 @@ public class InMemoryRunItemStore implements RunItemStore {
     }
 
     @Override
+    public synchronized List<ItemRow.FileRow> firstFiles(long jobQueueId, Collection<String> itemKeys) {
+        Map<String, ItemRow.FileRow> first = new LinkedHashMap<>();
+        for (String key : itemKeys) {
+            ItemRow row = this.currentOf(jobQueueId, key);
+            if (row == null) {
+                continue;
+            }
+            this.files.stream().filter(f -> f.jobQueueId == jobQueueId && f.itemKey.equals(key) && f.attempt == row.attempt
+                && ItemRow.FileRow.OUTPUT.equals(f.role)).forEach(f -> first.putIfAbsent(key + "\u0000" + f.stepKey, f));
+        }
+        return new ArrayList<>(first.values());
+    }
+
+    @Override
     public synchronized List<KeptReport> reportsOf(Collection<Long> jobQueueIds, Collection<String> itemKeys) {
         return this.reports.stream().filter(r -> jobQueueIds.contains(r.jobQueueId) && itemKeys.contains(r.itemKey)).collect(Collectors.toList());
     }

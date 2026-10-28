@@ -333,6 +333,22 @@ public class JdbcRunItemStore implements RunItemStore {
     }
 
     @Override
+    public List<ItemRow.FileRow> firstFiles(long jobQueueId, Collection<String> itemKeys) {
+        if (itemKeys == null || itemKeys.isEmpty()) {
+            return new ArrayList<>();
+        }
+        String[] keys = itemKeys.toArray(new String[0]);
+        return this.jdbc.query(con -> {
+            PreparedStatement ps = con.prepareStatement("SELECT DISTINCT ON (f.item_key, f.step_key) " + FILE_COLUMNS
+                + "JOIN run_item i ON i.job_queue_id = f.job_queue_id AND i.item_key = f.item_key AND i.attempt = f.attempt AND i.current "
+                + "WHERE f.job_queue_id = ? AND f.item_key = ANY (?) AND f.role = 'output' ORDER BY f.item_key, f.step_key, f.run_item_file_id");
+            ps.setLong(1, jobQueueId);
+            ps.setArray(2, con.createArrayOf("varchar", keys));
+            return ps;
+        }, JdbcRunItemStore::file);
+    }
+
+    @Override
     public List<KeptReport> reportsOf(Collection<Long> jobQueueIds, Collection<String> itemKeys) {
         List<KeptReport> out = new ArrayList<>();
         if (jobQueueIds == null || jobQueueIds.isEmpty() || itemKeys == null || itemKeys.isEmpty()) {

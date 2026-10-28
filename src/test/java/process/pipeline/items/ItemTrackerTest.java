@@ -126,6 +126,42 @@ class ItemTrackerTest {
         assertThat(tracker.summary()).isEqualTo("Items: 3 of 3 done.");
     }
 
+    /**
+     * ZT-I35: a step whose own rows do not name the items (Generate report's rows are its reports) but that made a file for
+     * an item did that item's work: the item's entry is done with its file, not "left out", and the item goes on to the next
+     * step that makes it a file. An item it made nothing for is still left out there.
+     */
+    @Test
+    void aStepThatMadeAnItemAFileDidItsWorkThoughItsRowsDoNotNameIt() throws Exception {
+        String listed = this.write("list", Arrays.asList(row("key", "in/a.json"), row("key", "in/b.json")));
+        // As live run #2950's: the step's rows carry the key column, but with its reports' own values, which name no item.
+        String reports = this.write("reports", Collections.singletonList(row("key", "RPT-0001", "version", 1)));
+        List<ItemTracker.StepInfo> steps = Arrays.asList(step(0, "read", ItemRole.SOURCE, "key"), step(1, "report", ItemRole.EACH, null),
+            step(2, "json", ItemRole.EACH, null));
+        ItemTracker tracker = ItemTracker.open(RUN, 1, this.store, this.engine, steps, -1, 0, null);
+        tracker.beforeStep(0, null, Collections.emptyList());
+        tracker.afterStep(this.done(0, null, listed, 1));
+        ItemTracker.Outcome report = this.done(1, listed, reports, 2);
+        report.reports = Collections.singletonList(ItemReport.file(row("key", "in/a.json"), "Intake_a_v1.pdf", null, null, 4096));
+        tracker.afterStep(report);
+        ItemTracker.Outcome json = this.done(2, reports, this.write("saved", Collections.singletonList(row("file", "intake-a.json"))), 3);
+        json.reports = Collections.singletonList(ItemReport.file(row("key", "in/a.json"), "intake-a.json", null, null, 512));
+        tracker.afterStep(json);
+        tracker.finish(true, false, false, null);
+
+        ItemRow a = this.store.currentOf(RUN, "in/a.json");
+        assertThat(a.status).isEqualTo("done");
+        assertThat(a.step(1).status).as("the report step made a's report").isEqualTo("done");
+        assertThat(a.step(1).files).isEqualTo(1);
+        assertThat(a.step(1).note).isEqualTo("1 file");
+        assertThat(a.step(2).status).as("and the JSON step its JSON").isEqualTo("done");
+        assertThat(a.step(2).files).isEqualTo(1);
+        assertThat(a.fileCount).isEqualTo(2);
+        ItemRow b = this.store.currentOf(RUN, "in/b.json");
+        assertThat(b.step(1).status).as("nothing made for b: it is left out there").isEqualTo("left_out");
+        assertThat(b.step(2)).isNull();
+    }
+
     @Test
     void anItemsCallKeyIsTheSameWhateverItsPosition() throws Exception {
         String listed = this.write("list", Arrays.asList(row("key", "in/a.m4a"), row("key", "in/b.m4a")));

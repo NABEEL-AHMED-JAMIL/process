@@ -428,8 +428,9 @@ public class RunItems {
         List<String> wanted = request.fields == null ? Collections.<String>emptyList()
             : request.fields.stream().filter(available::contains).limit(MAX_FIELDS).collect(Collectors.toList());
         List<Map<String, Object>> items = new ArrayList<>();
+        Map<String, ItemRow.FileRow> firstFiles = this.firstFilesOf(run.getJobQueueId(), shown);
         for (ItemRow row : shown) {
-            Map<String, Object> view = this.itemView(row, steps, byKey);
+            Map<String, Object> view = this.itemView(row, steps, byKey, firstFiles);
             if (!wanted.isEmpty()) {
                 view.put("fields", this.fieldsOf(rows, row, masks, wanted));
             }
@@ -660,6 +661,23 @@ public class RunItems {
 
     /** One item as a row of the list. */
     Map<String, Object> itemView(ItemRow row, Steps steps, Map<String, ItemRow> byKey) {
+        return this.itemView(row, steps, byKey, Collections.<String, ItemRow.FileRow>emptyMap());
+    }
+
+    /** ZT-I35: the one file each step made for these items (by item and step), for its cell to name it; one query for the page. */
+    private Map<String, ItemRow.FileRow> firstFilesOf(long jobQueueId, List<ItemRow> shown) {
+        List<String> keys = shown.stream().filter(r -> r.steps.stream().anyMatch(e -> e.files != null && e.files == 1)).map(r -> r.itemKey)
+            .collect(Collectors.toList());
+        Map<String, ItemRow.FileRow> out = new HashMap<>();
+        if (!keys.isEmpty()) {
+            for (ItemRow.FileRow f : this.store.firstFiles(jobQueueId, keys)) {
+                out.put(f.itemKey + "\u0000" + f.stepKey, f);
+            }
+        }
+        return out;
+    }
+
+    Map<String, Object> itemView(ItemRow row, Steps steps, Map<String, ItemRow> byKey, Map<String, ItemRow.FileRow> firstFiles) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("ref", row.itemRef);
         view.put("key", row.itemKey);
@@ -705,6 +723,15 @@ public class RunItems {
             cell.put("sharedBy", entry.sharedBy);
             cell.put("reused", entry.reusedFrom != null);
             cell.put("hasData", entry.ds != null);
+            ItemRow.FileRow one = entry.files != null && entry.files == 1 ? firstFiles.get(row.itemKey + "\u0000" + entry.key) : null;
+            if (one != null) {
+                // ZT-I35: a step's one file, by name and type, for the cell's chip.
+                Map<String, Object> file = new LinkedHashMap<>();
+                file.put("fileRef", one.runItemFileId);
+                file.put("name", one.fileName);
+                file.put("format", one.format != null ? one.format : extensionOf(one.fileName));
+                cell.put("file", file);
+            }
             cells.put(entry.key, cell);
         }
         view.put("cells", cells);
@@ -904,7 +931,7 @@ public class RunItems {
         data.put("steps", stepViews);
         int count = this.countFilesOf(row, null, null);
         data.put("fileCount", count);
-        data.put("files", this.filesView(this.filesOf(row, null, null, 0, 20), steps));
+        data.put("files", this.filesView(this.filesOf(row, null, null, 0, 20), steps, row));
         List<Map<String, Object>> vs = new ArrayList<>();
         for (ItemRow v : versions) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -928,8 +955,20 @@ public class RunItems {
     }
 
     List<Map<String, Object>> filesView(List<ItemRow.FileRow> files, Steps steps) {
+        return this.filesView(files, steps, null);
+    }
+
+    /**
+     * The files as the panel lists them; ZT-I35: an item's report PDF also says which Report Studio report it is -- its id,
+     * number, version and pages -- for its preview, its approval and Verify (from run_item_report, the reports a Generate
+     * report step kept for the item).
+     */
+    List<Map<String, Object>> filesView(List<ItemRow.FileRow> files, Steps steps, ItemRow item) {
         List<Map<String, Object>> out = new ArrayList<>();
         Instant now = Instant.now();
+        List<RunItemStore.KeptReport> reports = item == null || files.stream().noneMatch(RunItems::isPdf)
+            ? Collections.<RunItemStore.KeptReport>emptyList()
+            : this.store.reportsOf(Collections.singleton(item.jobQueueId), Collections.singleton(item.itemKey));
         for (ItemRow.FileRow f : files) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("fileRef", f.runItemFileId);
@@ -943,9 +982,41 @@ public class RunItems {
             m.put("previewable", PREVIEWABLE.contains(format == null ? "" : format.toLowerCase(Locale.ROOT)));
             m.put("expired", f.expiresAt != null && !f.expiresAt.isAfter(now));
             m.put("fileId", f.fileId);
+            RunItemStore.KeptReport report = isPdf(f) ? reportOf(f, reports) : null;
+            if (report != null) {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("reportId", report.reportId);
+                r.put("number", report.reportLabel);
+                r.put("version", report.reportVersion);
+                r.put("pages", report.pages);
+                m.put("report", r);
+            }
             out.add(m);
         }
         return out;
+    }
+
+    private static boolean isPdf(ItemRow.FileRow f) {
+        String format = f.format != null ? f.format : extensionOf(f.fileName);
+        return ItemRow.FileRow.OUTPUT.equals(f.role) && "pdf".equalsIgnoreCase(format == null ? "" : format);
+    }
+
+    /**
+     * The kept report this file is, when it has a number: the same name from the same step (a kept report knows the PDF's
+     * name as the run kept it), else the same file (the store's guess is the item's latest PDF, which another step may have made).
+     */
+    static RunItemStore.KeptReport reportOf(ItemRow.FileRow f, List<RunItemStore.KeptReport> reports) {
+        for (RunItemStore.KeptReport r : reports) {
+            if (r.reportId == null || r.reportId.isEmpty() || r.reportLabel == null || r.reportVersion <= 0) {
+                continue;
+            }
+            boolean same = r.fileName != null ? r.fileName.equals(f.fileName) && (r.stepKey == null || r.stepKey.equals(f.stepKey))
+                : r.fileRef != null && r.fileRef.equals(f.runItemFileId);
+            if (same) {
+                return r;
+            }
+        }
+        return null;
     }
 
     static final Set<String> PREVIEWABLE = new HashSet<>(Arrays.asList("png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "json",
@@ -1065,7 +1136,7 @@ public class RunItems {
             bytes += f.byteCount == null ? 0 : f.byteCount;
         }
         data.put("bytes", bytes);
-        data.put("files", this.filesView(this.filesOf(row, request.stepKey, request.search, page * size, size), this.stepsOf(row.jobQueueId)));
+        data.put("files", this.filesView(this.filesOf(row, request.stepKey, request.search, page * size, size), this.stepsOf(row.jobQueueId), row));
         // ZT-M21: listed (name, size, type) whoever reads them; whether this person may have them, and why not.
         Optional<String> refusal = this.fileRefusal(request.jobQueueId);
         data.put("downloadable", !refusal.isPresent());

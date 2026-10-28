@@ -65,6 +65,12 @@ public interface RunItemStore {
      */
     List<AcrossRow> acrossRuns(long jobId, AcrossQuery query, int limit);
 
+    /**
+     * ZT-I35: the first output file each step made for each of these items, at the item's current version -- the name a
+     * step's one file shows in the Items table.
+     */
+    List<ItemRow.FileRow> firstFiles(long jobQueueId, Collection<String> itemKeys);
+
     /** The PDF reports of these items in these runs: the kept report (made or reused), else the item's latest PDF file. */
     List<KeptReport> reportsOf(Collection<Long> jobQueueIds, Collection<String> itemKeys);
 
