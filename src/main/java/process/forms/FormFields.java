@@ -251,6 +251,8 @@ public final class FormFields {
             // Kept only where an empty control shows it, so a yes/no, table, file or signature saves exactly as before.
             valid.setPlaceholder(PLACEHOLDER_TYPES.contains(type) ? placeholder : null);
             valid.setSection(section);
+            // ZT-I34: personal data, on any type; absent is no.
+            valid.setPersonal(Boolean.TRUE.equals(field.getPersonal()) ? Boolean.TRUE : null);
             switch (type) {
                 case CHECKBOXES: {
                     int count = options.size();

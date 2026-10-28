@@ -156,6 +156,33 @@ public class FormSubmissionService {
         this.documents = documents;
     }
 
+    /** ZT-I34: who may see a submission's personal answers; none wired (a test's own) masks them for every member. */
+    private PersonalAnswers personal;
+
+    @Autowired(required = false)
+    public void usePersonalAnswers(PersonalAnswers personal) {
+        this.personal = personal;
+    }
+
+    /**
+     * ZT-I34: the submission's view with its personal answers masked for someone who may not see them (marked so on the view,
+     * personalMasked), and its approval's note too.
+     */
+    private Map<String, Object> forReader(Map<String, Object> view, FormStore.Submission s, List<FormField> fields) {
+        Set<String> keys = PersonalAnswers.keys(fields);
+        if (keys.isEmpty() || this.maySee(s)) {
+            return view;
+        }
+        view.put("answers", PersonalAnswers.masked(s.answers, keys));
+        view.put("workflowReason", PersonalAnswers.text(s.workflowReason, s.answers, keys));
+        view.put("personalMasked", true);
+        return view;
+    }
+
+    private boolean maySee(FormStore.Submission s) {
+        return this.personal != null ? this.personal.maySee(s.submittedBy) : "TENANT_ADMIN".equals(TenantContext.getUserRole());
+    }
+
     // ---- submitting --------------------------------------------------------------------------------------------
 
     public ResponseDto submit(FormSubmitRequest request) {
@@ -243,7 +270,7 @@ public class FormSubmissionService {
         String title = String.format("%s #%d", form.name, submission.submissionId);
         try {
             FormWorkflows.Started started = this.workflows.start(tenantId, form.workflowKey, submission.submissionId,
-                title.length() > 255 ? title.substring(0, 255) : title, subject, person);
+                title.length() > 255 ? title.substring(0, 255) : title, subject, person, SubjectFields.of(form.fields, form.fields));
             this.store.setWorkflow(tenantId, submission.submissionId, started.instanceId, statusOf(started.state, false), null);
         } catch (RuntimeException refused) {
             logger.warn("Submission {} of form {} did not start workflow {}: {}", submission.submissionId, form.formId, form.workflowKey,
@@ -663,12 +690,14 @@ public class FormSubmissionService {
         Map<Long, String> named = this.namesOf(found);
         for (FormStore.Submission submission : found) {
             Map<String, Object> row = view(submission, named);
+            List<FormField> answered = form.get().fields;
             // A submission to an earlier version carries that version's fields, so it is shown as it was answered.
             if (submission.formVersion != form.get().version) {
-                versions.computeIfAbsent(submission.formVersion, v -> this.fieldsOf(tenantId, submission))
-                    .ifPresent(fields -> row.put("fields", fields));
+                Optional<List<FormField>> then = versions.computeIfAbsent(submission.formVersion, v -> this.fieldsOf(tenantId, submission));
+                then.ifPresent(fields -> row.put("fields", fields));
+                answered = then.isPresent() ? withPersonalOf(then.get(), form.get().fields) : answered;
             }
-            rows.add(row);
+            rows.add(this.forReader(row, submission, answered));
         }
         return new ResponseDto(SUCCESS, String.format("%d submission(s).", rows.size()), rows);
     }
@@ -684,10 +713,32 @@ public class FormSubmissionService {
         return this.store.submission(tenantId, submissionId).filter(s -> s.tenantId == tenantId)
             .map(s -> {
                 Map<String, Object> view = view(s, this.namesOf(Collections.singletonList(s)));
-                this.fieldsOf(tenantId, s).ifPresent(fields -> view.put("fields", fields));
-                return new ResponseDto(SUCCESS, "Submission fetched successfully.", view);
+                Optional<List<FormField>> fields = this.fieldsOf(tenantId, s);
+                fields.ifPresent(f -> view.put("fields", f));
+                List<FormField> current = this.store.find(tenantId, s.formId).map(f -> f.fields).orElse(Collections.emptyList());
+                return new ResponseDto(SUCCESS, "Submission fetched successfully.",
+                    this.forReader(view, s, withPersonalOf(fields.orElse(current), current)));
             })
             .orElseGet(() -> new ResponseDto(ERROR, SUBMISSION_NOT_FOUND));
+    }
+
+    /** ZT-I34: a version's fields, each personal also when the form marks it so now (marked later, masked earlier too). */
+    static List<FormField> withPersonalOf(List<FormField> answered, List<FormField> current) {
+        Set<String> now = PersonalAnswers.keys(current);
+        if (now.isEmpty()) {
+            return answered;
+        }
+        List<FormField> out = new ArrayList<>();
+        for (FormField f : answered) {
+            if (f != null && now.contains(f.getKey()) && !Boolean.TRUE.equals(f.getPersonal())) {
+                FormField copy = new FormField(f.getKey(), f.getLabel(), f.getType(), f.isRequired(), f.getHelp(), f.getOptions());
+                copy.setPersonal(Boolean.TRUE);
+                out.add(copy);
+            } else {
+                out.add(f);
+            }
+        }
+        return out;
     }
 
     /** The fields the submission answered: its version's, kept since MIG-277. */
@@ -703,7 +754,11 @@ public class FormSubmissionService {
             return null;
         }
         List<FormStore.Submission> submissions = this.store.submissions(tenantId, form.get().formId, MAX_EXPORT);
-        return new Export(fileName(form.get()), csv(form.get(), submissions, this.namesOf(submissions)));
+        // ZT-I34: each submission's personal answers masked for someone who may not see them (the form marks which, now).
+        Set<String> keys = PersonalAnswers.keys(form.get().fields);
+        List<FormStore.Submission> read = keys.isEmpty() ? submissions : submissions.stream()
+            .map(s -> this.maySee(s) ? s : s.withAnswers(PersonalAnswers.masked(s.answers, keys))).collect(Collectors.toList());
+        return new Export(fileName(form.get()), csv(form.get(), read, this.namesOf(submissions)));
     }
 
     /** A CSV file: its name and its bytes (UTF-8, with a byte-order mark so a spreadsheet reads the accents). */

@@ -86,4 +86,14 @@ class HttpFormWorkflowsTest {
         assertThat(body.path("requestedBy").asLong()).isEqualTo(4537L);
         assertThat(body.path("subject").path("patient").asText()).isEqualTo("P-1");
     }
+
+    @Test
+    void aStartCarriesWhatEachKeyOfTheSubjectIs() {
+        this.client().start(2924L, "approve-visit", 41L, "Visit #41", Collections.singletonMap("dob", "1950-03-02"), 4537L,
+            Collections.singletonList(Collections.singletonMap("key", "dob")));
+        assertThat(this.bodies.get(0).path("subjectFields").get(0).path("key").asText()).isEqualTo("dob");
+        // Without them the start sends none.
+        this.client().start(2924L, "approve-visit", 42L, "Visit #42", Collections.singletonMap("dob", "1950-03-02"), 4537L);
+        assertThat(this.bodies.get(1).has("subjectFields")).isFalse();
+    }
 }

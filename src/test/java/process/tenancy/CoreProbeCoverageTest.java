@@ -62,6 +62,7 @@ import process.identity.InternalSecretRestApi;
 import process.identity.InternalTenantDirectoryRestApi;
 import process.lineage.InternalLineageRestApi;
 import process.identity.InternalTenantFactsRestApi;
+import process.forms.InternalFormSubjectRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
 import process.customer.InternalRunDocumentsRestApi;
 import process.workflow.InternalReviewEligibilityRestApi;
@@ -154,7 +155,7 @@ class CoreProbeCoverageTest {
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
         InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class,
-        InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class);
+        InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class, InternalFormSubjectRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -214,6 +215,8 @@ class CoreProbeCoverageTest {
         NOTHING_TO_AIM.put("POST internal/workflows/pipeline", service + "; reads one job of the workspace named, as that workspace"
             + " (row security and the tenant check), and another workspace's job is \"No pipeline\" (InternalWorkflowRunRestApiTest."
             + "aPipelinesFieldsAreTheWorkspacesOwnOnly)");
+        NOTHING_TO_AIM.put("POST internal/forms/subjectFields", service + "; reads one submission of the workspace named, as that "
+            + "workspace, and another workspace's is \"No submission\" (SubjectFieldsTest.theInternalDoorAnswersASubmissionsFieldsWithTheTokenOnly)");
         NOTHING_TO_AIM.put("POST internal/customer/runDocuments", service + "; reads one run of the workspace named, as that workspace "
             + "(row security and the tenant check: CustomerRuns.found), another workspace's run is a 404 (InternalRunDocumentsRestApiTest."
             + "withoutTheInternalTokenNothingIsRead, anotherWorkspacesRunIsNotFound)");

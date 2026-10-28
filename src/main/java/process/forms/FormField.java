@@ -37,6 +37,12 @@ public class FormField {
     private Lookup lookup;
     /** 2026-10-26: the title of the group this field starts or belongs to; a field whose section differs from the one above starts a new group. */
     private String section;
+    /**
+     * ZT-I34 (owner 2026-10-27, "mask for readers without access"): the answer is personal data -- a name, a date of birth, a
+     * phone, an address, a member id. A request the submission starts shows it masked to people who may not see personal data
+     * (workflow-service, SubjectMasks), and masks it wherever it appears in the request's free text; absent (null) is no.
+     */
+    private Boolean personal;
     /** 2026-10-26: a checkboxes field's least and most options ticked (each optional; the least applies once anything is ticked or it is required). */
     private Integer minSelected;
     private Integer maxSelected;
@@ -162,6 +168,10 @@ public class FormField {
     public Integer getMaxFiles() { return this.maxFiles; }
 
     public void setMaxFiles(Integer maxFiles) { this.maxFiles = maxFiles; }
+
+    public Boolean getPersonal() { return this.personal; }
+
+    public void setPersonal(Boolean personal) { this.personal = personal; }
 
     public Boolean getToDocuments() { return this.toDocuments; }
 

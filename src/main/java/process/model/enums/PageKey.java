@@ -109,7 +109,11 @@ public enum PageKey {
     // per-row files, an item's files and zips, a report's PDF, a run's outputs) are its real output and are never masked, so
     // downloading, viewing or previewing one is this permission's. A capability, not a screen: its prefix is served by
     // nothing; Core, media and ai ask the page gate for /sensitiveFiles.json/download. Identity-service's PageKey says the same.
-    SENSITIVE_FILES("sensitive-files", "Download sensitive files", "Pipelines", "/runs/latest", "/sensitiveFiles.json");
+    SENSITIVE_FILES("sensitive-files", "Download sensitive files", "Pipelines", "/runs/latest", "/sensitiveFiles.json"),
+    // ZT-I34 (owner 2026-10-27): "See personal data" -- showing a request's personal data (workflow-service masks it for
+    // everyone else; each showing is in the request's history). A capability, not a screen: its prefix is served by nothing.
+    // Identity-service's PageKey says the same.
+    SEE_PERSONAL_DATA("see-personal-data", "See personal data", "Workflows", "/review/approvals", "/personalData.json");
     // BILLING was retired by MIG-34. It promised that an access profile could withhold Cost & usage
     // from a tenant admin, and nothing could: admins hold no profile, page access is evaluated for
     // tenant users only, and /billing.json -- billing-service's now, behind the gateway -- is

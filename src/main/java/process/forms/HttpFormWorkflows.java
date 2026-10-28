@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import process.correlation.CorrelationInterceptor;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -58,6 +59,12 @@ public class HttpFormWorkflows implements FormWorkflows {
 
     @Override
     public Started start(long tenantId, String key, long submissionId, String title, Map<String, Object> subject, Long requestedBy) {
+        return this.start(tenantId, key, submissionId, title, subject, requestedBy, null);
+    }
+
+    @Override
+    public Started start(long tenantId, String key, long submissionId, String title, Map<String, Object> subject, Long requestedBy,
+        List<Map<String, Object>> subjectFields) {
         ObjectNode body = this.json.createObjectNode();
         body.put("tenantId", tenantId);
         body.put("definitionKey", key);
@@ -66,6 +73,9 @@ public class HttpFormWorkflows implements FormWorkflows {
         body.set("subject", this.json.valueToTree(subject));
         if (requestedBy != null) {
             body.put("requestedBy", requestedBy);
+        }
+        if (subjectFields != null) {
+            body.set("subjectFields", this.json.valueToTree(subjectFields));
         }
         body.put("eventId", "form-submission-" + submissionId);
         JsonNode answer = this.post("/start", body, false);

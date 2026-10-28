@@ -99,6 +99,17 @@ public interface FormStore {
             this.bucket = bucket;
             this.storageKey = storageKey;
         }
+
+        /** ZT-I34: the same submission with other answers (its personal ones masked, for a CSV). */
+        public Submission withAnswers(Map<String, Object> others) {
+            Submission copy = new Submission(this.submissionId, this.formId, this.tenantId, this.formVersion, others, this.submittedBy,
+                this.submittedByName, this.submittedAt, this.status, this.jobId, this.jobQueueId, this.reason, this.bucket, this.storageKey);
+            copy.workflowInstanceId = this.workflowInstanceId;
+            copy.workflowStatus = this.workflowStatus;
+            copy.workflowReason = this.workflowReason;
+            copy.workflowStage = this.workflowStage;
+            return copy;
+        }
     }
 
     /** The workspace's forms by name, each with its submission count; Archived ones only when asked. */

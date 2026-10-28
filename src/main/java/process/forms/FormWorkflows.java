@@ -1,5 +1,6 @@
 package process.forms;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -41,6 +42,16 @@ public interface FormWorkflows {
 
     /** Starts a request of the workflow for a submission; the same submission twice starts one. */
     Started start(long tenantId, String key, long submissionId, String title, Map<String, Object> subject, Long requestedBy);
+
+    /**
+     * ZT-I34: the same, with what each key of the subject is -- the form's fields in its own order (key, label, type, section,
+     * personal) and the submission's own keys -- so the request shows the answers as the form asks them and masks the
+     * personal ones for people who may not see them (SubjectFields).
+     */
+    default Started start(long tenantId, String key, long submissionId, String title, Map<String, Object> subject, Long requestedBy,
+        List<Map<String, Object>> subjectFields) {
+        return this.start(tenantId, key, submissionId, title, subject, requestedBy);
+    }
 
     /**
      * MIG-332: starts a request of the workflow for another subject -- an event the customer API received
