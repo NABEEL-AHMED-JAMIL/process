@@ -61,6 +61,37 @@ class FilterStepTaskTest {
             "ignoreCase", true)))).containsExactly(1L);
     }
 
+    /**
+     * AI eval A-filter-021 (2026-11-02): "hba1c below 8" kept all 100 rows instead of 34 -- the rows with no hba1c, an empty
+     * CSV cell, passed, because "" sorted before every number as text. A comparison with an empty side never holds.
+     */
+    @Test
+    void anEmptyValueIsNeitherBelowNorAboveANumber() throws Exception {
+        List<Map<String, Object>> labs = Arrays.asList(row("id", 1L, "hba1c", "7.2"), row("id", 2L, "hba1c", ""),
+            row("id", 3L, "hba1c", "9.1"), row("id", 4L, "hba1c", null), row("id", 5L, "hba1c", "  "), row("id", 6L, "hba1c", 6.4));
+        for (String[] c : new String[][] {{"lt", "8", "1,6"}, {"lte", "7.2", "1,6"}, {"gt", "8", "3"}, {"gte", "6.4", "1,3,6"}}) {
+            assertThat(this.keptOf(labs, "conditions", Collections.singletonList(config("column", "hba1c", "operator", c[0], "value", c[1]))))
+                .as(c[0] + " " + c[1]).containsExactly(Arrays.stream(c[2].split(",")).map(Long::valueOf).toArray());
+        }
+        // Empty is said explicitly, and eq/ne keep their rule (null eq null; anything ne null).
+        assertThat(this.keptOf(labs, "conditions", Collections.singletonList(config("column", "hba1c", "operator", "is_empty"))))
+            .containsExactly(2L, 4L);
+        assertThat(this.keptOf(labs, "conditions", Collections.singletonList(config("column", "hba1c", "operator", "not_empty"))))
+            .containsExactly(1L, 3L, 5L, 6L);
+        assertThat(this.keptOf(labs, "conditions", Collections.singletonList(config("column", "hba1c", "operator", "ne", "value", "7.2"))))
+            .containsExactly(2L, 3L, 4L, 5L, 6L);
+        // An empty value to compare with matches nothing either.
+        assertThat(FilterStepTask.meets("7", config("operator", "lt", "value", ""))).isFalse();
+    }
+
+    private List<Object> keptOf(List<Map<String, Object>> input, Object... config) throws Exception {
+        List<Object> ids = new ArrayList<>();
+        for (Map<String, Object> row : this.task.run(TaskContext.of(config(config), input)).getOutput().getRows()) {
+            ids.add(row.get("id"));
+        }
+        return ids;
+    }
+
     @Test
     void anOperatorNeedsWhatItComparesWith() {
         assertThat(this.task.check(config("conditions", Arrays.asList(config("column", "a", "operator", "eq"),

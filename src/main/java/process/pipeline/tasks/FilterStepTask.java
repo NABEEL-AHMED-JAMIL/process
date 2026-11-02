@@ -22,7 +22,8 @@ import java.util.Map;
  * Filter (MIG-231): keeps the rows that meet all (or any) of its conditions. A condition compares a column with a
  * value: eq, ne, gt, gte, lt, lte (numbers by value when both sides are numbers, else text), contains, starts_with,
  * ends_with (text; {@code ignoreCase} optional), in / not_in a list of values, is_null / not_null, is_empty /
- * not_empty (null or ""). No regular expressions: nothing a person types can make a step run away. Pure Core.
+ * not_empty (null or ""). gt, gte, lt and lte never hold for an empty value (null or blank): an empty cell is not below
+ * 8 (2026-11-02). No regular expressions: nothing a person types can make a step run away. Pure Core.
  * MIG-344: streamed, a row at a time.
  */
 @Component
@@ -32,6 +33,8 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
         "in", "not_in", "is_null", "not_null", "is_empty", "not_empty");
     private static final List<String> UNARY = Arrays.asList("is_null", "not_null", "is_empty", "not_empty");
     private static final List<String> LISTED = Arrays.asList("in", "not_in");
+    /** The comparisons that order: none of them holds when either side is empty (null or blank text). */
+    private static final List<String> ORDERED = Arrays.asList("gt", "gte", "lt", "lte");
 
     static final TaskSpec SPEC = TaskSpec.builder("filter", "Filter", TaskKind.PROCESS)
         .description("Keeps the rows that meet all (or any) of its conditions.")
@@ -139,6 +142,12 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
             // Only eq/ne say anything about null: null eq null, and anything ne null.
             return "eq".equals(operator) ? actual == value : "ne".equals(operator) && actual != value;
         }
+        // AI eval A-filter-021 (2026-11-02): an empty value is not less (or more) than anything. A CSV's empty cell is "",
+        // and "" sorted before every number as text, so "hba1c below 8" kept every row with no hba1c. A comparison with
+        // an empty side is false, as in a Compute formula (Expression) and a form's rule; is_empty / not_empty say it.
+        if (ORDERED.contains(operator) && (blank(actual) || blank(value))) {
+            return false;
+        }
         String left = ignoreCase ? Values.text(actual).toLowerCase(Locale.ROOT) : Values.text(actual);
         String right = ignoreCase ? Values.text(value).toLowerCase(Locale.ROOT) : Values.text(value);
         switch (operator) {
@@ -163,6 +172,11 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
             default:
                 return false;
         }
+    }
+
+    /** Text with nothing in it but spaces: what an empty CSV cell or form field reads as. */
+    private static boolean blank(Object value) {
+        return value instanceof CharSequence && value.toString().trim().isEmpty();
     }
 
     private static boolean equal(Object actual, Object value, boolean ignoreCase) {
