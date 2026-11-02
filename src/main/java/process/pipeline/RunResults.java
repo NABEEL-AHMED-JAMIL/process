@@ -332,6 +332,40 @@ public class RunResults {
         return new Dataset(named, out);
     }
 
+    /** A run's output as a whole-dataset reader takes it: the step that answers and the output it kept. */
+    public static final class Output {
+        public final String stepKey;
+        /** Never handed to a caller as is: it names a storage key. Past its retention when {@code expiredAt(now)}. */
+        public final StepStore.KeptOutput kept;
+
+        Output(String stepKey, StepStore.KeptOutput kept) {
+            this.stepKey = stepKey;
+            this.kept = kept;
+        }
+    }
+
+    /**
+     * Report Studio's scheduled reports: the output the run's answer is read from -- the final one, or the named step's
+     * ({@code from}) -- for a reader that streams the whole dataset itself. Chosen exactly as {@link #read} chooses it; an
+     * output past its retention is returned too (the caller tells it apart). Empty, with {@code about.problem} saying why, when
+     * the run has no such output.
+     */
+    public Optional<Output> output(long jobQueueId, String from, Result about) {
+        Optional<StepStore.StepRow> chosen = this.stepOf(jobQueueId, from == null || from.trim().isEmpty() ? FINAL : from.trim(), about);
+        if (!chosen.isPresent()) {
+            return Optional.empty();
+        }
+        StepStore.StepRow step = chosen.get();
+        about.step = step.stepKey;
+        long source = step.reusedFrom != null ? step.reusedFrom : step.stepExecutionId;
+        StepStore.KeptOutput kept = this.steps.keptOutputsOf(Collections.singletonList(source)).get(source);
+        if (kept == null) {
+            about.problem = "The step " + step.stepKey + " kept no output of its own.";
+            return Optional.empty();
+        }
+        return Optional.of(new Output(step.stepKey, kept));
+    }
+
     /** The step whose output is read: the named one of the latest attempt, or the last one that kept an output. */
     private Optional<StepStore.StepRow> stepOf(long jobQueueId, String from, Result result) {
         List<StepStore.StepRow> all = this.steps.stepsOfRun(jobQueueId);

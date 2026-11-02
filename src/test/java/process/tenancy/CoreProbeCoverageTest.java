@@ -65,6 +65,7 @@ import process.identity.InternalTenantFactsRestApi;
 import process.forms.InternalFormSubjectRestApi;
 import process.retention.InternalRetentionHoldsRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
+import process.customer.InternalReportRunsRestApi;
 import process.customer.InternalRunDocumentsRestApi;
 import process.workflow.InternalReviewEligibilityRestApi;
 import process.identity.InternalUserDirectoryRestApi;
@@ -157,7 +158,9 @@ class CoreProbeCoverageTest {
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
         InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class,
         InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class, InternalFormSubjectRestApi.class,
-        InternalRetentionHoldsRestApi.class);
+        InternalRetentionHoldsRestApi.class,
+        // Report Studio's scheduled reports: media-service's reads of a pipeline's runs and a run's rows
+        InternalReportRunsRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -224,6 +227,12 @@ class CoreProbeCoverageTest {
         NOTHING_TO_AIM.put("POST internal/customer/runDocuments", service + "; reads one run of the workspace named, as that workspace "
             + "(row security and the tenant check: CustomerRuns.found), another workspace's run is a 404 (InternalRunDocumentsRestApiTest."
             + "withoutTheInternalTokenNothingIsRead, anotherWorkspacesRunIsNotFound)");
+        NOTHING_TO_AIM.put("GET internal/reports/pipelineRun", service + "; reads one pipeline of the workspace named and its runs, as "
+            + "that workspace (row security and the tenant check: PipelineCatalogue.find, CustomerRunStore), another workspace's pipeline "
+            + "is a 404 (InternalReportRunsRestApiTest.withoutTheInternalTokenNothingIsRead, anotherWorkspacesPipelineIsNotFound)");
+        NOTHING_TO_AIM.put("GET internal/reports/runRows", service + "; reads one run of the workspace named, as that workspace (row "
+            + "security and the tenant check: CustomerRunStore.find), another workspace's run is a 404 and nothing of it is read "
+            + "(InternalReportRunsRestApiTest.withoutTheInternalTokenNothingIsRead, anotherWorkspacesRunIsNotFoundAndNothingOfItIsRead)");
         NOTHING_TO_AIM.put("POST internal/review/bulkEligibility", service + "; answered as that workspace (RowSecurity.forTenant), "
             + "another workspace's subject is not-found and names nothing (InternalReviewEligibilityRestApiTest."
             + "withoutTheInternalTokenNothingIsAnswered, eachSubjectIsAnsweredByItsPipelinesFlagAsTheWorkspace)");

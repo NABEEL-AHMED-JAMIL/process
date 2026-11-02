@@ -46,6 +46,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/internal/**").permitAll()
                 // MIG-92: Identity's public signing keys. Not a secret; the gateway keeps /internal inside.
                 .requestMatchers(HttpMethod.GET, "/internal/jwks").permitAll()
+                // Report Studio's scheduled reports: media-service's two reads; InternalReportRunsRestApi checks
+                // X-Internal-Token itself (401 without it). Named one by one: no other GET under /internal is opened.
+                .requestMatchers(HttpMethod.GET, "/internal/reports/pipelineRun", "/internal/reports/runRows").permitAll()
                 // "/addLogs/**" does not cover "/addLogsBatch/..." -- a pattern does not
                 // match across the segment boundary -- so every batched log line was rejected
                 // with a 401 and silently lost. The batch endpoint is listed in its own right.

@@ -55,6 +55,27 @@ public class FileAccessLog {
     }
 
     /**
+     * Report Studio's scheduled reports: one read of a run's rows by a service with no person signed in (media-service,
+     * GET /internal/reports/runRows), served or refused -- written in the named workspace as a run dataset download (json),
+     * the service as client_id and no user; the run only once it is the workspace's.
+     */
+    public void serviceRunRows(long tenantId, String service, Long jobQueueId, String fileName, boolean served, int status, String reason) {
+        logger.info("File access: run {} rows ({}) by service {} in workspace {}: {} {}", jobQueueId, fileName, service, tenantId,
+            served ? "served" : "refused", status);
+        if (tenantId < 1) {
+            return;
+        }
+        try {
+            RowSecurity.forTenant(tenantId, () -> this.jdbc.update("INSERT INTO file_access_log (tenant_id, user_id, action, kind, client_id, "
+                    + "job_queue_id, file_name, format, outcome, http_status, reason) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)", tenantId,
+                DOWNLOAD, RUN_DATASET, service, jobQueueId, fileName == null || fileName.length() <= 512 ? fileName : fileName.substring(0, 512),
+                "json", served ? "served" : "refused", status, reason == null || reason.length() <= 512 ? reason : reason.substring(0, 512)));
+        } catch (RuntimeException ex) {
+            logger.warn("The service read of run {}'s rows by {} could not be recorded: {}", jobQueueId, service, ex.getMessage());
+        }
+    }
+
+    /**
      * MIG-334: one read of a file through the customer API's signed link, served or refused -- written in the link's
      * workspace with the API client that asked for the link (no person), the file id and, for a run's file, the run.
      */
