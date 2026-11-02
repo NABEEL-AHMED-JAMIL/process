@@ -743,16 +743,29 @@ public class StepTimelineService {
             Map<String, List<String>> out = new HashMap<>();
             this.definitions.byId(pipelineDefinitionId).ifPresent(stored -> {
                 String previous = null;
-                for (PipelineDefinition.Step step : stored.definition().getSteps()) {
+                List<PipelineDefinition.Step> steps = stored.definition().getSteps();
+                for (int i = 0; i < steps.size(); i++) {
+                    PipelineDefinition.Step step = steps.get(i);
                     LinkedHashSet<String> from = new LinkedHashSet<>();
                     Optional<StepTask> task = this.stepTasks.find(step.getTask());
                     Map<String, Object> schema = task.map(found -> found.spec().configSchema()).orElse(null);
-                    if (step.getInput() != null) {
-                        from.add(step.getInput());
-                    } else if (previous != null && task.map(StepTimelineService::readsItsInput).orElse(true)) {
-                        from.add(previous);
+                    if (Routes.isMerge(step) && step.getConfig() != null && step.getConfig().get("route") instanceof String) {
+                        // MIG-450: a Merge takes in each branch's last step (or, for a branch with none, the Route itself).
+                        String routeKey = (String) step.getConfig().get("route");
+                        for (Routes.Head head : Routes.heads(steps, i, routeKey, allKeys(steps))) {
+                            from.add(head.reads.startsWith(routeKey + ".") ? routeKey : head.reads);
+                        }
+                    } else {
+                        if (step.getInput() != null) {
+                            // MIG-450: a branch ("<route>.<branch>") is its Route's rows.
+                            String input = step.getInput();
+                            int dot = input.indexOf('.');
+                            from.add(dot > 0 && Routes.route(steps, input.substring(0, dot)) != null ? input.substring(0, dot) : input);
+                        } else if (previous != null && task.map(StepTimelineService::readsItsInput).orElse(true)) {
+                            from.add(previous);
+                        }
+                        stepRefs(schema, step.getConfig(), from);
                     }
-                    stepRefs(schema, step.getConfig(), from);
                     out.put(step.getKey(), new ArrayList<>(from));
                     previous = step.getKey();
                 }
@@ -761,6 +774,17 @@ public class StepTimelineService {
         } catch (RuntimeException ex) {
             return Collections.emptyMap();
         }
+    }
+
+    /** Every step's key: what a Merge's heads may read when the run's outputs are not at hand (the plan, not the run). */
+    private static Set<String> allKeys(List<PipelineDefinition.Step> steps) {
+        Set<String> keys = new HashSet<>();
+        for (PipelineDefinition.Step step : steps) {
+            if (step != null && step.getKey() != null) {
+                keys.add(step.getKey());
+            }
+        }
+        return keys;
     }
 
     /** Whether a task takes in the step before it: not a read (it makes its own rows), not one whose input is "Not read". */

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import process.ai.InMemoryModelChoiceStore;
 import process.pipeline.tasks.JoinStepTask;
 import process.pipeline.tasks.AppendStepTask;
+import process.pipeline.tasks.MergeStepTask;
+import process.pipeline.tasks.RouteStepTask;
 import process.ai.RunAiStep;
 import process.model.dto.ResponseDto;
 import process.model.enums.JobStatus;
@@ -218,6 +220,33 @@ class StepTimelineServiceTest {
 
         assertThat(list).extracting(step -> step.get("key") + "<" + step.get("reads"))
             .containsExactly("a<[]", "b<[]", "both<[a, b]", "joined<[both, b]", "picked<[a]");
+    }
+
+    /** MIG-450: a branch's first step takes in its Route; a Merge takes in each branch's last step, or the Route for an empty one. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aBranchTakesInItsRouteAndAMergeEachBranchsLastStep() {
+        PipelineDefinitionStore definitions = mock(PipelineDefinitionStore.class);
+        PipelineDefinitionStore.Stored stored = new PipelineDefinitionStore.Stored();
+        stored.id = 1002L;
+        stored.tenantId = TENANT;
+        stored.version = 1;
+        stored.json = "{\"version\":1,\"steps\":[{\"key\":\"a\",\"task\":\"sample\",\"config\":{\"rows\":[{\"p\":\"x\"}]}},"
+            + "{\"key\":\"triage\",\"task\":\"route\",\"config\":{\"branches\":[{\"name\":\"urgent\",\"conditions\":"
+            + "[{\"column\":\"p\",\"operator\":\"eq\",\"value\":\"x\"}]}]}},"
+            + "{\"key\":\"look\",\"task\":\"select\",\"input\":\"triage.urgent\",\"config\":{\"columns\":[\"p\"]}},"
+            + "{\"key\":\"together\",\"task\":\"merge\",\"config\":{\"route\":\"triage\"}}]}";
+        when(definitions.byId(1002L)).thenReturn(Optional.of(stored));
+        this.service.useDefinitions(definitions);
+        this.service.useStepTasks(Definitions.builtInTasks(new RouteStepTask(), new MergeStepTask()));
+        this.steps.plan(RUN, 1, 1002L, Arrays.asList(new StepStore.Planned(0, "a", "sample", "fail"),
+            new StepStore.Planned(1, "triage", "route", "fail"), new StepStore.Planned(2, "look", "select", "fail"),
+            new StepStore.Planned(3, "together", "merge", "fail")));
+
+        List<Map<String, Object>> list = (List<Map<String, Object>>) this.timeline(null).get("steps");
+
+        assertThat(list).extracting(step -> step.get("key") + "<" + step.get("reads"))
+            .containsExactly("a<[]", "triage<[a]", "look<[triage]", "together<[look, triage]");
     }
 
     @Test
