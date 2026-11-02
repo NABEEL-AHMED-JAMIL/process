@@ -209,9 +209,14 @@ public class AiPromptStepTask extends RegisteredTask {
             List<AiPort.Image> images = image == null ? null : Collections.singletonList(this.imageOf(context, image, row));
             // MIG-420: in an item run a row's call is keyed by its item and what it asks (itemTag), so a retry of some items never
             // takes another item's answer, and reuses an item's own only when it asks the same.
-            AiPort.StepResult result = this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(),
-                itemTag(tags[i], variables, image == null ? null : row.get(Configs.text(image, "keyColumn", ""))), promptId, variables, images,
-                context.modelProfile(), context.sourceTaskId());
+            // Owner 2026-11-02 (BAA check): a pipeline marked sensitive says so, and ai-service's data policy reads its rows as sensitive
+            // whatever the prompt declares.
+            String item = itemTag(tags[i], variables, image == null ? null : row.get(Configs.text(image, "keyColumn", "")));
+            AiPort.StepResult result = context.sensitive()
+                ? this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(), item, promptId, variables, images,
+                    context.modelProfile(), context.sourceTaskId(), "sensitive")
+                : this.ai.runRowStep(context.tenantId(), context.jobQueueId(), context.stepKey(), item, promptId, variables, images,
+                    context.modelProfile(), context.sourceTaskId());
             took[i] = (System.nanoTime() - began) / 1_000_000L;
             if (atOnce > 1 && result.httpStatus != null && (result.httpStatus == 429 || result.httpStatus == 503)) {
                 throw new AtOnce.Busy("Row " + (i + 1) + ": the AI service is busy", result.retryAfterSeconds == null ? 0 : result.retryAfterSeconds);

@@ -413,6 +413,41 @@ class StepEnginePostgresTest {
             steps)).as("the step still says what it did").isEqualTo(1L);
     }
 
+    /**
+     * Owner 2026-11-02 (legal holds): a run's expired datasets under an active hold -- on the workspace, on the run's
+     * pipeline, or on the run -- are kept by the sweep; once the hold is released the next sweep removes them. (The retention
+     * pass's own holds are RetentionPostgresTest's; this is the "Keep run files" expiry.)
+     */
+    @Test
+    void aLegalHoldKeepsARunsExpiredDatasetsUntilItIsReleased() throws Exception {
+        long run = this.queue(STEPS_JOB);
+        this.pass();
+        String key = "datasets/" + run + "/1/shape/output.rows";
+        login.update("UPDATE run_dataset SET expires_at = now() - interval '1 minute' WHERE storage_key LIKE ?", "datasets/" + run + "/%");
+        DatasetSweep sweep = AcrossTenantsProxy.of(new DatasetSweep(db.appJdbc(), new FileDatasetStore(datasetDir.toString())));
+        String[][] holds = {{"WORKSPACE", null, null}, {"PIPELINE", String.valueOf(STEPS_JOB), null}, {"RUN", null, String.valueOf(run)}};
+        try {
+            for (String[] hold : holds) {
+                long id = login.queryForObject("INSERT INTO legal_hold (tenant_id, scope, job_id, job_queue_id, reason, placed_by) VALUES (?, ?, ?, ?, "
+                    + "'Litigation hold', 1) RETURNING legal_hold_id", Long.class, TENANT, hold[0], hold[1] == null ? null : Long.valueOf(hold[1]),
+                    hold[2] == null ? null : Long.valueOf(hold[2]));
+                sweep.sweep();
+                assertThat(Files.exists(datasetDir.resolve(key))).as(hold[0] + " hold").isTrue();
+                assertThat(login.queryForObject("SELECT count(*) FROM retention_log WHERE job_queue_id = ?", Long.class, run)).as(hold[0]).isZero();
+                login.update("UPDATE legal_hold SET released_at = now(), released_by = 1, release_reason = 'Matter closed' WHERE legal_hold_id = ?", id);
+            }
+            // Another workspace's hold, or another pipeline's, keeps nothing of this run.
+            login.update("INSERT INTO legal_hold (tenant_id, scope, reason, placed_by) VALUES (?, 'WORKSPACE', 'Theirs', 1)", OTHER);
+            login.update("INSERT INTO legal_hold (tenant_id, scope, job_id, reason, placed_by) VALUES (?, 'PIPELINE', ?, 'Another pipeline', 1)", TENANT,
+                STEPS_JOB + 1000);
+            assertThat(sweep.sweep()).as("every hold on it released").isPositive();
+            assertThat(Files.exists(datasetDir.resolve(key))).isFalse();
+            assertThat(login.queryForObject("SELECT count(*) FROM retention_log WHERE job_queue_id = ?", Long.class, run)).isPositive();
+        } finally {
+            login.update("DELETE FROM legal_hold");
+        }
+    }
+
     /** Seconds each of a run's datasets is kept: expires_at from when it was written. */
     private List<Long> keptSeconds(long run) {
         return login.queryForList("SELECT round(extract(epoch FROM (d.expires_at - d.date_created)))::bigint FROM run_dataset d "

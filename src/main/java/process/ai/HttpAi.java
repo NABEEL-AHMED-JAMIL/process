@@ -81,7 +81,17 @@ public class HttpAi implements AiPort {
     @Override
     public StepResult runRowStep(Long tenantId, Long jobQueueId, String stepTag, String item, Long promptId, Map<String, String> values,
         List<Image> images, String modelProfile, Long sourceTaskId) {
+        return this.runRowStep(tenantId, jobQueueId, stepTag, item, promptId, values, images, modelProfile, sourceTaskId, null);
+    }
+
+    @Override
+    public StepResult runRowStep(Long tenantId, Long jobQueueId, String stepTag, String item, Long promptId, Map<String, String> values,
+        List<Image> images, String modelProfile, Long sourceTaskId, String sensitivity) {
         ObjectNode body = this.json.createObjectNode();
+        // Owner 2026-11-02: the pipeline's level, so ai-service's data policy reads the higher of it and the prompt's.
+        if (sensitivity != null && !sensitivity.trim().isEmpty()) {
+            body.put("sensitivity", sensitivity.trim());
+        }
         body.put("tenantId", tenantId);
         body.put("jobQueueId", jobQueueId);
         body.put("stepTag", stepTag);

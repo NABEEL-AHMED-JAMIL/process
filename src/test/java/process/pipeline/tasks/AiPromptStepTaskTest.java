@@ -195,4 +195,23 @@ class AiPromptStepTaskTest {
         assertThatThrownBy(() -> this.task.run(context)).hasMessage("The input needs 2 calls; this step makes at most 1 (maxCalls).");
         verify(this.ai, never()).runRowStep(anyLong(), anyLong(), anyString(), anyString(), any(), anyMap(), any(), any(), any());
     }
+
+    /**
+     * Owner 2026-11-02 (BAA check): a pipeline marked sensitive tells ai-service so with every row, and ai-service's data policy
+     * reads the rows as sensitive whatever the prompt declares; a pipeline not marked sends no level (the prompt's alone).
+     */
+    @Test
+    void aSensitivePipelinesRowsGoToAiServiceMarkedSensitive() throws Exception {
+        this.buckets.objects.put("wounds/in/p1.jpg", "a".getBytes(StandardCharsets.UTF_8));
+        this.buckets.objects.put("wounds/in/p2.png", "b".getBytes(StandardCharsets.UTF_8));
+        when(this.ai.runRowStep(anyLong(), anyLong(), anyString(), anyString(), any(), anyMap(), any(), any(), any(), eq("sensitive")))
+            .thenReturn(answered("{\"stage\":\"2\",\"length_cm\":3.1}"));
+        TaskContext context = this.imageContext();
+        context.sensitive = true;
+
+        assertThat(this.task.run(context).getOutput().getRows()).hasSize(2);
+        verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("1"), eq(41L), anyMap(), anyList(), isNull(), isNull(), eq("sensitive"));
+        verify(this.ai).runRowStep(eq(TaskContext.TENANT), anyLong(), eq("step"), eq("2"), eq(41L), anyMap(), anyList(), isNull(), isNull(), eq("sensitive"));
+        verify(this.ai, never()).runRowStep(anyLong(), anyLong(), anyString(), anyString(), any(), anyMap(), any(), any(), any());
+    }
 }

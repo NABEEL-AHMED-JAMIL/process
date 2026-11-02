@@ -37,6 +37,13 @@ final class TaskContext implements StepContext {
     Map<String, Object> runValues = new LinkedHashMap<>();
     /** MIG-419: earlier steps' files by step key. */
     final Map<String, List<RunFile>> runFiles = new LinkedHashMap<>();
+    /** ZT-M21 / owner 2026-11-02: whether the run's pipeline is marked sensitive. */
+    boolean sensitive;
+
+    @Override
+    public boolean sensitive() {
+        return this.sensitive;
+    }
 
     @Override
     public Map<String, Object> runValues() {

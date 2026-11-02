@@ -104,6 +104,16 @@ public interface AiPort {
         return StepResult.failed("This AI service cannot run an engine step.");
     }
 
+    /**
+     * Owner 2026-11-02 (BAA check): the same, with the level of the pipeline the step runs in ("sensitive" for a pipeline marked
+     * sensitive; null otherwise). ai-service's data policy then reads the higher of it and the prompt's declared level, so a
+     * sensitive pipeline's rows never go to a model its sensitive data may not reach. A port that knows no level ignores it.
+     */
+    default StepResult runRowStep(Long tenantId, Long jobQueueId, String stepTag, String item, Long promptId, Map<String, String> values,
+        List<Image> images, String modelProfile, Long sourceTaskId, String sensitivity) {
+        return this.runRowStep(tenantId, jobQueueId, stepTag, item, promptId, values, images, modelProfile, sourceTaskId);
+    }
+
     /** One model an AI step may run on (ai-service's AiModelOptionDto): its id is what a run asks for. */
     final class ModelOption {
         public Long modelOptionId;

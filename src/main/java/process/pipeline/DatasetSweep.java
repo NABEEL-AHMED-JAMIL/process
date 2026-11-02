@@ -27,6 +27,10 @@ import java.util.Map;
  * run's datasets/{run}/ -- the query asks for exactly that, and the key is checked again before anything is deleted.
  * Nothing else -- a workspace's buckets, uploads a step made (run_output kind 'bucket'), any other table -- is touched.
  *
+ * <b>Legal holds.</b> A dataset under an active legal hold (MIG-354's legal_hold: the workspace, the run's pipeline, or the
+ * run) is not removed, however long ago it expired -- as the retention pass keeps what a hold covers; released, the next
+ * sweep removes it. The hold's placing and release are in the retention audit.
+ *
  * Switched off with the rest of the scheduled work when process.scheduling.enabled is false.
  */
 @ConditionalOnProperty(name = "process.scheduling.enabled", havingValue = "true", matchIfMissing = true)
@@ -67,6 +71,10 @@ public class DatasetSweep {
             // own early ones; the sweep takes them once the run has ended.
             + "JOIN job_queue q ON q.job_queue_id = s.job_queue_id AND UPPER(q.job_status) NOT IN ('QUEUE', 'START', 'RUNNING') "
             + "WHERE d.expires_at < ? AND d.storage_key LIKE 'datasets/' || s.job_queue_id || '/%' "
+            // Owner 2026-11-02 (legal holds): an active hold keeps what it covers -- the workspace's, its pipeline's or the run's
+            // own -- however long ago it expired; once the hold is released, the next sweep removes it.
+            + "AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.tenant_id = q.tenant_id AND h.released_at IS NULL AND (h.scope = 'WORKSPACE' "
+            + "OR (h.scope = 'PIPELINE' AND h.job_id = q.job_id) OR (h.scope = 'RUN' AND h.job_queue_id = q.job_queue_id))) "
             + "ORDER BY d.run_dataset_id LIMIT " + BATCH, now);
         int removed = 0;
         for (Map<String, Object> dataset : expired) {

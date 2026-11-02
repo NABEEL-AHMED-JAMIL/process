@@ -133,6 +133,18 @@ class StepAnswerContractTest {
 
         assertThat(this.bodies.get(0).has("modelProfile")).isFalse();
         assertThat(this.bodies.get(0).has("sourceTaskId")).isFalse();
+        assertThat(this.bodies.get(0).has("sensitivity")).as("no level: the prompt's alone").isFalse();
+    }
+
+    /** Owner 2026-11-02 (BAA check): a sensitive pipeline's row names its level, so ai-service's data policy reads it as sensitive. */
+    @Test
+    void aSensitivePipelinesRowNamesItsLevel() {
+        this.answers("/api/v1/internal/ai/steps/run", 200, ANSWER);
+
+        this.ai().runRowStep(2905L, 5073L, "summary", "1", 1049L, Collections.emptyMap(), null, null, 8801L, "sensitive");
+
+        assertThat(this.bodies.get(0).get("sensitivity").asText()).isEqualTo("sensitive");
+        assertThat(this.bodies.get(0).get("item").asText()).isEqualTo("1");
     }
 
     @Test
