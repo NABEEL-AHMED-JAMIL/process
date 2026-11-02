@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 237.0-retention-tools
+      author: nabeel.amd93
+      description: "Tools redesign: retention_rule.data_class also allows TRANSCRIPTS, RECORDINGS and CONVERSIONS (media holds them); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V237.0-retention-tools/V237__retention_tools.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V237.0-retention-tools/V237__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

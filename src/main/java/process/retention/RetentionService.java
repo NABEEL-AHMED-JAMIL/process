@@ -98,6 +98,7 @@ public class RetentionService implements DisposableBean {
             one.put("holds", dataClass.knowsRuns() ? "workspace, pipeline, run" : "workspace");
             one.put("keepDays", rule == null ? null : rule.keepDays);
             one.put("minDays", dataClass == DataClass.AUDIT ? platform.auditFloorDays : null);
+            one.put("maxDays", dataClass.maxDays());
             one.put("confirmedCount", rule == null ? null : rule.confirmedCount);
             one.put("confirmedAt", rule == null || rule.confirmedAt == null ? null : rule.confirmedAt.toString());
             RetentionStore.ClassResult result = last.get(dataClass);
@@ -388,6 +389,10 @@ public class RetentionService implements DisposableBean {
                     throw new Refused(HttpStatus.BAD_REQUEST, dataClass.label() + ": days are 1 to " + MAX_DAYS + ", or empty to keep forever.");
                 }
                 days = n.intValue();
+            }
+            if (dataClass.maxDays() != null && days != null && days > dataClass.maxDays()) {
+                throw new Refused(HttpStatus.BAD_REQUEST, dataClass.label() + " are never kept more than " + dataClass.maxDays()
+                    + " days; choose 1 to " + dataClass.maxDays() + ", or leave it empty for the " + dataClass.maxDays() + " days.");
             }
             if (dataClass == DataClass.AUDIT && days != null && days < platform.auditFloorDays && strictAudit) {
                 throw new Refused(HttpStatus.BAD_REQUEST, "Audit records are kept at least " + platform.auditFloorDays + " days (the platform's "

@@ -63,6 +63,7 @@ import process.identity.InternalTenantDirectoryRestApi;
 import process.lineage.InternalLineageRestApi;
 import process.identity.InternalTenantFactsRestApi;
 import process.forms.InternalFormSubjectRestApi;
+import process.retention.InternalRetentionHoldsRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
 import process.customer.InternalRunDocumentsRestApi;
 import process.workflow.InternalReviewEligibilityRestApi;
@@ -155,7 +156,8 @@ class CoreProbeCoverageTest {
         InternalRunVerificationRestApi.class, InternalSecretRestApi.class, InternalTenantDirectoryRestApi.class,
         InternalTenantFactsRestApi.class, InternalUserDirectoryRestApi.class, InternalSloRestApi.class, ReliabilityRestApi.class,
         InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class,
-        InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class, InternalFormSubjectRestApi.class);
+        InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class, InternalFormSubjectRestApi.class,
+        InternalRetentionHoldsRestApi.class);
 
     private static final Map<String, String> NOTHING_TO_AIM = new LinkedHashMap<>();
 
@@ -217,6 +219,8 @@ class CoreProbeCoverageTest {
             + "aPipelinesFieldsAreTheWorkspacesOwnOnly)");
         NOTHING_TO_AIM.put("POST internal/forms/subjectFields", service + "; reads one submission of the workspace named, as that "
             + "workspace, and another workspace's is \"No submission\" (SubjectFieldsTest.theInternalDoorAnswersASubmissionsFieldsWithTheTokenOnly)");
+        NOTHING_TO_AIM.put("POST internal/retention/holds", service + "; reads the legal holds of the workspace named, as that "
+            + "workspace (RowSecurity.forTenant), and answers only whether a workspace hold is on (InternalRetentionHoldsRestApiTest)");
         NOTHING_TO_AIM.put("POST internal/customer/runDocuments", service + "; reads one run of the workspace named, as that workspace "
             + "(row security and the tenant check: CustomerRuns.found), another workspace's run is a 404 (InternalRunDocumentsRestApiTest."
             + "withoutTheInternalTokenNothingIsRead, anotherWorkspacesRunIsNotFound)");

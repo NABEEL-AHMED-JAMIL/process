@@ -56,6 +56,35 @@ class RetentionRulesTest {
             .filter(DataClass::configurable).collect(Collectors.toList()));
     }
 
+    /**
+     * The tools redesign (2026-11-02): transcripts, recordings and unkept conversions are media's, reached at the same door; only
+     * a workspace hold reaches them (they know no run); recordings and conversions are never kept more than 30 days.
+     */
+    @Test
+    void theToolsClassesAreMediasKnowNoRunAndTwoOfThemAreCappedAtThirtyDays() throws Exception {
+        RemoteRetention remote = new RemoteRetention(new okhttp3.OkHttpClient(), "http://ai:9150", "http://storage:9120",
+            "http://notifications:9100", "http://media:9110", "t");
+        for (DataClass tools : new DataClass[]{DataClass.TRANSCRIPTS, DataClass.RECORDINGS, DataClass.CONVERSIONS}) {
+            assertThat(tools.owner()).isEqualTo(DataClass.Owner.MEDIA);
+            assertThat(tools.configurable()).isTrue();
+            assertThat(tools.knowsRuns()).as(tools + ": a pipeline or run hold does not reach it").isFalse();
+            assertThat(remote.urlOf(tools)).isEqualTo("http://media:9110/api/v1/internal/media/retention");
+            JsonNode body = remote.body("purge", 2960, tools, Instant.parse("2026-10-03T05:00:00Z"), 500,
+                new Holds(false, Set.of(2908L), Set.of(8071L)));
+            assertThat(body.has("keepRunIds")).as("no run ids for a class that knows no run").isFalse();
+        }
+        assertThat(DataClass.of("transcripts")).contains(DataClass.TRANSCRIPTS);
+        assertThat(DataClass.TRANSCRIPTS.maxDays()).as("a transcript is kept until deleted or a policy says").isNull();
+        assertThat(DataClass.RECORDINGS.maxDays()).isEqualTo(30);
+        assertThat(DataClass.CONVERSIONS.maxDays()).isEqualTo(30);
+        RetentionStore.Platform platform = new RetentionStore.Platform();
+        assertThat(this.service.days(map("RECORDINGS", 7), platform, true)).containsEntry(DataClass.RECORDINGS, 7);
+        assertThat(this.service.days(map("CONVERSIONS", ""), platform, true)).containsEntry(DataClass.CONVERSIONS, null);
+        assertThatThrownBy(() -> this.service.days(map("RECORDINGS", 31), platform, true))
+            .hasMessage("Audio recordings are never kept more than 30 days; choose 1 to 30, or leave it empty for the 30 days.");
+        assertThat(this.service.days(map("TRANSCRIPTS", 400), platform, true)).containsEntry(DataClass.TRANSCRIPTS, 400);
+    }
+
     @Test
     void theShareIsMeasuredOnTheWholeClass() {
         assertThat(RetentionPass.overShare(20, 100, 20)).isFalse();

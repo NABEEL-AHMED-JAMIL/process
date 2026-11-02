@@ -39,6 +39,19 @@ public enum DataClass {
         "Report Studio: the files of report versions a newer version replaced, and the frozen data no kept version uses (a failed "
             + "generation's after 7 days). Each report's current version, every approved or signed version, templates, assets and "
             + "brand profiles stay; a removed version keeps its record, marked expired."),
+    /*
+     * The tools redesign (owner-approved 2026-11-02): media holds the three. A workspace hold keeps them; they know no run.
+     * Recordings and unkept conversions are never kept more than 30 days ({@link #maxDays}): media removes them at 30 days
+     * by itself (unless a workspace hold is on), and a policy may only shorten that.
+     */
+    TRANSCRIPTS(Owner.MEDIA, true, false, "Transcripts",
+        "Audio Transcript: each transcript (its text, times, speakers and corrections). The recording itself is the next class."),
+    RECORDINGS(Owner.MEDIA, true, false, "Audio recordings",
+        "Audio Transcript: the recordings kept for playback beside their transcripts -- never more than 30 days. The transcript "
+            + "stays."),
+    CONVERSIONS(Owner.MEDIA, true, false, "Converted files",
+        "Document Converter: the originals and results of conversions not kept in a bucket -- never more than 30 days -- and "
+            + "each conversion's line in Recent conversions. Files kept in a bucket are the bucket's."),
     ANALYTICS(Owner.NONE, false, false, "Analytics copies and cache",
         "Bounded by the platform: Parquet copies are kept to 4 GB a workspace (least recently read go first) and query results 10 "
             + "minutes. Both are rebuilt from your sources on the next read."),
@@ -83,6 +96,11 @@ public enum DataClass {
 
     public String covers() {
         return this.covers;
+    }
+
+    /** The most days the class is ever kept (the platform removes it then, policy or not); null when there is no such cap. */
+    public Integer maxDays() {
+        return this == RECORDINGS || this == CONVERSIONS ? 30 : null;
     }
 
     public static Optional<DataClass> of(String name) {

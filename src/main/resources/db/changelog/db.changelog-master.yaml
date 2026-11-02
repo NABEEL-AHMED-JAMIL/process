@@ -288,3 +288,6 @@ databaseChangeLog:
   # V236: owner 2026-10-27 ("add a sort on each table") -- job_queue per-job indexes for a schedule's run history sorted by Queued, Started, Ended or Duration.
   - include:
       file: db/changelog/yaml/V236.0-run-list-sort.yaml
+  # V237: the tools redesign (owner-approved 2026-11-02) -- retention_rule.data_class also allows TRANSCRIPTS, RECORDINGS and CONVERSIONS (media holds them).
+  - include:
+      file: db/changelog/yaml/V237.0-retention-tools.yaml

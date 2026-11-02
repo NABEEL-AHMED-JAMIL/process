@@ -28,7 +28,8 @@ import java.util.concurrent.TimeUnit;
  * POST {ai}/api/v1/internal/ai/retention                       AI_CONVERSATIONS, DOCUMENTS
  * POST {storage}/api/v1/internal/storage/retention             FILES
  * POST {notifications}/api/v1/internal/notifications/retention NOTIFICATIONS
- * POST {media}/api/v1/internal/media/retention                 REPORTS (Report Studio phase 7)
+ * POST {media}/api/v1/internal/media/retention                 REPORTS (Report Studio phase 7); TRANSCRIPTS, RECORDINGS,
+ *                                                              CONVERSIONS (the tools redesign)
  *   {"action": "preview" | "purge", "tenantId": 2960, "dataClass": "FILES", "cutoff": "2025-10-13T07:00:00Z",
  *    "limit": 500, "keepRunIds": [..]}
  *   preview -> {"count", "bytes" (or null), "oldest" (an instant or null), "total"}
