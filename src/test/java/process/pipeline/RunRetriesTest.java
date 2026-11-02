@@ -22,11 +22,14 @@ import process.pipeline.registry.TaskRegistry;
 import process.pipeline.tasks.ReadFileStepTask;
 import process.pipeline.tasks.SampleStepTask;
 import process.pipeline.tasks.SelectStepTask;
+import process.pipeline.tasks.MergeStepTask;
+import process.pipeline.tasks.RouteStepTask;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,6 +42,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +58,6 @@ import static process.pipeline.Definitions.config;
 import static process.pipeline.Definitions.row;
 import static process.pipeline.Definitions.sample;
 import static process.pipeline.Definitions.step;
-import java.util.AbstractMap;
 
 /**
  * MIG-345: a failed run retried from the step that failed, as a new attempt of the same run, through RunRetries and the
@@ -94,7 +97,8 @@ class RunRetriesTest {
     @BeforeEach
     void setUp() {
         List<StepTask> registered = new ArrayList<>(Arrays.asList(new SampleStepTask(), new SelectStepTask(), new Counted(), new Gate(),
-            new Metered(), new ReadFileStepTask(this.buckets), new ReadS3StepTask(this.buckets)));
+            new Metered(), new ReadFileStepTask(this.buckets), new ReadS3StepTask(this.buckets),
+            new RouteStepTask(), new MergeStepTask()));
         StepTasks tasks = new StepTasks(registered);
         DefinitionValidator validator = new DefinitionValidator(new TaskRegistry(tasks, new InMemoryTaskOverrideStore()));
         this.engine = new StepEngine(this.definitions, this.steps, tasks, validator, this.datasets, this.worker, this.transactions,
@@ -398,6 +402,36 @@ class RunRetriesTest {
         assertThat(asked.pipelineDefinitionId).isEqualTo(fixed);
         assertThat(asked.requestedVia).isEqualTo("console");
         assertThat(asked.requestedByUserId).isEqualTo(USER);
+    }
+
+    /** MIG-450: a failed step inside a branch resumes there: the Route is reused, its branches kept again for the new attempt. */
+    @Test
+    void aStepThatFailedInsideABranchResumesThere() {
+        Function<Boolean, PipelineDefinition> routed = pass -> {
+            PipelineDefinition.Step check = step("check", "gate", config("pass", pass));
+            check.setInput("triage.big");
+            return Definitions.of(sample("read", row("id", 1, "amount", 50), row("id", 2, "amount", 120), row("id", 3, "amount", 400)),
+                step("triage", "route", config("branches", Collections.singletonList(config("name", "big", "conditions",
+                    Collections.singletonList(config("column", "amount", "operator", "gt", "value", 100)))))),
+                check, step("together", "merge", config("route", "triage")));
+        };
+        this.saves(routed.apply(false));
+        this.runs();
+        assertThat(this.steps.statuses(RUN_ID, 1)).containsExactly(entry("read", "Completed"), entry("triage", "Completed"),
+            entry("check", "Failed"), entry("together", "Skip"));
+        this.saves(routed.apply(true));
+
+        RunRetries.Outcome outcome = this.resume();
+
+        assertThat(outcome.queued()).as(String.valueOf(outcome.refusal)).isTrue();
+        assertThat(outcome.plan.fromKey).isEqualTo("check");
+        this.runs();
+        assertThat(this.run.getJobStatus()).isEqualTo(JobStatus.Completed);
+        assertThat(this.steps.row(RUN_ID, 2, "triage").reusedFrom).isNotNull();
+        assertThat(this.steps.row(RUN_ID, 2, "check").recordsIn).as("the branch's rows, kept again for attempt 2").isEqualTo(2L);
+        assertThat(this.steps.row(RUN_ID, 2, "together").recordsIn).isEqualTo(3L);
+        assertThat(this.datasets.stored.keySet()).contains("datasets/9345/2/triage/branch-big.json",
+            "datasets/9345/2/triage/branch-otherwise.json");
     }
 
     private List<String> engineReports() {

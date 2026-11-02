@@ -30,7 +30,8 @@ import process.settings.EngineDials;
  *       config that holds to its task's config schema ({@link ConfigSchemaValidator}) and then to the task's own
  *       checks.</li>
  *   <li>A {@code legacy} step is the only step: it is the whole of an existing pipeline, run by its worker.</li>
- *   <li>{@code input} names an earlier step.</li>
+ *   <li>{@code input} names an earlier step, or a branch of an earlier Route ("&lt;route&gt;.&lt;branch&gt;", MIG-450); a Merge
+ *   names an earlier Route.</li>
  *   <li>{@code retry.maxAttempts} 1 to 10, {@code retry.delaySeconds} 0 to 3600, {@code timeoutSeconds} 1 to 86400,
  *       {@code onError} fail, continue or skip_rest.</li>
  *   <li>{@code settings}: datasetRetentionHours 1 to 720, defaultTimeoutSeconds 1 to 86400, defaultOnError as onError;
@@ -156,10 +157,22 @@ public class DefinitionValidator {
                 + "up to 50 formulas -- or ask a platform administrator to raise the limit.", steps.size(), maxSteps)));
         }
         Set<String> earlier = new HashSet<>();
+        Set<String> routes = new HashSet<>();
         for (int i = 0; i < steps.size(); i++) {
-            this.step(steps.get(i), "steps[" + i + "]", steps.size(), earlier, switches, role, maxTimeout, problems);
-            if (steps.get(i) != null && steps.get(i).getKey() != null) {
-                earlier.add(steps.get(i).getKey());
+            PipelineDefinition.Step step = steps.get(i);
+            this.step(step, "steps[" + i + "]", steps.size(), earlier, switches, role, maxTimeout, problems);
+            // MIG-450: a Merge names a Route before it; its branches read as "<route>.<branch>" from the step after it on.
+            if (Routes.isMerge(step) && step.getConfig() != null && step.getConfig().get("route") instanceof String
+                && earlier.contains((String) step.getConfig().get("route")) && !routes.contains((String) step.getConfig().get("route"))) {
+                problems.add(new DefinitionProblem("steps[" + i + "].config.route", String.format("<%s> is not a Route step",
+                    step.getConfig().get("route"))));
+            }
+            if (step != null && step.getKey() != null) {
+                earlier.add(step.getKey());
+                if (Routes.isRoute(step)) {
+                    routes.add(step.getKey());
+                    earlier.addAll(Routes.refs(step));
+                }
             }
         }
         return problems;

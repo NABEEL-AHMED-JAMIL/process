@@ -1331,6 +1331,7 @@ public class StepEngine {
                 }
                 this.outputs.put(step.getKey(), passed);
                 latest = passed;
+                this.branches(step, rows.get(i), passed);
                 String line = String.format("Reused from attempt %d: not run again (%s in, %s out).", earlier.attempt,
                     earlier.recordsIn == null ? "no records" : earlier.recordsIn.toString(),
                     earlier.recordsOut == null ? "no records" : earlier.recordsOut.toString());
@@ -1445,6 +1446,7 @@ public class StepEngine {
                     }
                     outputs.put(step.getKey(), passed);
                     latest = passed;
+                    this.branches(step, row, passed);
                     this.itemsAfter(i, row, inputKey, passed, true, null, tried.reports, millis);
                     this.recordReads(row, step, tried.reads);
                     String done = String.format("Completed in %.1f s: %d in, %s out%s.", millis / 1000.0, recordsIn,
@@ -1674,6 +1676,7 @@ public class StepEngine {
                     }
                     this.outputs.put(step.getKey(), passed);
                     latest = passed;
+                    this.branches(step, row.stepExecutionId, passed);
                     if (row.reusedFrom != null) {
                         waited.reused.add(origins.get(row.stepExecutionId).attempt);
                     } else {
@@ -1802,6 +1805,15 @@ public class StepEngine {
             Optional<StepTask> task = tasks.find(step.getTask());
             if (task.isPresent() && task.get().spec().kind() == TaskKind.READ && task.get().spec().inputSchema() == null) {
                 return 0;
+            }
+            if (Routes.isMerge(step) && step.getConfig() != null && step.getConfig().get("route") instanceof String) {
+                long total = 0;
+                for (Routes.Head head : this.branchHeads(step.getKey(), (String) step.getConfig().get("route"))) {
+                    if (outputs.containsKey(head.reads)) {
+                        total += new Input(outputs.get(head.reads), source).size();
+                    }
+                }
+                return total;
             }
             if ("append".equals(step.getTask()) && step.getConfig() != null && step.getConfig().get("steps") instanceof List) {
                 long total = 0;
@@ -2003,7 +2015,8 @@ public class StepEngine {
                     tried.outputRows = output.size();
                     tried.outputColumns = output.columns();
                     // A streaming try's records out are the rows it wrote.
-                    tried.result = StepResult.streamed(output.size());
+                    // ...and what it noted about them stays with them (MIG-450: a Route's split).
+                    tried.result = StepResult.streamed(output.size()).withNote(tried.result.getNote());
                 } else {
                     context.discard();
                 }
@@ -2077,6 +2090,68 @@ public class StepEngine {
                 }
             }
             return files;
+        }
+
+        /**
+         * MIG-450: after a Route step's output is known (run, reused, or rebuilt after an approval), each branch's rows are
+         * kept apart under "&lt;route&gt;.&lt;branch&gt;" -- read a batch at a time, never held whole -- and recorded on the step's
+         * row as "branch &lt;name&gt;", so the run page lists them beside its output. Nothing for any other step.
+         */
+        private void branches(PipelineDefinition.Step step, long row, String passed) {
+            if (!Routes.isRoute(step) || passed == null) {
+                return;
+            }
+            String column = Routes.column(step);
+            Map<String, DatasetStore.Output> parts = new LinkedHashMap<>();
+            Map<String, String> keys = new LinkedHashMap<>();
+            List<String> columns;
+            try (RowSource rows = datasets.open(passed, batchRows())) {
+                columns = rows.columns();
+                for (String name : Routes.branchNames(step)) {
+                    String key = datasets.outputKeyOf(this.run.getJobQueueId(), this.attempt, step.getKey(), "branch-" + name);
+                    DatasetStore.Output part = datasets.create(key);
+                    part.declare(columns);
+                    parts.put(name, part);
+                    keys.put(name, key);
+                }
+                for (List<Map<String, Object>> batch = rows.next(); batch != null; batch = rows.next()) {
+                    for (Map<String, Object> one : batch) {
+                        DatasetStore.Output part = parts.get(String.valueOf(one.get(column)));
+                        if (part != null) {
+                            part.add(one);
+                        }
+                    }
+                }
+                for (DatasetStore.Output part : parts.values()) {
+                    part.commit();
+                }
+            } catch (Exception ex) {
+                parts.values().forEach(DatasetStore.Output::abort);
+                throw new IllegalStateException(String.format("The branches of route <%s> could not be kept: %s", step.getKey(),
+                    reasonOf(ex)), ex);
+            }
+            String listed;
+            try {
+                listed = JSON.writeValueAsString(columns);
+            } catch (JsonProcessingException ex) {
+                listed = "[]";
+            }
+            for (Map.Entry<String, DatasetStore.Output> part : parts.entrySet()) {
+                String key = keys.get(part.getKey());
+                long size = part.getValue().size();
+                this.datasetIds.put(key, steps.dataset(row, "branch " + part.getKey(), key, size, listed, this.expiry()));
+                this.sizes.put(key, size);
+                this.outputs.put(Routes.ref(step.getKey(), part.getKey()), key);
+            }
+        }
+
+        /** MIG-450: what the Merge step {@code mergeKey} stacks for route {@code routeKey}, by this run's outputs so far. */
+        List<Routes.Head> branchHeads(String mergeKey, String routeKey) {
+            int at = 0;
+            while (at < this.stepList.size() && !mergeKey.equals(this.stepList.get(at).getKey())) {
+                at++;
+            }
+            return Routes.heads(this.stepList, at, routeKey, this.outputs.keySet());
         }
 
         private Dataset outputOf(String stepKey) {
@@ -2519,6 +2594,11 @@ public class StepEngine {
         @Override
         public Dataset dataset(String stepKey) {
             return this.execution.outputOf(stepKey);
+        }
+
+        @Override
+        public List<Routes.Head> branchHeads(String routeKey) {
+            return this.execution.branchHeads(this.step.getKey(), routeKey);
         }
 
         @Override

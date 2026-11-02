@@ -35,7 +35,7 @@ public final class Streams {
         InMemory adapted = new InMemory(context);
         try {
             StepResult result = task.stream(adapted);
-            return result.isStreamed() ? StepResult.of(adapted.sink.toDataset()) : result;
+            return result.isStreamed() ? StepResult.of(adapted.sink.toDataset()).withNote(result.getNote()) : result;
         } finally {
             adapted.removeScratch();
         }
@@ -223,6 +223,8 @@ public final class Streams {
         @Override public List<String> inputKeys() { return this.context.inputKeys(); }
 
         @Override public Dataset dataset(String stepKey) throws Exception { return this.context.dataset(stepKey); }
+
+        @Override public List<Routes.Head> branchHeads(String routeKey) { return this.context.branchHeads(routeKey); }
 
         @Override public List<RunFile> runFiles(String stepKey) throws Exception { return this.context.runFiles(stepKey); }
 

@@ -88,7 +88,18 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
         String sourceColumn = Configs.text(config, "sourceColumn", null);
         boolean coerce = Configs.bool(config, "coerce", true);
         Map<String, String> types = Configs.textMap(config, "types");
+        return stack(context, steps, steps, sourceColumn, false, common, coerce, types, "Append");
+    }
 
+    /**
+     * Stacks the outputs {@code reads} names, one after the other: Append's rows, and a Merge's (MIG-450). {@code
+     * labelColumn}, when set, holds each row's {@code labels} entry; {@code overwrite} lets it be a column the inputs
+     * already have (a Merge's branch column, which the Route wrote), else that is refused.
+     */
+    static StepResult stack(StreamContext context, List<String> reads, List<String> labels, String labelColumn, boolean overwrite,
+                            boolean common, boolean coerce, Map<String, String> types, String what) throws Exception {
+        List<String> steps = reads;
+        String sourceColumn = labelColumn;
         // Columns first, from each input's own list (known before a row is read).
         Set<String> columns = new LinkedHashSet<>();
         List<Long> sizes = new ArrayList<>();
@@ -110,8 +121,11 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
             }
         }
         if (sourceColumn != null && columns.contains(sourceColumn)) {
-            throw new IllegalArgumentException(String.format("The source column '%s' is already a column of the steps; name another.",
-                sourceColumn));
+            if (!overwrite) {
+                throw new IllegalArgumentException(String.format("The source column '%s' is already a column of the steps; name another.",
+                    sourceColumn));
+            }
+            columns.remove(sourceColumn);
         }
         for (String typed : types.keySet()) {
             if (!columns.contains(typed)) {
@@ -135,7 +149,7 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
             try (RowSource input = context.openOutputOf(step)) {
                 for (List<Map<String, Object>> batch = input.next(); batch != null; batch = input.next()) {
                     if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedException("Append was stopped.");
+                        throw new InterruptedException(what + " was stopped.");
                     }
                     for (Map<String, Object> row : batch) {
                         r++;
@@ -171,16 +185,18 @@ public class AppendStepTask extends RegisteredTask implements StreamingStepTask 
                             stacked.put(column, value);
                         }
                         if (sourceColumn != null) {
-                            stacked.put(sourceColumn, step);
+                            stacked.put(sourceColumn, labels.get(i));
                         }
                         out.add(stacked);
                     }
                 }
             }
         }
-        StringBuilder line = new StringBuilder(String.format("Stacked %,d row(s) from %d steps (", out.size(), steps.size()));
+        StringBuilder line = new StringBuilder(String.format("Stacked %,d row(s) from %d %s (", out.size(), steps.size(),
+            labels == reads ? "steps" : "branches"));
         for (int i = 0; i < steps.size(); i++) {
-            line.append(i == 0 ? "" : ", ").append(String.format("<%s> %,d", steps.get(i), sizes.get(i)));
+            line.append(i == 0 ? "" : ", ").append(labels == reads ? String.format("<%s> %,d", steps.get(i), sizes.get(i))
+                : String.format("%s %,d", labels.get(i), sizes.get(i)));
         }
         line.append(String.format("), %d column(s)%s.", declared.size(), common ? " in common" : ""));
         context.log(line.toString());

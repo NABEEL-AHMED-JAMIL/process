@@ -146,6 +146,14 @@ public interface StepContext {
     }
 
     /**
+     * MIG-450: what a Merge stacks for the route it names -- each branch, in the route's order, with what to read: the last
+     * step of that branch before this one that made an output, else the branch's own rows ("&lt;route&gt;.&lt;branch&gt;").
+     */
+    default List<Routes.Head> branchHeads(String routeKey) {
+        throw new UnsupportedOperationException("This context reads no route's branches.");
+    }
+
+    /**
      * Keeps a file this step made with the run (MIG-231's Save File): written beside the run's datasets, recorded as a
      * run_dataset named by the file, and removed with them when the run's datasets expire. {@code fileName} is a plain
      * name (letters, digits, '.', '-', '_'). Returns nothing a step may hand out: the storage key is the platform's.

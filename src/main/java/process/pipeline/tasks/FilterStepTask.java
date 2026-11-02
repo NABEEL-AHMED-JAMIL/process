@@ -42,13 +42,7 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
         .output(TaskSpec.rows("The rows that meet the conditions, unchanged."))
         .config(JsonSchema.object()
             .property("match", JsonSchema.string().enumOf("all", "any").title("Keep a row that meets").defaultValue("all"))
-            .required("conditions", JsonSchema.array(JsonSchema.object()
-                .required("column", JsonSchema.string().minLength(1).maxLength(128).title("Column").format("column"))
-                .required("operator", JsonSchema.string().enumOf(OPERATORS.toArray(new String[0])).title("Is"))
-                .property("value", JsonSchema.scalar().title("Value"))
-                .property("values", JsonSchema.array(JsonSchema.scalar()).maxItems(1000).title("Values").description("in / not_in."))
-                .property("ignoreCase", JsonSchema.bool().title("Ignore case").defaultValue(false)))
-                .minItems(1).maxItems(50).title("Conditions")))
+            .required("conditions", JsonSchema.array(conditionSchema()).minItems(1).maxItems(50).title("Conditions")))
         .aiToolName("filter_rows")
         .build();
 
@@ -58,18 +52,7 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
 
     @Override
     public List<DefinitionProblem> check(Map<String, Object> config) {
-        List<DefinitionProblem> problems = new ArrayList<>();
-        List<Map<String, Object>> conditions = Configs.objects(config, "conditions");
-        for (int i = 0; i < conditions.size(); i++) {
-            String operator = Configs.text(conditions.get(i), "operator", "");
-            String at = "conditions[" + i + "]";
-            if (LISTED.contains(operator) && !(conditions.get(i).get("values") instanceof List)) {
-                problems.add(new DefinitionProblem(at + ".values", operator + " needs its list of values"));
-            } else if (!UNARY.contains(operator) && !LISTED.contains(operator) && !conditions.get(i).containsKey("value")) {
-                problems.add(new DefinitionProblem(at + ".value", operator + " needs a value to compare with"));
-            }
-        }
-        return problems;
+        return conditionProblems(Configs.objects(config, "conditions"), "");
     }
 
     @Override
@@ -86,19 +69,7 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
                     throw new InterruptedException("Filter was stopped.");
                 }
                 for (Map<String, Object> row : batch) {
-                    boolean keep = !any;
-                    for (Map<String, Object> condition : conditions) {
-                        boolean met = meets(row.get(Configs.text(condition, "column", "")), condition);
-                        if (any && met) {
-                            keep = true;
-                            break;
-                        }
-                        if (!any && !met) {
-                            keep = false;
-                            break;
-                        }
-                    }
-                    if (keep) {
+                    if (matches(row, conditions, any)) {
                         out.add(row);
                     }
                 }
@@ -106,6 +77,45 @@ public class FilterStepTask extends RegisteredTask implements StreamingStepTask 
         }
         context.log(String.format("%d of %d row(s) kept.", out.size(), total));
         return StepResult.streamed(out.size());
+    }
+
+    /** Whether a row meets all (or, {@code any}, one) of the conditions: Filter's rule, and a Route branch's (MIG-450). */
+    static boolean matches(Map<String, Object> row, List<Map<String, Object>> conditions, boolean any) {
+        for (Map<String, Object> condition : conditions) {
+            boolean met = meets(row.get(Configs.text(condition, "column", "")), condition);
+            if (any && met) {
+                return true;
+            }
+            if (!any && !met) {
+                return false;
+            }
+        }
+        return !any;
+    }
+
+    /** Filter's problems with a list of conditions (a value or a list where the operator needs one), each at its path. */
+    static List<DefinitionProblem> conditionProblems(List<Map<String, Object>> conditions, String prefix) {
+        List<DefinitionProblem> problems = new ArrayList<>();
+        for (int i = 0; i < conditions.size(); i++) {
+            String operator = Configs.text(conditions.get(i), "operator", "");
+            String at = prefix + "conditions[" + i + "]";
+            if (LISTED.contains(operator) && !(conditions.get(i).get("values") instanceof List)) {
+                problems.add(new DefinitionProblem(at + ".values", operator + " needs its list of values"));
+            } else if (!UNARY.contains(operator) && !LISTED.contains(operator) && !conditions.get(i).containsKey("value")) {
+                problems.add(new DefinitionProblem(at + ".value", operator + " needs a value to compare with"));
+            }
+        }
+        return problems;
+    }
+
+    /** One condition's schema (column, operator, value or values, ignoreCase): Filter's, and a Route branch's. */
+    static JsonSchema conditionSchema() {
+        return JsonSchema.object()
+            .required("column", JsonSchema.string().minLength(1).maxLength(128).title("Column").format("column"))
+            .required("operator", JsonSchema.string().enumOf(OPERATORS.toArray(new String[0])).title("Is"))
+            .property("value", JsonSchema.scalar().title("Value"))
+            .property("values", JsonSchema.array(JsonSchema.scalar()).maxItems(1000).title("Values").description("in / not_in."))
+            .property("ignoreCase", JsonSchema.bool().title("Ignore case").defaultValue(false));
     }
 
     static boolean meets(Object actual, Map<String, Object> condition) {

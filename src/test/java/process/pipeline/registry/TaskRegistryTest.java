@@ -47,6 +47,7 @@ class TaskRegistryTest {
             entry("measure_mask", "Process"), entry("read_runs", "Read"),
             // MIG-424: another pipeline of the workspace, called with parameters, its answer as rows.
             entry("run_pipeline", "Process"),
+            entry("route", "Process"), entry("merge", "Process"),
             // Report Studio phase 5: a Report Studio report from the rows, with the step's own design or a template.
             entry("generate_report", "Output"),
             // A file a row: a recording to text, a document to another format (media-service's transcriber and converter).

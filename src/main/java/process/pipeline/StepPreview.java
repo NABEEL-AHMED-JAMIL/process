@@ -66,7 +66,7 @@ public class StepPreview {
     /** The tasks a preview may run: rows in, rows out, nothing written, sent or asked of a model. */
     static final Set<String> PREVIEWABLE = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList("transform", "filter", "select", "sort",
         "limit", "compute", "aggregate", "append", "join", "enrich", "validate", "sample", "dedupe", "split_column", "pivot", "unpivot",
-        "fill_missing")));
+        "fill_missing", "route")));
 
     /** The roles that may preview a step that calls an API (enrich). */
     static final Set<String> ADMINS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("TENANT_ADMIN", "PLATFORM_ADMIN")));

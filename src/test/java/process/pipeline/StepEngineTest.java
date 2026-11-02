@@ -327,6 +327,38 @@ class StepEngineTest {
         assertThat(this.audit).anySatisfy(line -> assertThat(line).startsWith("Step 3/3 <both> (append) started on 4 record(s)."));
     }
 
+    /**
+     * MIG-450: a routed run end to end -- Route splits the rows (each branch kept as its own dataset), a branch's steps run
+     * on its rows alone, a branch with no step passes its rows through, and Merge stacks them with the branch each came from.
+     */
+    @Test
+    void aRouteSendsRowsDownItsBranchesAndAMergeBringsThemTogether() {
+        PipelineDefinition.Step triage = step("triage", "route", config("branches", Arrays.asList(
+            config("name", "urgent", "conditions", Collections.singletonList(config("column", "priority", "operator", "eq", "value", "urgent"))),
+            config("name", "empty_branch", "conditions", Collections.singletonList(config("column", "priority", "operator", "eq", "value", "never")))),
+            "otherwise", "routine"));
+        PipelineDefinition.Step opinion = step("opinion", "compute", config("formulas", Collections.singletonList(
+            config("target", "second_opinion", "expression", "'asked'"))));
+        opinion.setInput("triage.urgent");
+        PipelineDefinition.Step tag = step("tag", "compute", config("formulas", Collections.singletonList(
+            config("target", "seen", "expression", "true"))));
+        tag.setInput("triage.routine");
+        PipelineDefinition.Step together = step("together", "merge", config("route", "triage"));
+        this.runs(Definitions.of(sample("read", row("id", 1, "priority", "urgent"), row("id", 2, "priority", "routine"),
+            row("id", 3, "priority", "urgent"), row("id", 4, "priority", "")), triage, opinion, tag, together));
+
+        assertThat(this.worker.last()).isEqualTo("Completed: 5 of 5 step(s) completed.");
+        assertThat(this.steps.row(RUN_ID, 1, "triage").statusMessage).endsWith("urgent 2 · empty_branch 0 · routine 2");
+        assertThat(this.steps.row(RUN_ID, 1, "opinion").recordsIn).as("a branch's steps read its rows alone").isEqualTo(2L);
+        assertThat(this.steps.row(RUN_ID, 1, "tag").recordsIn).isEqualTo(2L);
+        assertThat(this.steps.row(RUN_ID, 1, "together").recordsIn).as("every branch's last output").isEqualTo(4L);
+        assertThat(this.steps.datasets).extracting(d -> d.name + ":" + d.rowCount)
+            .contains("branch urgent:2", "branch empty_branch:0", "branch routine:2");
+        List<Map<String, Object>> merged = this.datasets.stored.get("datasets/7401/1/together/output.json").getRows();
+        assertThat(merged).extracting(r -> r.get("id") + ":" + r.get("branch") + ":" + r.get("second_opinion") + ":" + r.get("seen"))
+            .containsExactly("1:urgent:asked:null", "3:urgent:asked:null", "2:routine:null:true", "4:routine:null:true");
+    }
+
     @Test
     void onErrorFailFailsTheRunAndSkipsTheRest() {
         this.runs(Definitions.of(sample("read", row("id", 1)), failing("check", "the amount is negative", null), step("count", "counts")));

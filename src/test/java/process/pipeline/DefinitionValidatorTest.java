@@ -3,6 +3,8 @@ package process.pipeline;
 import process.model.enums.ReviewParty;
 import process.pipeline.tasks.SampleStepTask;
 import org.junit.jupiter.api.Test;
+import process.pipeline.tasks.MergeStepTask;
+import process.pipeline.tasks.RouteStepTask;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -325,5 +327,26 @@ class DefinitionValidatorTest {
         assertThatThrownBy(() -> Definitions.builtInTasks(new SampleStepTask()))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("share the code sample");
         assertThat(Definitions.builtInTasks().all()).extracting(StepTask::code).containsExactly("legacy", "sample", "select");
+    }
+
+    /** MIG-450: a branch of an earlier Route is read as "<route>.<branch>"; a Merge names a Route. */
+    @Test
+    void aBranchIsReadByItsRouteAndNameAndAMergeNamesARoute() {
+        DefinitionValidator routes = new DefinitionValidator(Definitions.builtInTasks(new RouteStepTask(),
+            new MergeStepTask()));
+        PipelineDefinition.Step read = Definitions.sample("read", Definitions.row("p", "urgent"));
+        PipelineDefinition.Step triage = Definitions.step("triage", "route", Definitions.config("branches", Collections.singletonList(
+            Definitions.config("name", "urgent", "conditions", Collections.singletonList(
+                Definitions.config("column", "p", "operator", "eq", "value", "urgent"))))));
+        PipelineDefinition.Step shape = Definitions.step("shape", "select", Definitions.config("columns", Collections.singletonList("p")));
+        shape.setInput("triage.urgent");
+        PipelineDefinition.Step together = Definitions.step("together", "merge", Definitions.config("route", "triage"));
+        assertThat(routes.problems(Definitions.of(read, triage, shape, together))).isEmpty();
+
+        shape.setInput("triage.nope");
+        together.setConfig(Definitions.config("route", "read"));
+        assertThat(routes.problems(Definitions.of(read, triage, shape, together))).containsExactly(
+            new DefinitionProblem("steps[2].input", "'triage.nope' is not an earlier step"),
+            new DefinitionProblem("steps[3].config.route", "<read> is not a Route step"));
     }
 }
