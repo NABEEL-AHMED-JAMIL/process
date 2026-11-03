@@ -74,6 +74,8 @@ public final class RulerMeasure {
     static final double MIN_DELTA_E = 15;
     static final double NOISE_FACTOR = 3;
     static final double MIN_REGION_CM2 = 0.05;
+    /** Without a ruler there is no cm: the smallest region outlined is this share of the photo's pixels. */
+    static final double NO_SCALE_SMALLEST = 0.001;
 
     private static final double LONG_TICK = 0.75;
     private static final double MIN_ASPECT = 2.5;
@@ -218,8 +220,15 @@ public final class RulerMeasure {
             ruler = Ruler.find(pixels, WHITER[k]);
         }
         if (ruler == null) {
-            return new Measurement(false, null, null, null, null, "no ruler found: not measured",
-                new Geometry(photo.getWidth(), photo.getHeight(), luminance, null, null, null, null, null, null, null, null));
+            // No ruler, no size -- the step's answer is unchanged. Image review still draws the region's outline (and its size
+            // in pixels): the outline is kept so its shape can be compared, and "Adjust outline" starts from it.
+            Region region = Region.find(pixels, Ruler.NONE, NO_SCALE_SMALLEST * pixels.width * pixels.height, target);
+            Geometry geometry = region == null
+                ? new Geometry(photo.getWidth(), photo.getHeight(), luminance, null, null, null, null, null, null, null, null)
+                : new Geometry(photo.getWidth(), photo.getHeight(), luminance, null, null, scaledOutline(region.outline, shrink),
+                    scaledLine(region.lengthLine, shrink), scaledLine(region.widthLine, shrink), region.count * (long) shrink * shrink,
+                    round(region.length * shrink), round(region.width * shrink));
+            return new Measurement(false, null, null, null, null, "no ruler found: not measured", geometry);
         }
         double scale = ruler.pxPerCm;
         Double reported = round(scale * shrink);
@@ -445,6 +454,9 @@ public final class RulerMeasure {
         final int[] excluded;
         final int ticks;
         final double pxPerCm;
+
+        /** No ruler: nothing is left out of the region, and there is no scale (only Image review's outline reads it). */
+        static final Ruler NONE = new Ruler(new int[] {-1, -1, -2, -2}, new int[] {-1, -1, -2, -2}, 0, Double.NaN);
 
         private Ruler(int[] box, int[] excluded, int ticks, double pxPerCm) {
             this.box = box;

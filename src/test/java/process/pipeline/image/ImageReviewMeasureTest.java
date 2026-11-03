@@ -64,6 +64,8 @@ class ImageReviewMeasureTest {
         assertThat(m.note).isEqualTo("no ruler found: not measured");
         assertThat(m.geometry.rulerBox).isNull();
         assertThat(m.geometry.meanLuminance).isGreaterThan(80);
+        assertThat(m.geometry.outline).as("the outline is kept, in pixels only").isNotEmpty();
+        assertThat(m.geometry.areaPx).isPositive();
 
         RulerMeasure.Measurement dark = RulerMeasure.measure(photo("wound-photo-dark.jpg"), RulerMeasure.Target.RED_REGION);
         assertThat(dark.scaleFound).isFalse();
