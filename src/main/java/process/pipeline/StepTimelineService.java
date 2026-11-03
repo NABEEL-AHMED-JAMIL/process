@@ -750,17 +750,15 @@ public class StepTimelineService {
                     Optional<StepTask> task = this.stepTasks.find(step.getTask());
                     Map<String, Object> schema = task.map(found -> found.spec().configSchema()).orElse(null);
                     if (Routes.isMerge(step) && step.getConfig() != null && step.getConfig().get("route") instanceof String) {
-                        // MIG-450: a Merge takes in each branch's last step (or, for a branch with none, the Route itself).
+                        // MIG-450: a Merge takes in each branch's last step (or, for a branch with none, "<route>.<branch>").
                         String routeKey = (String) step.getConfig().get("route");
                         for (Routes.Head head : Routes.heads(steps, i, routeKey, allKeys(steps))) {
-                            from.add(head.reads.startsWith(routeKey + ".") ? routeKey : head.reads);
+                            from.add(head.reads);
                         }
                     } else {
                         if (step.getInput() != null) {
-                            // MIG-450: a branch ("<route>.<branch>") is its Route's rows.
-                            String input = step.getInput();
-                            int dot = input.indexOf('.');
-                            from.add(dot > 0 && Routes.route(steps, input.substring(0, dot)) != null ? input.substring(0, dot) : input);
+                            // MIG-450: a branch is named as "<route>.<branch>"; the map draws it from its Route, with its rows.
+                            from.add(step.getInput());
                         } else if (previous != null && task.map(StepTimelineService::readsItsInput).orElse(true)) {
                             from.add(previous);
                         }

@@ -222,7 +222,7 @@ class StepTimelineServiceTest {
             .containsExactly("a<[]", "b<[]", "both<[a, b]", "joined<[both, b]", "picked<[a]");
     }
 
-    /** MIG-450: a branch's first step takes in its Route; a Merge takes in each branch's last step, or the Route for an empty one. */
+    /** MIG-450: a branch's first step takes in its Route's branch; a Merge each branch's last step, or the branch itself when empty. */
     @Test
     @SuppressWarnings("unchecked")
     void aBranchTakesInItsRouteAndAMergeEachBranchsLastStep() {
@@ -246,7 +246,7 @@ class StepTimelineServiceTest {
         List<Map<String, Object>> list = (List<Map<String, Object>>) this.timeline(null).get("steps");
 
         assertThat(list).extracting(step -> step.get("key") + "<" + step.get("reads"))
-            .containsExactly("a<[]", "triage<[a]", "look<[triage]", "together<[look, triage]");
+            .containsExactly("a<[]", "triage<[a]", "look<[triage.urgent]", "together<[look, triage.otherwise]");
     }
 
     @Test
