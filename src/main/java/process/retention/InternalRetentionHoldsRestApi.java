@@ -24,6 +24,10 @@ import java.util.Map;
  * Converter's unkept conversions after 30 days by itself -- with no retention policy at all -- and asks here first whether a
  * legal hold keeps the workspace's data: POST /internal/retention/holds {tenantId} -> {workspace: true|false}. Those classes
  * know no run, so only a workspace hold reaches them. Service token only; the gateway never exposes /internal.
+ *
+ * <p>Reports redesign, feature 16 (2026-11-03): a report with review comments is not deleted while a hold keeps it -- media
+ * names the run that made it ({tenantId, runId}) and is also answered {run: true|false}: held by a run hold on that run, or
+ * a pipeline hold on its pipeline. A run that is not the workspace's is never said held by another workspace's hold.
  */
 @RestController
 @RequestMapping("/internal/retention")
@@ -41,6 +45,15 @@ public class InternalRetentionHoldsRestApi {
     /** Whose holds are asked about. */
     public static class HoldsRequest {
         private Long tenantId;
+        private Long runId;
+
+        public Long getRunId() {
+            return this.runId;
+        }
+
+        public void setRunId(Long runId) {
+            this.runId = runId;
+        }
 
         public Long getTenantId() {
             return this.tenantId;
@@ -66,6 +79,15 @@ public class InternalRetentionHoldsRestApi {
         Holds holds = RowSecurity.forTenant(tenantId, () -> this.store.activeHolds(tenantId));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("workspace", holds.workspace);
+        Long runId = request.getRunId();
+        if (runId != null) {
+            boolean run = runId > 0 && holds.runIds.contains(runId);
+            if (!run && runId > 0 && !holds.jobIds.isEmpty()) {
+                Long pipeline = RowSecurity.forTenant(tenantId, () -> this.store.runPipeline(tenantId, runId));
+                run = pipeline != null && holds.jobIds.contains(pipeline);
+            }
+            out.put("run", run);
+        }
         return ResponseEntity.ok(new ResponseDto("SUCCESS", "Holds.", out));
     }
 

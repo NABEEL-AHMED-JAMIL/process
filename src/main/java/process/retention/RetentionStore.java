@@ -446,6 +446,12 @@ public class RetentionStore {
         return n != null && n > 0;
     }
 
+    /** The pipeline a run of the workspace belongs to, or null when the run is not the workspace's (or has none). */
+    public Long runPipeline(long tenantId, long runId) {
+        List<Long> found = this.jdbc.queryForList("SELECT job_id FROM job_queue WHERE tenant_id = ? AND job_queue_id = ?", Long.class, tenantId, runId);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
     /** The run is the workspace's. */
     public boolean runExists(long tenantId, long runId) {
         Integer n = this.jdbc.queryForObject("SELECT count(*) FROM job_queue WHERE tenant_id = ? AND job_queue_id = ?", Integer.class, tenantId, runId);

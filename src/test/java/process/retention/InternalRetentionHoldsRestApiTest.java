@@ -43,6 +43,23 @@ class InternalRetentionHoldsRestApiTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void aRunIsHeldByItsRunHoldOrItsPipelinesHold() {
+        when(this.store.activeHolds(2962L)).thenReturn(new Holds(false, Collections.singleton(5L), Collections.singleton(71L)));
+        when(this.store.runPipeline(2962L, 72L)).thenReturn(5L);
+        when(this.store.runPipeline(2962L, 73L)).thenReturn(6L);
+        when(this.store.runPipeline(2962L, 74L)).thenReturn(null);
+        for (long[] c : new long[][] {{71L, 1}, {72L, 1}, {73L, 0}, {74L, 0}}) {
+            InternalRetentionHoldsRestApi.HoldsRequest request = of(2962L);
+            request.setRunId(c[0]);
+            Map<String, Object> answer = (Map<String, Object>) ((ResponseDto) this.api.holds("secret-token", request).getBody()).getData();
+            assertThat(answer).as("run " + c[0]).containsEntry("workspace", false).containsEntry("run", c[1] == 1);
+        }
+        // Without a run named, the answer is the workspace's alone (as the tools' 30-day removal asks).
+        assertThat(((Map<String, Object>) ((ResponseDto) this.api.holds("secret-token", of(2962L)).getBody()).getData())).doesNotContainKey("run");
+    }
+
+    @Test
     void withoutTheTokenOrAWorkspaceNothingIsRead() {
         assertThat(this.api.holds(null, of(2960L)).getStatusCode().value()).isEqualTo(401);
         assertThat(this.api.holds("wrong", of(2960L)).getStatusCode().value()).isEqualTo(401);
