@@ -644,7 +644,7 @@ public final class RulerMeasure {
                 return null;
             }
             Labels regions = new Labels(mask, pixels.width, pixels.height);
-            int id = largest(regions, smallest);
+            int id = largest(regions, smallest, pixels.width, pixels.height);
             if (id == 0) {
                 return null;
             }
@@ -654,12 +654,26 @@ public final class RulerMeasure {
         }
 
         /** The largest region's label, or 0 when there is none or it is under the smallest size. */
-        private static int largest(Labels regions, double smallest) {
-            if (regions.counts.isEmpty()) {
-                return 0;
+        private static int largest(Labels regions, double smallest, int width, int height) {
+            for (int id : regions.bySize()) {
+                if (regions.counts.get(id - 1) < Math.max(30, smallest)) {
+                    return 0;
+                }
+                // A strip along an edge, nearly the photo's full width or height and thin -- a printed banner or a label band,
+                // a frame -- is the photo's own, not the object: the next region is taken (Image review, 2026-11-03).
+                if (!banner(regions.boxes.get(id - 1), width, height)) {
+                    return id;
+                }
             }
-            int id = regions.bySize().get(0);
-            return regions.counts.get(id - 1) < Math.max(30, smallest) ? 0 : id;
+            return 0;
+        }
+
+        static boolean banner(int[] box, int width, int height) {
+            int across = box[2] - box[0] + 1;
+            int down = box[3] - box[1] + 1;
+            boolean wide = across >= 0.9 * width && down <= 0.15 * height && (box[1] == 0 || box[3] == height - 1);
+            boolean tall = down >= 0.9 * height && across <= 0.15 * width && (box[0] == 0 || box[2] == width - 1);
+            return wide || tall;
         }
 
         /** red_region: markedly redder than the border, by (green + blue) / 2 over red. */
@@ -721,7 +735,7 @@ public final class RulerMeasure {
             double noise = Math.max(MIN_DELTA_E, NOISE_FACTOR * median(around));
             boolean[] mask = over(difference, noise, pixels, ruler);
             Labels first = new Labels(mask, pixels.width, pixels.height);
-            int id = largest(first, smallest);
+            int id = largest(first, smallest, pixels.width, pixels.height);
             if (id == 0) {
                 return mask;
             }
