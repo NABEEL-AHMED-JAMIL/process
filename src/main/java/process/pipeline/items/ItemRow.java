@@ -138,6 +138,8 @@ public final class ItemRow {
         public String idc;
         /** A fan-out step: the column that names its sub-items. */
         public String subc;
+        /** A Route step: the branch the item's rows went to (MIG-450). */
+        public String branch;
 
         public StepEntry() {
         }
@@ -162,6 +164,7 @@ public final class ItemRow {
             c.se = this.se;
             c.idc = this.idc;
             c.subc = this.subc;
+            c.branch = this.branch;
             return c;
         }
     }

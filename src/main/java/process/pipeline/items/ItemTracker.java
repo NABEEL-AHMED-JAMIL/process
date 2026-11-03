@@ -5,6 +5,7 @@ import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import process.pipeline.PipelineDefinition;
+import process.pipeline.Routes;
 import process.pipeline.StepTask;
 import process.pipeline.StepTasks;
 import process.pipeline.data.RowSource;
@@ -99,9 +100,16 @@ public final class ItemTracker {
         public final String subKey;
         public final String bucket;
         public final boolean readsFiles;
+        /** A Route step: the column naming each row's branch (MIG-450); null for any other step. */
+        public final String branchColumn;
 
         StepInfo(int index, String key, String name, String task, ItemRole role, String identity, String subKey, String bucket,
             boolean readsFiles) {
+            this(index, key, name, task, role, identity, subKey, bucket, readsFiles, null);
+        }
+
+        StepInfo(int index, String key, String name, String task, ItemRole role, String identity, String subKey, String bucket,
+            boolean readsFiles, String branchColumn) {
             this.index = index;
             this.key = key;
             this.name = name;
@@ -111,6 +119,7 @@ public final class ItemTracker {
             this.subKey = subKey;
             this.bucket = bucket;
             this.readsFiles = readsFiles;
+            this.branchColumn = branchColumn;
         }
     }
 
@@ -151,7 +160,7 @@ public final class ItemTracker {
                 && ((Map<?, ?>) spec.configSchema().get("properties")).containsKey("keyColumn");
             steps.add(new StepInfo(i, step.getKey(), step.getName() == null || step.getName().trim().isEmpty() ? step.getKey() : step.getName(),
                 step.getTask(), role, spec == null ? null : spec.itemIdentity(), spec == null ? null : spec.itemSubKey(),
-                bucket == null ? null : String.valueOf(bucket), readsFiles));
+                bucket == null ? null : String.valueOf(bucket), readsFiles, Routes.isRoute(step) ? Routes.column(step) : null));
         }
         return items ? steps : Collections.<StepInfo>emptyList();
     }
@@ -882,6 +891,7 @@ public final class ItemTracker {
                 entry.ds = out == null ? this.datasetOfInput(row, o) : ds;
                 entry.rows = new ArrayList<>(mine.subList(0, Math.min(MAX_POSITIONS, mine.size())));
                 entry.n = mine.size();
+                entry.branch = branchOf(step, out, mine);
             }
             if (row.parentKey == null && this.hasChildEntry(row, o.index)) {
                 this.parentEntry(row, entry, o.index);
@@ -1582,6 +1592,9 @@ public final class ItemTracker {
             if (step.identity != null) {
                 wanted.add(step.identity);
             }
+            if (step.branchColumn != null) {
+                wanted.add(step.branchColumn);
+            }
         }
         wanted.addAll(CANDIDATES);
         int p = 0;
@@ -1604,6 +1617,21 @@ public final class ItemTracker {
             throw new IllegalStateException("the dataset could not be read back: " + unread.getMessage(), unread);
         }
         return out;
+    }
+
+    /** A Route step: the branch the item's rows went to ("urgent"; "urgent, routine" when they split); null for any other step. */
+    static String branchOf(StepInfo step, List<Rows> out, List<Integer> positions) {
+        if (step.branchColumn == null || out == null) {
+            return null;
+        }
+        Set<String> branches = new LinkedHashSet<>();
+        for (Integer p : positions) {
+            String branch = p != null && p < out.size() ? text(out.get(p).row.get(step.branchColumn)) : null;
+            if (branch != null) {
+                branches.add(branch);
+            }
+        }
+        return branches.isEmpty() ? null : String.join(", ", branches);
     }
 
     /** What the console calls an item: a file's name, a document's file name, else its key. */

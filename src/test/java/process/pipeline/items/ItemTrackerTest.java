@@ -162,6 +162,42 @@ class ItemTrackerTest {
         assertThat(b.step(2)).isNull();
     }
 
+    /**
+     * MIG-450: a Route step's entry says which branch the item went to, and a Merge keeps each row with its item (not a
+     * shared output): the Items tab shows "urgent" or "routine" under the Route, and each item's own rows under the Merge.
+     */
+    @Test
+    void aRouteSaysEachItemsBranchAndAMergeKeepsEachRowWithItsItem() throws Exception {
+        String listed = this.write("list", Arrays.asList(row("key", "in/a.json"), row("key", "in/b.json")));
+        String asked = this.write("ask", Arrays.asList(row("key", "in/a.json", "acuity", 9), row("key", "in/b.json", "acuity", 2)));
+        String routed = this.write("routed", Arrays.asList(row("key", "in/a.json", "acuity", 9, "branch", "urgent"),
+            row("key", "in/b.json", "acuity", 2, "branch", "routine")));
+        String urgent = this.write("branch-urgent", Collections.singletonList(row("key", "in/a.json", "acuity", 9, "branch", "urgent")));
+        String merged = this.write("merged", Arrays.asList(row("key", "in/a.json", "acuity", 9, "branch", "urgent"),
+            row("key", "in/b.json", "acuity", 2, "branch", "routine")));
+        List<ItemTracker.StepInfo> steps = Arrays.asList(step(0, "read", ItemRole.SOURCE, "key"), step(1, "ask", ItemRole.EACH, null),
+            new ItemTracker.StepInfo(2, "triage", "triage", "route", ItemRole.PASS, null, null, null, false, "branch"),
+            step(3, "together", ItemRole.PASS, null));
+        ItemTracker tracker = ItemTracker.open(RUN, 1, this.store, this.engine, steps, -1, 0, null);
+        tracker.beforeStep(0, null, Collections.emptyList());
+        tracker.afterStep(this.done(0, null, listed, 1));
+        tracker.afterStep(this.done(1, listed, asked, 2));
+        tracker.afterStep(this.done(2, asked, routed, 3));
+        tracker.afterStep(this.done(3, urgent, merged, 5));
+        tracker.finish(true, false, false, null);
+
+        ItemRow a = this.store.currentOf(RUN, "in/a.json");
+        ItemRow b = this.store.currentOf(RUN, "in/b.json");
+        assertThat(a.step(2).branch).isEqualTo("urgent");
+        assertThat(b.step(2).branch).isEqualTo("routine");
+        assertThat(a.step(1).branch).as("only a Route says a branch").isNull();
+        assertThat(a.step(3).status).as("a Merge's rows stay their items'").isEqualTo("done");
+        assertThat(a.step(3).sharedBy).isNull();
+        assertThat(b.step(3).status).isEqualTo("done");
+        assertThat(b.step(3).rows).containsExactly(1);
+        assertThat(b.status).isEqualTo("done");
+    }
+
     @Test
     void anItemsCallKeyIsTheSameWhateverItsPosition() throws Exception {
         String listed = this.write("list", Arrays.asList(row("key", "in/a.m4a"), row("key", "in/b.m4a")));

@@ -37,7 +37,7 @@ public class MergeStepTask extends RegisteredTask implements StreamingStepTask {
                 .description("The column saying which branch each row came from; the route's own branch column when empty.")))
         .backing(TaskSpec.CORE)
         .aiToolName("merge_branches")
-        .items(ItemRole.SHARED)
+        .items(ItemRole.PASS)
         .build();
 
     public MergeStepTask() {

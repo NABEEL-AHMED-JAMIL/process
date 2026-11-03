@@ -788,6 +788,7 @@ public class RunItems {
             cell.put("sharedBy", entry.sharedBy);
             cell.put("reused", entry.reusedFrom != null);
             cell.put("hasData", entry.ds != null);
+            cell.put("branch", entry.branch);
             ItemRow.FileRow one = entry.files != null && entry.files == 1 ? firstFiles.get(row.itemKey + "\u0000" + entry.key) : null;
             if (one != null) {
                 // ZT-I35: a step's one file, by name and type, for the cell's chip.
@@ -974,6 +975,7 @@ public class RunItems {
             s.put("files", entry.files);
             s.put("sharedBy", entry.sharedBy);
             s.put("hasData", entry.ds != null);
+            s.put("branch", entry.branch);
             s.put("reusedFromAttempt", entry.reusedFrom);
             stepViews.add(s);
         }
