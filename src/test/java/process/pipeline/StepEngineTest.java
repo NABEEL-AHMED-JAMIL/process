@@ -359,6 +359,28 @@ class StepEngineTest {
             .containsExactly("1:urgent:asked:null", "3:urgent:asked:null", "2:routine:null:true", "4:routine:null:true");
     }
 
+    /**
+     * MIG-451: Build JSON feeding Call API -- one document per patient, grouped from its findings, through the run's datasets
+     * (kept as the object it is) and sent as the request's body as it is.
+     */
+    @Test
+    void buildJsonFeedsCallApisBodyThroughTheRunsDatasets() throws Exception {
+        PipelineDefinition.Step shape = step("shape", "build_json", config("mode", "group", "groupBy", Collections.singletonList("patient_id"),
+            "fields", Arrays.asList(config("key", "patient.id", "column", "patient_id"),
+                config("key", "findings", "from", "rows", "fields", Collections.singletonList(config("key", "code", "column", "code"))),
+                config("key", "source", "from", "value", "value", "etl-console"))));
+        PipelineDefinition.Step send = step("send", "call_api", config("requestId", 4, "bodyColumn", "json"));
+        this.runs(Definitions.of(sample("read", row("patient_id", "P-1", "code", "L89.1"), row("patient_id", "P-1", "code", "E11.9"),
+            row("patient_id", "P-2", "code", "I10")), shape, send));
+
+        assertThat(this.worker.last()).isEqualTo("Completed: 3 of 3 step(s) completed.");
+        assertThat(this.steps.row(RUN_ID, 1, "shape").statusMessage).endsWith("2 documents");
+        assertThat(this.all.api.calls).hasSize(2);
+        assertThat(this.all.api.calls.get(0).variables.get("body"))
+            .isEqualTo("{\"patient\":{\"id\":\"P-1\"},\"findings\":[{\"code\":\"L89.1\"},{\"code\":\"E11.9\"}],\"source\":\"etl-console\"}");
+        assertThat(this.all.api.calls.get(0).jsonVariables).containsExactly("body");
+    }
+
     @Test
     void onErrorFailFailsTheRunAndSkipsTheRest() {
         this.runs(Definitions.of(sample("read", row("id", 1)), failing("check", "the amount is negative", null), step("count", "counts")));

@@ -206,6 +206,34 @@ class CallApiStepTaskTest {
         assertThat(this.api.calls.get(0).jsonVariables).containsExactly("payload");
     }
 
+    /** MIG-451: a Build JSON column is sent as the body as it is -- {{body}} with no Variables entry, {{row}} too, a list in a batch. */
+    @Test
+    void aJsonColumnIsSentAsTheBodyAsItIs() throws Exception {
+        Map<String, Object> document = config("patient", config("id", "P-1"), "findings", Arrays.asList(config("code", "L89.1")),
+            "source", "etl-console");
+        TaskContext context = TaskContext.of(config("requestId", 12, "bodyColumn", "json"),
+            Arrays.asList(row("patient_id", "P-1", "json", document), row("patient_id", "P-2", "json", "{\"patient\":{\"id\":\"P-2\"}}")));
+        this.task.run(context);
+        assertThat(this.api.calls).hasSize(2);
+        assertThat(Values.JSON.readTree(this.api.calls.get(0).variables.get("body"))).isEqualTo(Values.JSON.valueToTree(document));
+        assertThat(this.api.calls.get(0).jsonVariables).containsExactly("body");
+        assertThat(Values.JSON.readTree(this.api.calls.get(1).variables.get("body")).path("patient").path("id").asText())
+            .as("JSON text is sent as the JSON it holds").isEqualTo("P-2");
+        assertThat(CallApiStepTask.sentByItself(context.config)).contains("body");
+
+        this.api.calls.clear();
+        this.task.run(TaskContext.of(config("requestId", 12, "mode", "batch", "bodyColumn", "json", "variables", config("payload", "{{rows_json}}")),
+            Arrays.asList(row("json", document), row("json", document))));
+        assertThat(Values.JSON.readTree(this.api.calls.get(0).variables.get("payload"))).hasSize(2);
+        assertThat(this.api.calls.get(0).variables.get("body")).isEqualTo(this.api.calls.get(0).variables.get("payload"));
+
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 12, "bodyColumn", "json"),
+            Collections.singletonList(row("json", "plain words")))))
+            .hasMessage("Row 1's json is text, not a JSON document to send as the body.");
+        assertThatThrownBy(() -> this.task.run(TaskContext.of(config("requestId", 12, "bodyColumn", "doc"),
+            Collections.singletonList(row("json", document))))).hasMessageContaining("names doc, which the rows have not");
+    }
+
     @Test
     void aColumnNamedRowStillFillsRowAsBefore() throws Exception {
         TaskContext context = TaskContext.of(config("requestId", 12, "variables", config("n", "{{row}}")),

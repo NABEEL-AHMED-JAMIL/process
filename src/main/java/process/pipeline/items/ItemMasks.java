@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import org.barco.platform.sensitive.SensitiveValues;
 import org.barco.platform.sensitive.SensitiveValues.Kind;
 import process.pipeline.data.RowSource;
+import process.pipeline.data.Values;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -128,7 +129,7 @@ public final class ItemMasks {
                 for (Map<String, Object> row : rows) {
                     Object v = row.get(column);
                     if (v != null && !(v instanceof Boolean) && !(v instanceof Number && column.toLowerCase(Locale.ROOT).endsWith("_count"))) {
-                        sample.add(String.valueOf(v));
+                        sample.add(Values.text(v));
                     }
                 }
                 sensitiveColumnKind(column, sample).ifPresent(kind -> {
@@ -154,10 +155,20 @@ public final class ItemMasks {
             return value;
         }
         Kind kind = column == null ? null : byName.get(column.toLowerCase(Locale.ROOT));
-        String text = String.valueOf(value);
+        String text = Values.text(value);
         if (kind != null) {
             masked.add(column);
             return SensitiveValues.mask(text, kind);
+        }
+        if (value instanceof Map || value instanceof Collection) {
+            // MIG-451: a Build JSON document, masked inside by its keys and patterns, and kept the object it is.
+            boolean[] changed = {false};
+            JsonNode shown = this.node(byName, JSON.valueToTree(value), changed);
+            if (changed[0]) {
+                masked.add(column);
+                return JSON.convertValue(shown, Object.class);
+            }
+            return value;
         }
         if (value instanceof Number && !this.failClosed) {
             return value;

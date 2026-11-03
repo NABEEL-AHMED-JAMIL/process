@@ -66,7 +66,7 @@ public class StepPreview {
     /** The tasks a preview may run: rows in, rows out, nothing written, sent or asked of a model. */
     static final Set<String> PREVIEWABLE = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList("transform", "filter", "select", "sort",
         "limit", "compute", "aggregate", "append", "join", "enrich", "validate", "sample", "dedupe", "split_column", "pivot", "unpivot",
-        "fill_missing", "route")));
+        "fill_missing", "route", "build_json")));
 
     /** The roles that may preview a step that calls an API (enrich). */
     static final Set<String> ADMINS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("TENANT_ADMIN", "PLATFORM_ADMIN")));
@@ -145,6 +145,11 @@ public class StepPreview {
             Object asked = config.get("maxCalls");
             int calls = asked instanceof Number ? ((Number) asked).intValue() : MAX_CALLS;
             config.put("maxCalls", Math.max(1, Math.min(calls, MAX_CALLS)));
+        }
+        boolean asColumn = "build_json".equals(code) && "file".equals(config.get("output"));
+        if (asColumn) {
+            // MIG-451: a preview keeps no file -- Build JSON's documents show as the column they go on in.
+            config.put("output", "column");
         }
         Set<String> earlier = new HashSet<>(inputs.keySet());
         List<DefinitionProblem> problems = ConfigSchemaValidator.problems(task.spec().configSchema(), config, earlier);
@@ -226,6 +231,9 @@ public class StepPreview {
         data.put("masked", new ArrayList<>(masked));
         data.put("log", context.lines);
         data.put("warnings", context.warnings);
+        if (asColumn) {
+            data.put("note", "A preview keeps no file: the documents are shown in the column the rows go on with.");
+        }
         if (result.getOutput() == null) {
             data.put("note", "The step acted and made no new rows; its input is shown.");
         }
@@ -298,13 +306,33 @@ public class StepPreview {
 
     /** A row with a person's details masked to their form (letters x/X, digits 9); the columns masked are added to `masked`. */
     static Map<String, Object> mask(Map<String, Object> row, Set<String> masked) {
+        return mask(row, masked, "");
+    }
+
+    /** MIG-451: a Build JSON document is masked inside, key by key; the keys masked are named by their path (json.patient.name). */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mask(Map<String, Object> row, Set<String> masked, String at) {
         Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<String, Object> cell : row.entrySet()) {
             Object v = cell.getValue();
-            boolean personal = PERSONAL.matcher(cell.getKey()).matches() && v != null && !(v instanceof Boolean);
+            if (v instanceof Map) {
+                out.put(cell.getKey(), mask((Map<String, Object>) v, masked, at + cell.getKey() + "."));
+                continue;
+            }
+            if (v instanceof List) {
+                List<Object> list = new ArrayList<>();
+                for (Object each : (List<Object>) v) {
+                    list.add(each instanceof Map ? mask((Map<String, Object>) each, masked, at + cell.getKey() + "[].")
+                        : mask(Collections.singletonMap(cell.getKey(), each), masked, at).get(cell.getKey()));
+                }
+                out.put(cell.getKey(), list);
+                continue;
+            }
+            boolean personal = (PERSONAL.matcher(cell.getKey()).matches() || PERSONAL.matcher((at + cell.getKey()).replace('.', '_')).matches())
+                && v != null && !(v instanceof Boolean);
             boolean looks = v instanceof String && (EMAIL.matcher((String) v).matches() || NUMBER_LIKE.matcher((String) v).matches());
             if (personal || looks) {
-                masked.add(cell.getKey());
+                masked.add(at + cell.getKey());
                 out.put(cell.getKey(), form(String.valueOf(v)));
             } else {
                 out.put(cell.getKey(), v);

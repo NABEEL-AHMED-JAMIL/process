@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -17,7 +18,8 @@ import java.util.Map;
 /**
  * What a row's values are and how they compare (MIG-231). A row holds plain values: text, a number, true/false or
  * null. Anything nested that comes in (an API's JSON, a JSON file) is kept as its JSON text in one column, never as a
- * structure a later step would have to guess at.
+ * structure a later step would have to guess at. The one exception is a document Build JSON made (MIG-451): it is kept as
+ * the object it is, so a JSON file, the customer API, a webhook or Call API sends it as JSON; {@link #text} is its JSON.
  */
 public final class Values {
 
@@ -182,6 +184,14 @@ public final class Values {
     public static String text(Object value) {
         if (value == null) {
             return null;
+        }
+        if (value instanceof Map || value instanceof Collection || value instanceof JsonNode) {
+            // MIG-451: a nested value (Build JSON's document) is its JSON, never Java's {a=1}.
+            try {
+                return JSON.writeValueAsString(value);
+            } catch (JsonProcessingException unwritable) {
+                return value.toString();
+            }
         }
         if (value instanceof Double || value instanceof Float || value instanceof BigDecimal) {
             BigDecimal number = new BigDecimal(value.toString());

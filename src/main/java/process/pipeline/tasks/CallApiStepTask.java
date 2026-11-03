@@ -91,6 +91,8 @@ public class CallApiStepTask extends RegisteredTask {
     static final List<String> REPORT_VALUES = Arrays.asList("report_label", "report_version", "report_signed", "report_pdf", "report_html",
         "report_md");
     private static final Pattern JSON_PLACEHOLDER = Pattern.compile("\\{\\{\\s*(row|rows_json)\\s*}}");
+    /** MIG-451: {{body}}, a Build JSON column's document, sent as JSON when the step sends one. */
+    private static final Pattern BODY_PLACEHOLDER = Pattern.compile("\\{\\{\\s*body\\s*}}");
     static final int LOGGED_BODY_CHARS = 300;
     private static final List<String> UNARY = Arrays.asList("is_null", "not_null", "is_empty", "not_empty");
 
@@ -112,6 +114,10 @@ public class CallApiStepTask extends RegisteredTask {
                     .description("The name in the JSON; a dot nests: patient.id.")))
                 .maxItems(200).title("Columns sent")
                 .description("What {{row}} and {{rows_json}} hold for each row: these columns, renamed with As. None: every column."))
+            .property("bodyColumn", JsonSchema.string().maxLength(128).format("column").title("Send a JSON column as the body")
+                .description("A column holding a JSON document (Build JSON's): {{row}} and {{body}} are that document as it is, and "
+                    + "{{rows_json}} a list of them in a batch -- the request's body {{body}} needs no Variables entry. Empty: the "
+                    + "rows' columns (Columns sent)."))
             .property("resultsPath", JsonSchema.string().maxLength(255).title("Results at")
                 .description("batch: a dot path to the answer's list of per-row results (results, data.items); each row's Fields "
                     + "are read from its item, by position. Empty: from the whole answer, for every row of the call."))
@@ -270,6 +276,11 @@ public class CallApiStepTask extends RegisteredTask {
             sources = input.getRows();
             inputColumns = input.getColumns();
         }
+        String bodyColumn = Configs.text(config, "bodyColumn", "");
+        if (!bodyColumn.isEmpty() && (once || !sources.isEmpty()) && !inputColumns.isEmpty() && !inputColumns.contains(bodyColumn)) {
+            throw new IllegalStateException(String.format("Send a JSON column as the body names %s, which the rows have not (they have %s).",
+                bodyColumn, String.join(", ", inputColumns)));
+        }
         // ZT-S5: no rows to send is no call -- nothing to check the columns against (an empty read has only the other side's).
         for (Map<String, Object> column : once || !sources.isEmpty() ? sent : Collections.<Map<String, Object>>emptyList()) {
             String name = Configs.text(column, "column", "");
@@ -416,6 +427,7 @@ public class CallApiStepTask extends RegisteredTask {
         boolean backOff, String[] tags, ReportSource report) throws Exception {
         List<Map<String, Object>> part = batch ? sources.subList(i * batchSize, Math.min(sources.size(), (i + 1) * batchSize))
             : Collections.singletonList(sources.get(i));
+        String bodyColumn = Configs.text(config, "bodyColumn", "");
         Map<String, Object> values = new HashMap<>(runValues);
         // MIG-426: the report's chosen formats -- the step's one report, or with Send: each this row's own.
         Map<String, Object> reportValues = report == null ? Collections.<String, Object>emptyMap()
@@ -423,8 +435,13 @@ public class CallApiStepTask extends RegisteredTask {
         values.putAll(reportValues);
         if (batch) {
             List<Object> array = new ArrayList<>(part.size());
-            part.forEach(source -> array.add(rowObject(source, sent)));
+            for (int r = 0; r < part.size(); r++) {
+                array.add(sentObject(part.get(r), sent, bodyColumn, i * batchSize + r + 1));
+            }
             values.put("rows_json", Values.JSON.writeValueAsString(array));
+            if (!bodyColumn.isEmpty()) {
+                values.put("body", values.get("rows_json"));
+            }
             values.put("batch", i + 1);
             values.put("batches", total);
             values.put("batch_rows", part.size());
@@ -433,7 +450,14 @@ public class CallApiStepTask extends RegisteredTask {
             Map<String, Object> source = part.get(0);
             values.putAll(source);
             // {{row}}: the row as one object -- unless the rows have a column of that name, which fills it as before.
-            values.putIfAbsent("row", Values.JSON.writeValueAsString(rowObject(source, sent)));
+            if (bodyColumn.isEmpty()) {
+                values.putIfAbsent("row", Values.JSON.writeValueAsString(rowObject(source, sent)));
+            } else {
+                // MIG-451: the row's document as it is -- {{row}} and {{body}} both.
+                String document = Values.JSON.writeValueAsString(sentObject(source, sent, bodyColumn, i + 1));
+                values.put("row", document);
+                values.put("body", document);
+            }
             values.put("call_key", callKeyOf(context, tags[i], i));
         }
         Map<String, String> variables = new LinkedHashMap<>();
@@ -443,9 +467,17 @@ public class CallApiStepTask extends RegisteredTask {
             String filled = Templates.fill(template.getValue(), values);
             variables.put(template.getKey(), filled);
             size += filled == null ? 0 : filled.length();
-            if (sendsJson(template.getValue(), values) && isJson(filled)) {
+            boolean sendsBody = !bodyColumn.isEmpty() && BODY_PLACEHOLDER.matcher(template.getValue() == null ? "" : template.getValue()).find();
+            if ((sendsJson(template.getValue(), values) || sendsBody) && isJson(filled)) {
                 json.add(template.getKey());
             }
+        }
+        // MIG-451: a request whose body is {{body}} gets the document without the step repeating it as a variable.
+        if (!bodyColumn.isEmpty() && !variables.containsKey("body")) {
+            String body = String.valueOf(values.get("body"));
+            variables.put("body", body);
+            json.add("body");
+            size += body.length();
         }
         // A request whose own body names {{file_bucket}}... gets the file without the step repeating it as a variable.
         for (String name : FILE_VALUES) {
@@ -490,6 +522,9 @@ public class CallApiStepTask extends RegisteredTask {
         if (config.get("file") instanceof Map) {
             sent.addAll(FILE_VALUES);
         }
+        if (!Configs.text(config, "bodyColumn", "").isEmpty()) {
+            sent.add("body");
+        }
         if (config.get("report") instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> report = (Map<String, Object>) config.get("report");
@@ -531,6 +566,26 @@ public class CallApiStepTask extends RegisteredTask {
      * MIG-419: a row as one JSON object -- the chosen columns (every one when none is chosen), named by As, a dot in As
      * nesting (patient.id); numbers, true/false and empty stay what they are, anything else is its text.
      */
+    /**
+     * MIG-451: what a row sends -- with Send a JSON column as the body, that column's document as it is (an object or a list
+     * Build JSON made, or JSON text); else the row as one object (Columns sent).
+     */
+    static Object sentObject(Map<String, Object> row, List<Map<String, Object>> chosen, String bodyColumn, int rowNumber) {
+        if (bodyColumn == null || bodyColumn.isEmpty()) {
+            return rowObject(row, chosen);
+        }
+        Object value = row.get(bodyColumn);
+        if (value instanceof Map || value instanceof List) {
+            return value;
+        }
+        Object structured = Values.structured(value);
+        if (structured instanceof JsonNode) {
+            return structured;
+        }
+        throw new IllegalStateException(String.format("Row %d's %s is %s, not a JSON document to send as the body.", rowNumber, bodyColumn,
+            value == null ? "empty" : "text"));
+    }
+
     @SuppressWarnings("unchecked")
     static Map<String, Object> rowObject(Map<String, Object> row, List<Map<String, Object>> chosen) {
         Map<String, Object> out = new LinkedHashMap<>();

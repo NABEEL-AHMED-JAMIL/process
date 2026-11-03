@@ -6,6 +6,7 @@ import process.pipeline.backing.ReportStudio;
 
 import process.pipeline.backing.Fakes;
 import process.pipeline.tasks.AggregateStepTask;
+import process.pipeline.tasks.BuildJsonStepTask;
 import process.pipeline.tasks.MergeStepTask;
 import process.pipeline.tasks.RouteStepTask;
 import process.pipeline.tasks.AiPromptStepTask;
@@ -87,7 +88,7 @@ public final class AllTasks {
             new MeasureMaskStepTask(this.buckets), new ReadRunsStepTask(this.runs), new GenerateReportStepTask(this.studio),
             new TranscribeAudioStepTask(this.media, this.buckets), new ConvertFileStepTask(this.media, this.buckets),
             new SplitPagesStepTask(this.buckets), new OcrPagesStepTask(this.media), new RunPipelineStepTask(this.calls),
-            new RouteStepTask(), new MergeStepTask()));
+            new RouteStepTask(), new MergeStepTask(), new BuildJsonStepTask()));
     }
 
     public StepTasks tasks() {

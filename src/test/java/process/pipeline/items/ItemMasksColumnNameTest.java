@@ -38,6 +38,26 @@ class ItemMasksColumnNameTest {
         assertThat(ItemMasks.columnName(" patient.name ")).isEqualTo("patient_name");
     }
 
+    /** MIG-451: a Build JSON document stays an object, masked inside (here fail closed: every pattern kind). */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDocumentIsMaskedInsideAndStaysAnObject() {
+        Map<String, Object> contact = new LinkedHashMap<>();
+        contact.put("email", "ada@example.org");
+        contact.put("risk", "High");
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("contact", contact);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("json", document);
+        Set<String> masked = new HashSet<>();
+        Map<String, Object> shown = ItemMasks.of(null, false, false).rows(Collections.singletonList(row), row.keySet(), masked).get(0);
+        assertThat(shown.get("json")).isInstanceOf(Map.class);
+        Map<String, Object> out = (Map<String, Object>) ((Map<String, Object>) shown.get("json")).get("contact");
+        assertThat(out.get("email")).isNotEqualTo("ada@example.org");
+        assertThat(out.get("risk")).isEqualTo("High");
+        assertThat(masked).containsExactly("json");
+    }
+
     @Test
     void aSensitivePipelinesFlattenedColumnsAreMaskedFromOneRow() throws Exception {
         ItemMasks masks = ItemMasks.forWorkspace(JSON.readTree("[]"), true);

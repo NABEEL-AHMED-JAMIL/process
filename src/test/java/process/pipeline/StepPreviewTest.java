@@ -322,6 +322,24 @@ class StepPreviewTest {
         assertThat(masked).contains("email", "contact").doesNotContain("score", "phone_note");
     }
 
+    /** MIG-451: a Build JSON document is masked inside, key by key, by its keys' paths; the rest of it shows. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDocumentIsMaskedInsideByItsKeys() {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("patient", new LinkedHashMap<>(row("id", "P-101", "name", "Ada Test")));
+        document.put("findings", Arrays.asList(new LinkedHashMap<>(row("code", "L89.1", "text", "Stage 1"))));
+        document.put("contacts", Arrays.asList("ada@example.org"));
+        Set<String> masked = new LinkedHashSet<>();
+        Map<String, Object> out = (Map<String, Object>) StepPreview.mask(row("json", document, "count", 2), masked).get("json");
+        Map<String, Object> patient = (Map<String, Object>) out.get("patient");
+        assertThat(patient.get("name")).isEqualTo("Xxx Xxxx");
+        assertThat(patient.get("id")).as("patient.id is a patient's id").isEqualTo("X-999");
+        assertThat(((List<Map<String, Object>>) out.get("findings")).get(0)).containsEntry("code", "L89.1");
+        assertThat(out.get("contacts")).isEqualTo(Arrays.asList("xxx@xxxxxxx.xxx"));
+        assertThat(masked).containsExactly("json.patient.id", "json.patient.name", "json.contacts");
+    }
+
     @SuppressWarnings("unused")
     private static Collection<Long> none() {
         return Collections.emptyList();
