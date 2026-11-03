@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 238.0-retention-photos
+      author: nabeel.amd93
+      description: "Image review: retention_rule.data_class also allows PHOTOS (media holds it); expand-only"
+      changes:
+        - sqlFile:
+            path: ../changelog-sets/V238.0-retention-photos/V238__retention_photos.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../changelog-sets/V238.0-retention-photos/V238__rollback.sql
+            relativeToChangelogFile: true
+            splitStatements: false

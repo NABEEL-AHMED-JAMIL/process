@@ -64,6 +64,7 @@ import process.lineage.InternalLineageRestApi;
 import process.identity.InternalTenantFactsRestApi;
 import process.forms.InternalFormSubjectRestApi;
 import process.retention.InternalRetentionHoldsRestApi;
+import process.pipeline.image.InternalImageMeasureRestApi;
 import process.workflow.InternalWorkflowRunRestApi;
 import process.customer.InternalReportRunsRestApi;
 import process.customer.InternalRunDocumentsRestApi;
@@ -159,6 +160,7 @@ class CoreProbeCoverageTest {
         InternalStorageDirectoryRestApi.class, InternalWorkflowRunRestApi.class, InternalLineageRestApi.class,
         InternalReviewEligibilityRestApi.class, InternalRunDocumentsRestApi.class, InternalFormSubjectRestApi.class,
         InternalRetentionHoldsRestApi.class,
+        InternalImageMeasureRestApi.class,
         // Report Studio's scheduled reports: media-service's reads of a pipeline's runs and a run's rows
         InternalReportRunsRestApi.class);
 
@@ -222,6 +224,10 @@ class CoreProbeCoverageTest {
             + "aPipelinesFieldsAreTheWorkspacesOwnOnly)");
         NOTHING_TO_AIM.put("POST internal/forms/subjectFields", service + "; reads one submission of the workspace named, as that "
             + "workspace, and another workspace's is \"No submission\" (SubjectFieldsTest.theInternalDoorAnswersASubmissionsFieldsWithTheTokenOnly)");
+        NOTHING_TO_AIM.put("POST internal/image/measure", service + "; measures the photo's bytes it is sent in memory (Image review, "
+            + "2026-11-03) -- it reads and stores nothing of any workspace (InternalImageMeasureRestApiTest)");
+        NOTHING_TO_AIM.put("POST internal/image/outline", service + "; re-measures the outline it is sent, in memory -- it reads and stores "
+            + "nothing of any workspace (InternalImageMeasureRestApiTest)");
         NOTHING_TO_AIM.put("POST internal/retention/holds", service + "; reads the legal holds of the workspace named, as that "
             + "workspace (RowSecurity.forTenant), and answers only whether a workspace hold is on (InternalRetentionHoldsRestApiTest)");
         NOTHING_TO_AIM.put("POST internal/customer/runDocuments", service + "; reads one run of the workspace named, as that workspace "

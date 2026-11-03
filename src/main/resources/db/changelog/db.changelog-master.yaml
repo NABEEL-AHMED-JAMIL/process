@@ -291,3 +291,6 @@ databaseChangeLog:
   # V237: the tools redesign (owner-approved 2026-11-02) -- retention_rule.data_class also allows TRANSCRIPTS, RECORDINGS and CONVERSIONS (media holds them).
   - include:
       file: db/changelog/yaml/V237.0-retention-tools.yaml
+  # V238: Image review (owner-approved 2026-11-03) -- retention_rule.data_class also allows PHOTOS (media holds it).
+  - include:
+      file: db/changelog/yaml/V238.0-retention-photos.yaml

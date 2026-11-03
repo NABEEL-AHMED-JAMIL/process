@@ -1,9 +1,12 @@
 package process.pipeline.image;
 
 import javax.imageio.ImageIO;
+import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.Raster;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,6 +57,12 @@ import java.util.Optional;
  *
  * A photo over {@value #MAX_SIDE} px on its long side is halved (averaging) until it fits, which keeps a step's memory
  * bounded; sizes do not change, and the scale is reported in the photo's own pixels.
+ *
+ * <p>Image review (the third Tools page, owner-approved 2026-11-03) measures with this same code: a measurement also carries
+ * its {@link Geometry} -- the region's outline, the ruler's box and the length and width lines, in the photo's own pixels --
+ * so the console draws what was measured. The pipeline step reads only the sizes. "Adjust outline" re-measures a region a
+ * person drew with {@link #drawn}: the drawn region is a mask measured by {@link MaskMeasure} (the {@code measure_mask}
+ * step's code) and sized here as a found region is; it is given in cm only with the ruler's scale, otherwise in pixels.
  */
 public final class RulerMeasure {
 
@@ -120,16 +129,64 @@ public final class RulerMeasure {
         public final Double widthCm;
         public final Double areaCm2;
         public final String note;
+        /** Where it was measured, in the photo's own pixels (Image review draws it); never null from {@link #measure}. */
+        public final Geometry geometry;
 
         Measurement(boolean scaleFound, Double pxPerCm, Double lengthCm, Double widthCm, Double areaCm2, String note) {
+            this(scaleFound, pxPerCm, lengthCm, widthCm, areaCm2, note, null);
+        }
+
+        Measurement(boolean scaleFound, Double pxPerCm, Double lengthCm, Double widthCm, Double areaCm2, String note, Geometry geometry) {
             this.scaleFound = scaleFound;
             this.pxPerCm = pxPerCm;
             this.lengthCm = lengthCm;
             this.widthCm = widthCm;
             this.areaCm2 = areaCm2;
             this.note = note;
+            this.geometry = geometry;
         }
     }
+
+    /**
+     * Where a measurement was made, in the photo's own pixels (x right, y down): the photo's size and mean luminance (0-255,
+     * how dark it is), the ruler's box {minX, minY, maxX, maxY} and its long ticks (null without a ruler), the region's
+     * outline as x,y pairs, its length and width lines {x1, y1, x2, y2}, and its size in pixels (null without a region). A drawn
+     * outline's geometry has no luminance and no ruler box.
+     */
+    public static final class Geometry {
+        public final int width;
+        public final int height;
+        public final Double meanLuminance;
+        public final int[] rulerBox;
+        public final Integer rulerTicks;
+        public final int[] outline;
+        public final double[] lengthLine;
+        public final double[] widthLine;
+        public final Long areaPx;
+        public final Double lengthPx;
+        public final Double widthPx;
+
+        Geometry(int width, int height, Double meanLuminance, int[] rulerBox, Integer rulerTicks, int[] outline, double[] lengthLine,
+                 double[] widthLine, Long areaPx, Double lengthPx, Double widthPx) {
+            this.width = width;
+            this.height = height;
+            this.meanLuminance = meanLuminance == null ? null : Math.round(meanLuminance * 10) / 10.0;
+            this.rulerBox = rulerBox;
+            this.rulerTicks = rulerTicks;
+            this.outline = outline;
+            this.lengthLine = lengthLine;
+            this.widthLine = widthLine;
+            this.areaPx = areaPx;
+            this.lengthPx = lengthPx;
+            this.widthPx = widthPx;
+        }
+    }
+
+    /** The most outline points a measurement carries; a longer traced edge is thinned evenly. */
+    static final int MAX_OUTLINE_POINTS = 240;
+
+    /** The most points a drawn outline may have. */
+    public static final int MAX_DRAWN_POINTS = 2000;
 
     /** A png or jpg photo's bytes, measured; bytes that are no image are an IOException. */
     public static Measurement measure(byte[] bytes, Target target) throws IOException {
@@ -153,6 +210,7 @@ public final class RulerMeasure {
             shrink *= 2;
         }
         Pixels pixels = new Pixels(image);
+        double luminance = pixels.meanLuminance();
         Ruler ruler = Ruler.find(pixels, LIGHT);
         // On a light background a ruler's face can merge with it: contrast looks again for a whiter strip. red_region
         // keeps its first rule exactly, so a saved step measures as it always has.
@@ -160,19 +218,122 @@ public final class RulerMeasure {
             ruler = Ruler.find(pixels, WHITER[k]);
         }
         if (ruler == null) {
-            return new Measurement(false, null, null, null, null, "no ruler found: not measured");
+            return new Measurement(false, null, null, null, null, "no ruler found: not measured",
+                new Geometry(photo.getWidth(), photo.getHeight(), luminance, null, null, null, null, null, null, null, null));
         }
         double scale = ruler.pxPerCm;
         Double reported = round(scale * shrink);
         String found = String.format(Locale.ROOT, "ruler %d ticks, %.1f px/cm", ruler.ticks, scale * shrink);
+        int[] rulerBox = scaled(ruler.box, shrink);
         Region region = Region.find(pixels, ruler, MIN_REGION_CM2 * scale * scale, target);
         if (region == null) {
-            return new Measurement(true, reported, null, null, null, found + "; no region found");
+            return new Measurement(true, reported, null, null, null, found + "; no region found",
+                new Geometry(photo.getWidth(), photo.getHeight(), luminance, rulerBox, ruler.ticks, null, null, null, null, null, null));
         }
         String note = String.format(Locale.ROOT, "%s; region %,d px%s", found, region.count * (long) shrink * shrink,
             region.touchesEdge ? ", touches the photo's edge (may be larger)" : "");
+        Geometry geometry = new Geometry(photo.getWidth(), photo.getHeight(), luminance, rulerBox, ruler.ticks,
+            scaledOutline(region.outline, shrink), scaledLine(region.lengthLine, shrink), scaledLine(region.widthLine, shrink),
+            region.count * (long) shrink * shrink, round(region.length * shrink), round(region.width * shrink));
         return new Measurement(true, reported, round(region.length / scale), round(region.width / scale),
-            round(region.count / (scale * scale)), note);
+            round(region.count / (scale * scale)), note, geometry);
+    }
+
+    /**
+     * Re-measures a region a person drew over a photo of {@code width} x {@code height} pixels ("Adjust outline" in Image
+     * review): the outline is x,y pairs in the photo's pixels, closed between its last point and its first. The drawn region
+     * becomes a mask measured by {@link MaskMeasure} -- the measure_mask step's code -- and its length and width are taken
+     * along its major axis as a found region's are. With the photo's ruler scale ({@code pxPerCm}) the sizes are in cm;
+     * without one there is no size in cm, only pixels: a size is never estimated.
+     */
+    public static Measurement drawn(int width, int height, double[] outline, Double pxPerCm) {
+        if (width < 1 || height < 1 || (long) width * height > 400_000_000L) {
+            throw new IllegalArgumentException("The photo's size is not one that can be measured.");
+        }
+        if (outline == null || outline.length < 6 || outline.length % 2 != 0) {
+            throw new IllegalArgumentException("Draw an outline of at least 3 points.");
+        }
+        if (outline.length / 2 > MAX_DRAWN_POINTS) {
+            throw new IllegalArgumentException("An outline has at most " + MAX_DRAWN_POINTS + " points.");
+        }
+        if (pxPerCm != null && !(pxPerCm > 0 && pxPerCm < 100_000)) {
+            throw new IllegalArgumentException("The scale must be a positive number of pixels per cm.");
+        }
+        int shrink = 1;
+        while (Math.max(width / shrink, height / shrink) > MAX_SIDE) {
+            shrink *= 2;
+        }
+        int w = Math.max(1, width / shrink);
+        int h = Math.max(1, height / shrink);
+        BufferedImage mask = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+        Graphics2D g = mask.createGraphics();
+        Path2D.Double path = new Path2D.Double();
+        for (int i = 0; i < outline.length; i += 2) {
+            double x = Math.max(0, Math.min(width, outline[i])) / shrink;
+            double y = Math.max(0, Math.min(height, outline[i + 1])) / shrink;
+            if (i == 0) {
+                path.moveTo(x, y);
+            } else {
+                path.lineTo(x, y);
+            }
+        }
+        path.closePath();
+        g.setColor(Color.WHITE);
+        g.fill(path);
+        g.dispose();
+        MaskMeasure.Measurement marked = MaskMeasure.measure(mask, 128);
+        Double luminance = null;
+        if (marked.areaPx == 0) {
+            return new Measurement(pxPerCm != null, pxPerCm, null, null, null, "the drawn outline encloses nothing",
+                new Geometry(width, height, luminance, null, null, null, null, null, 0L, null, null));
+        }
+        // The marked pixels over their box, one pixel wider each side: the layout Region.measured reads.
+        int[] box = {marked.boxX, marked.boxY, marked.boxX + marked.boxWidth - 1, marked.boxY + marked.boxHeight - 1};
+        int bw = box[2] - box[0] + 3;
+        int bh = box[3] - box[1] + 3;
+        boolean[] filled = new boolean[bw * bh];
+        Raster raster = mask.getRaster();
+        for (int y = box[1]; y <= box[3]; y++) {
+            for (int x = box[0]; x <= box[2]; x++) {
+                filled[(y - box[1] + 1) * bw + x - box[0] + 1] = raster.getSample(x, y, 0) >= 128;
+            }
+        }
+        Region region = Region.measured(filled, box, w, h);
+        long areaPx = marked.areaPx * (long) shrink * shrink;
+        int[] points = new int[outline.length];
+        for (int i = 0; i < outline.length; i++) {
+            points[i] = (int) Math.round(Math.max(0, Math.min(i % 2 == 0 ? width : height, outline[i])));
+        }
+        Geometry geometry = new Geometry(width, height, luminance, null, null, points, scaledLine(region.lengthLine, shrink),
+            scaledLine(region.widthLine, shrink), areaPx, round(region.length * shrink), round(region.width * shrink));
+        String pixelsNote = String.format(Locale.ROOT, "drawn outline %,d px (%d region%s)", areaPx, marked.regions,
+            marked.regions == 1 ? "" : "s");
+        if (pxPerCm == null) {
+            return new Measurement(false, null, null, null, null, pixelsNote + "; no ruler: pixels only, no size in cm", geometry);
+        }
+        double scale = pxPerCm / shrink;
+        return new Measurement(true, pxPerCm, round(region.length / scale), round(region.width / scale),
+            round(region.count / (scale * scale)), String.format(Locale.ROOT, "%s; ruler %.1f px/cm", pixelsNote, pxPerCm), geometry);
+    }
+
+    private static int[] scaled(int[] box, int shrink) {
+        return new int[] {box[0] * shrink, box[1] * shrink, (box[2] + 1) * shrink - 1, (box[3] + 1) * shrink - 1};
+    }
+
+    private static int[] scaledOutline(int[] outline, int shrink) {
+        int[] out = new int[outline.length];
+        for (int i = 0; i < outline.length; i++) {
+            out[i] = (int) Math.round((outline[i] + 0.5) * shrink);
+        }
+        return out;
+    }
+
+    private static double[] scaledLine(double[] line, int shrink) {
+        double[] out = new double[line.length];
+        for (int i = 0; i < line.length; i++) {
+            out[i] = Math.round((line[i] + 0.5) * shrink * 10) / 10.0;
+        }
+        return out;
     }
 
     private static Double round(double value) {
@@ -215,6 +376,14 @@ public final class RulerMeasure {
 
         double luminance(int i) {
             return 0.299 * this.red(i) + 0.587 * this.green(i) + 0.114 * this.blue(i);
+        }
+
+        double meanLuminance() {
+            double sum = 0;
+            for (int i = 0; i < this.rgb.length; i++) {
+                sum += this.luminance(i);
+            }
+            return this.rgb.length == 0 ? 0 : sum / this.rgb.length;
         }
     }
 
@@ -434,18 +603,27 @@ public final class RulerMeasure {
         }
     }
 
-    /** The region: its pixel count (holes filled), extents along and across its major axis, and whether it meets the edge. */
+    /**
+     * The region: its pixel count (holes filled), extents along and across its major axis, whether it meets the edge, its
+     * traced outline (x,y pairs) and its length and width lines ({x1, y1, x2, y2}), in the measured image's pixels.
+     */
     static final class Region {
         final long count;
         final double length;
         final double width;
         final boolean touchesEdge;
+        final int[] outline;
+        final double[] lengthLine;
+        final double[] widthLine;
 
-        private Region(long count, double length, double width, boolean touchesEdge) {
+        private Region(long count, double length, double width, boolean touchesEdge, int[] outline, double[] lengthLine, double[] widthLine) {
             this.count = count;
             this.length = length;
             this.width = width;
             this.touchesEdge = touchesEdge;
+            this.outline = outline;
+            this.lengthLine = lengthLine;
+            this.widthLine = widthLine;
         }
 
         static Region find(Pixels pixels, Ruler ruler, double smallest, Target target) {
@@ -614,7 +792,7 @@ public final class RulerMeasure {
         }
 
         /** Extents along and across the major axis of the second moments, in whole pixels. */
-        private static Region measured(boolean[] filled, int[] box, int width, int height) {
+        static Region measured(boolean[] filled, int[] box, int width, int height) {
             int w = box[2] - box[0] + 3;
             long count = 0;
             double sx = 0;
@@ -662,7 +840,85 @@ public final class RulerMeasure {
             double along = maxU - minU + 1;
             double across = maxV - minV + 1;
             boolean edge = box[0] == 0 || box[1] == 0 || box[2] == width - 1 || box[3] == height - 1;
-            return new Region(count, Math.max(along, across), Math.min(along, across), edge);
+            // The lines through the middle of the region's turned box, in the image's pixels (the box is one pixel wider).
+            double cu = (minU + maxU) / 2;
+            double cv = (minV + maxV) / 2;
+            double cx = mx + cu * ux - cv * uy + box[0] - 1;
+            double cy = my + cu * uy + cv * ux + box[1] - 1;
+            double[] alongLine = {cx - ux * (along - 1) / 2, cy - uy * (along - 1) / 2, cx + ux * (along - 1) / 2, cy + uy * (along - 1) / 2};
+            double[] acrossLine = {cx + uy * (across - 1) / 2, cy - ux * (across - 1) / 2, cx - uy * (across - 1) / 2, cy + ux * (across - 1) / 2};
+            boolean longer = along >= across;
+            return new Region(count, Math.max(along, across), Math.min(along, across), edge, traced(filled, w, box),
+                longer ? alongLine : acrossLine, longer ? acrossLine : alongLine);
+        }
+
+        /**
+         * The region's outer edge, traced pixel by pixel (Moore neighbours, clockwise from its top-left pixel) and thinned
+         * evenly to at most {@value #MAX_OUTLINE_POINTS} points, as x,y pairs in the image's pixels.
+         */
+        static int[] traced(boolean[] filled, int w, int[] box) {
+            int h = filled.length / w;
+            int start = -1;
+            for (int i = 0; i < filled.length; i++) {
+                if (filled[i]) {
+                    start = i;
+                    break;
+                }
+            }
+            if (start < 0) {
+                return new int[0];
+            }
+            int[][] steps = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
+            List<Integer> edge = new ArrayList<>();
+            int x = start % w;
+            int y = start / w;
+            int back = 4;
+            int second = -1;
+            edge.add(start);
+            for (int guard = 0; guard < 4 * filled.length; guard++) {
+                int next = -1;
+                int from = back;
+                for (int k = 1; k <= 8; k++) {
+                    int d = (back + k) % 8;
+                    int nx = x + steps[d][0];
+                    int ny = y + steps[d][1];
+                    if (nx >= 0 && ny >= 0 && nx < w && ny < h && filled[ny * w + nx]) {
+                        next = ny * w + nx;
+                        from = (back + k - 1) % 8;
+                        break;
+                    }
+                }
+                if (next < 0) {
+                    break;
+                }
+                if (y * w + x == start && next == second) {
+                    break;
+                }
+                if (second < 0) {
+                    second = next;
+                }
+                int px = x + steps[from][0];
+                int py = y + steps[from][1];
+                x = next % w;
+                y = next / w;
+                int dx = Integer.signum(px - x);
+                int dy = Integer.signum(py - y);
+                for (int d = 0; d < 8; d++) {
+                    if (steps[d][0] == dx && steps[d][1] == dy) {
+                        back = d;
+                    }
+                }
+                if (next != start) {
+                    edge.add(next);
+                }
+            }
+            int every = Math.max(1, (int) Math.ceil(edge.size() / (double) MAX_OUTLINE_POINTS));
+            int[] out = new int[2 * ((edge.size() + every - 1) / every)];
+            for (int i = 0, k = 0; i < edge.size(); i += every, k += 2) {
+                out[k] = edge.get(i) % w + box[0] - 1;
+                out[k + 1] = edge.get(i) / w + box[1] - 1;
+            }
+            return out;
         }
     }
 

@@ -64,7 +64,7 @@ class RetentionRulesTest {
     void theToolsClassesAreMediasKnowNoRunAndTwoOfThemAreCappedAtThirtyDays() throws Exception {
         RemoteRetention remote = new RemoteRetention(new okhttp3.OkHttpClient(), "http://ai:9150", "http://storage:9120",
             "http://notifications:9100", "http://media:9110", "t");
-        for (DataClass tools : new DataClass[]{DataClass.TRANSCRIPTS, DataClass.RECORDINGS, DataClass.CONVERSIONS}) {
+        for (DataClass tools : new DataClass[]{DataClass.TRANSCRIPTS, DataClass.RECORDINGS, DataClass.CONVERSIONS, DataClass.PHOTOS}) {
             assertThat(tools.owner()).isEqualTo(DataClass.Owner.MEDIA);
             assertThat(tools.configurable()).isTrue();
             assertThat(tools.knowsRuns()).as(tools + ": a pipeline or run hold does not reach it").isFalse();
@@ -77,12 +77,15 @@ class RetentionRulesTest {
         assertThat(DataClass.TRANSCRIPTS.maxDays()).as("a transcript is kept until deleted or a policy says").isNull();
         assertThat(DataClass.RECORDINGS.maxDays()).isEqualTo(30);
         assertThat(DataClass.CONVERSIONS.maxDays()).isEqualTo(30);
+        assertThat(DataClass.PHOTOS.maxDays()).as("Image review's photos (2026-11-03)").isEqualTo(30);
         RetentionStore.Platform platform = new RetentionStore.Platform();
         assertThat(this.service.days(map("RECORDINGS", 7), platform, true)).containsEntry(DataClass.RECORDINGS, 7);
         assertThat(this.service.days(map("CONVERSIONS", ""), platform, true)).containsEntry(DataClass.CONVERSIONS, null);
         assertThatThrownBy(() -> this.service.days(map("RECORDINGS", 31), platform, true))
             .hasMessage("Audio recordings are never kept more than 30 days; choose 1 to 30, or leave it empty for the 30 days.");
         assertThat(this.service.days(map("TRANSCRIPTS", 400), platform, true)).containsEntry(DataClass.TRANSCRIPTS, 400);
+        assertThatThrownBy(() -> this.service.days(map("PHOTOS", 45), platform, true))
+            .hasMessageStartingWith("Image review photos are never kept more than 30 days");
     }
 
     @Test

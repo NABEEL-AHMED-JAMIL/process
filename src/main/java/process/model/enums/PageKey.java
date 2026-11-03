@@ -80,6 +80,9 @@ public enum PageKey {
         "/documentConverter.json"),
     TOOLS_TRANSCRIPT("tools-transcript", "Audio Transcript", "Tools", "/tools/transcript",
         "/audioTranscript.json"),
+    // Image review (the third Tools page, owner-approved 2026-11-03): media's /imageReview.json.
+    TOOLS_IMAGES("tools-images", "Image review", "Tools", "/tools/images",
+        "/imageReview.json"),
     // Prompts replaced AI Agents on 2026-09-18 (V44 renames the grants). /aiAgent.json stays in
     // the group: the file chat and the job assistant still read prompts through its aliases.
     // ZT-P11: the AI Assistant (this page) lists the pipelines and reads a step definition to design and change one.
