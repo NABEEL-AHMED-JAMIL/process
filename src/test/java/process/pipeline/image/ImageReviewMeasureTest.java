@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -73,7 +74,7 @@ class ImageReviewMeasureTest {
     void theStepStillReadsTheSameSizes() throws IOException {
         // The pipeline step's call (bytes in, sizes out) and the tool's call are the same method: one code path.
         byte[] bytes = photo("wound-SV-000117-v3.jpg");
-        BufferedImage image = ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
         RulerMeasure.Measurement a = RulerMeasure.measure(bytes, RulerMeasure.Target.CONTRAST);
         RulerMeasure.Measurement b = RulerMeasure.measure(image, RulerMeasure.Target.CONTRAST);
         assertThat(a.areaCm2).isEqualTo(b.areaCm2);
