@@ -77,15 +77,14 @@ class RetentionRulesTest {
         assertThat(DataClass.TRANSCRIPTS.maxDays()).as("a transcript is kept until deleted or a policy says").isNull();
         assertThat(DataClass.RECORDINGS.maxDays()).isEqualTo(30);
         assertThat(DataClass.CONVERSIONS.maxDays()).isEqualTo(30);
-        assertThat(DataClass.PHOTOS.maxDays()).as("Image review's photos (2026-11-03)").isEqualTo(30);
+        assertThat(DataClass.PHOTOS.maxDays()).as("Image review: a photo sent on stays until the policy says (2026-11-03)").isNull();
         RetentionStore.Platform platform = new RetentionStore.Platform();
         assertThat(this.service.days(map("RECORDINGS", 7), platform, true)).containsEntry(DataClass.RECORDINGS, 7);
         assertThat(this.service.days(map("CONVERSIONS", ""), platform, true)).containsEntry(DataClass.CONVERSIONS, null);
         assertThatThrownBy(() -> this.service.days(map("RECORDINGS", 31), platform, true))
             .hasMessage("Audio recordings are never kept more than 30 days; choose 1 to 30, or leave it empty for the 30 days.");
         assertThat(this.service.days(map("TRANSCRIPTS", 400), platform, true)).containsEntry(DataClass.TRANSCRIPTS, 400);
-        assertThatThrownBy(() -> this.service.days(map("PHOTOS", 45), platform, true))
-            .hasMessageStartingWith("Image review photos are never kept more than 30 days");
+        assertThat(this.service.days(map("PHOTOS", 90), platform, true)).containsEntry(DataClass.PHOTOS, 90);
     }
 
     @Test

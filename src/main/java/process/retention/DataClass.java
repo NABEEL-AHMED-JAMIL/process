@@ -54,12 +54,13 @@ public enum DataClass {
             + "each conversion's line in Recent conversions. Files kept in a bucket are the bucket's."),
     /*
      * Image review (the third Tools page, owner-approved 2026-11-03): media holds it. A workspace hold keeps it; it knows no
-     * run. Never kept more than 30 days ({@link #maxDays}): media removes a photo at 30 days by itself (unless a workspace
-     * hold is on), and a policy may only shorten that. A photo sent to Documents or a report is that copy's from then on.
+     * run. Media removes a photo not sent on at 30 days by itself (unless a workspace hold is on); one sent to Documents or a
+     * report stays in the history until this policy or a person removes it. So the class has no cap of its own.
      */
     PHOTOS(Owner.MEDIA, true, false, "Image review photos",
         "Image review: the photos (blurred where a region was blurred; the unblurred original is never kept), their measurements "
-            + "and draft descriptions -- never more than 30 days. A copy sent to Documents or a report is kept there."),
+            + "and draft descriptions. A photo not sent to Documents or a report is removed after 30 days whatever the policy; the "
+            + "copy in Documents or a report is kept there."),
     ANALYTICS(Owner.NONE, false, false, "Analytics copies and cache",
         "Bounded by the platform: Parquet copies are kept to 4 GB a workspace (least recently read go first) and query results 10 "
             + "minutes. Both are rebuilt from your sources on the next read."),
@@ -108,7 +109,7 @@ public enum DataClass {
 
     /** The most days the class is ever kept (the platform removes it then, policy or not); null when there is no such cap. */
     public Integer maxDays() {
-        return this == RECORDINGS || this == CONVERSIONS || this == PHOTOS ? 30 : null;
+        return this == RECORDINGS || this == CONVERSIONS ? 30 : null;
     }
 
     public static Optional<DataClass> of(String name) {
