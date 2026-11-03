@@ -115,6 +115,8 @@ public class StepTimelineService {
     private final ModelChoiceStore aiSteps;
     private final DatasetStore datasets;
     private final RunReviews reviews;
+    private RunDocuments documents;
+    private RunInputs inputs;
 
     public StepTimelineService(JobQueueRepository runs, SourceJobRepository jobs, StepStore steps, ModelChoiceStore aiSteps,
                                DatasetStore datasets, RunReviews reviews) {
@@ -144,6 +146,13 @@ public class StepTimelineService {
     @Autowired(required = false)
     public void useItems(RunItems items) {
         this.items = items;
+    }
+
+    /** The approved documents (document_approval) and the inbox files (inbox_arrival) that started a run, for its "Started by". */
+    @Autowired(required = false)
+    public void useOrigins(RunDocuments documents, RunInputs inputs) {
+        this.documents = documents;
+        this.inputs = inputs;
     }
 
     /** ZT-M21: a sensitive pipeline's kept files need Download sensitive files; absent in hand-built tests (not checked). */
@@ -256,11 +265,40 @@ public class StepTimelineService {
             }).collect(Collectors.toList()));
             timeline.put("waitingForApproval", waiting[0]);
         }
+        timeline.put("startedBy", this.startedBy(run.get().getJobQueueId()));
         timeline.put("attemptDetails", this.attemptDetails(run.get().getJobQueueId()));
         timeline.put("aiSteps", ai.stream().filter(step -> (step.attempt == null ? 1 : step.attempt) == shown).collect(Collectors.toList()));
         this.putReview(timeline, owned.get());
         return new ResponseDto(SUCCESS, String.format("%d step(s) in attempt %d.", ((List<?>) timeline.get("steps")).size(), shown),
             timeline);
+    }
+
+    /**
+     * What started a run when an arrival did (a run's page said "Its timetable" for a run an approved document started, as
+     * its job runs on a schedule too): the approved documents that started it -- {kind: document, count, extractionIds,
+     * documentTypeId} -- or the inbox files -- {kind: file, count, fileName (the first's)}. Null for any other run (by hand,
+     * its timetable, a backfill, a call), which the console tells from the run and its job.
+     */
+    Map<String, Object> startedBy(long jobQueueId) {
+        List<RunDocuments.Document> started = this.documents == null ? Collections.emptyList() : this.documents.documentsOf(jobQueueId);
+        if (!started.isEmpty()) {
+            Map<String, Object> origin = new LinkedHashMap<>();
+            origin.put("kind", "document");
+            origin.put("count", started.size());
+            origin.put("extractionIds", started.stream().map(d -> d.extractionId).collect(Collectors.toList()));
+            origin.put("documentTypeId", started.get(0).documentTypeId);
+            return origin;
+        }
+        List<String> keys = this.inputs == null ? Collections.emptyList() : this.inputs.keysOf(jobQueueId);
+        if (!keys.isEmpty()) {
+            Map<String, Object> origin = new LinkedHashMap<>();
+            origin.put("kind", "file");
+            origin.put("count", keys.size());
+            String first = keys.get(0);
+            origin.put("fileName", first.substring(first.lastIndexOf('/') + 1));
+            return origin;
+        }
+        return null;
     }
 
     /** One step's own log, in order. */

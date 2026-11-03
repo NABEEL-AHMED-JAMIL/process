@@ -174,6 +174,27 @@ class StepTimelineServiceTest {
         assertThat(this.service.timeline(RUN, 3).getMessage()).isEqualTo("This run has no attempt 3; it has [1, 2].");
     }
 
+    /**
+     * Owner 2026-11-03: a run an approved document started says so ("Started by" read "Its timetable", its job runs on a
+     * schedule too); one an inbox file started names the file; any other run has no arrival to name.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRunSaysTheApprovedDocumentsOrTheFileThatStartedIt() {
+        this.steps.plan(RUN, 1, 1001L, Collections.singletonList(new StepStore.Planned(0, "read", "read_documents", "fail")));
+        assertThat(this.timeline(null).get("startedBy")).as("nothing wired: no arrival").isNull();
+
+        this.service.useOrigins(run -> run == RUN ? Arrays.asList(new RunDocuments.Document(1159L, 1065L, 1),
+            new RunDocuments.Document(1160L, 1065L, 1)) : Collections.<RunDocuments.Document>emptyList(), run -> Collections.<String>emptyList());
+        assertThat((Map<String, Object>) this.timeline(null).get("startedBy")).containsEntry("kind", "document").containsEntry("count", 2)
+            .containsEntry("extractionIds", Arrays.asList(1159L, 1160L)).containsEntry("documentTypeId", 1065L);
+
+        this.service.useOrigins(run -> Collections.<RunDocuments.Document>emptyList(),
+            run -> Collections.singletonList("intake/inbox/claims_2026-11-03.csv"));
+        assertThat((Map<String, Object>) this.timeline(null).get("startedBy")).containsEntry("kind", "file").containsEntry("count", 1)
+            .containsEntry("fileName", "claims_2026-11-03.csv");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void eachStepCarriesItsNameFromTheDefinitionTheRunFollowed() {
